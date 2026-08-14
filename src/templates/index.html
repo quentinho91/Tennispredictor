@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tennis Predictor — Analyse de match</title>
+  <meta name="description" content="Prédiction de match tennis basée sur XGBoost, Elo et historique ATP.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0f172a;--bg2:#1e293b;--card:rgba(255,255,255,0.04);--card-h:rgba(255,255,255,0.065);
+      --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.16);--text:#e2e8f0;--text2:#94a3b8;--text3:#475569;
+      --p1:#4ade80;--p1-bg:rgba(74,222,128,0.10);--p1-glow:rgba(74,222,128,0.22);--p1-border:rgba(74,222,128,0.28);
+      --p2:#a78bfa;--p2-bg:rgba(167,139,250,0.10);--p2-glow:rgba(167,139,250,0.22);--p2-border:rgba(167,139,250,0.28);
+      --err:#f87171;--r-sm:8px;--r:14px;--r-lg:20px;--blur:blur(16px);--trans:all 0.18s ease;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased; }
+    body::before { content:'';position:fixed;inset:0;background:radial-gradient(ellipse 900px 700px at 15% 5%,rgba(74,222,128,0.05) 0%,transparent 65%),radial-gradient(ellipse 900px 700px at 85% 95%,rgba(167,139,250,0.05) 0%,transparent 65%);pointer-events:none;z-index:0; }
+    .header { position:sticky;top:0;z-index:100;background:rgba(9,16,31,0.82);backdrop-filter:var(--blur);border-bottom:1px solid var(--border); }
+    .header-inner { max-width:720px;margin:0 auto;padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between; }
+    .logo { display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;letter-spacing:-0.3px; }
+    .logo-icon { width:30px;height:30px;background:linear-gradient(135deg,var(--p1),#16a34a);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 4px 14px var(--p1-glow); }
+    .header-chip { font-size:11px;font-weight:500;color:var(--text2);background:var(--card);border:1px solid var(--border);border-radius:20px;padding:5px 12px; }
+    .container { max-width:720px;margin:0 auto;padding:36px 24px 100px;position:relative;z-index:1; }
+    .hero { text-align:center;padding:36px 0 32px; }
+    .hero-eyebrow { font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--p1);margin-bottom:14px; }
+    .hero-title { font-size:clamp(32px,6vw,54px);font-weight:900;letter-spacing:-2px;line-height:1.05;background:linear-gradient(145deg,#fff 40%,rgba(255,255,255,0.45));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:14px; }
+    .hero-sub { font-size:15px;color:var(--text2);max-width:460px;margin:0 auto;line-height:1.6; }
+    .card { background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:var(--r-lg);padding:28px;margin-bottom:14px; }
+    .card.player-card { position:relative;z-index:20; }
+    .section-label { font-size:10.5px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--text3);margin-bottom:20px; }
+    .players-grid { display:grid;grid-template-columns:1fr 48px 1fr;gap:12px;align-items:start; }
+    .vs-col { display:flex;align-items:center;justify-content:center;padding-top:34px; }
+    .vs-badge { width:42px;height:42px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--text3); }
+    .player-col { position:relative; }
+    .player-col-label { font-size:12px;font-weight:700;margin-bottom:10px;letter-spacing:0.3px; }
+    .p1-col .player-col-label { color:var(--p1); }
+    .p2-col .player-col-label { color:var(--p2); }
+    .ac-wrap { position:relative; }
+    .player-input { width:100%;background:rgba(255,255,255,0.055);border:1px solid var(--border);border-radius:var(--r);padding:13px 18px;font-size:14px;font-family:'Inter',sans-serif;color:var(--text);outline:none;transition:var(--trans); }
+    .player-input::placeholder { color:var(--text3); }
+    .p1-col .player-input:focus { border-color:var(--p1-border);background:rgba(74,222,128,0.05);box-shadow:0 0 0 3px var(--p1-bg); }
+    .p2-col .player-input:focus { border-color:var(--p2-border);background:rgba(167,139,250,0.05);box-shadow:0 0 0 3px var(--p2-bg); }
+    .ac-dropdown { position:fixed;z-index:9999;background:#18243a;border:1px solid var(--border2);border-radius:var(--r);overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.6);display:none; }
+    .ac-dropdown.open { display:block; }
+    .ac-item { padding:11px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;transition:background 0.12s;border-bottom:1px solid rgba(255,255,255,0.04); }
+    .ac-item:last-child { border-bottom:none; }
+    .ac-item:hover,.ac-item.focused { background:rgba(255,255,255,0.07); }
+    .ac-name { font-size:13px;font-weight:500;flex:1; }
+    .ac-elo { font-size:11px;color:var(--text2);background:rgba(255,255,255,0.06);border-radius:6px;padding:2px 7px; }
+    .ac-rank { font-size:11px;color:var(--text3); }
+    .selected-chip { background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:12px;animation:fadeSlide 0.22s ease; }
+    .p1-col .selected-chip { border-color:var(--p1-border);background:var(--p1-bg); }
+    .p2-col .selected-chip { border-color:var(--p2-border);background:var(--p2-bg); }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)} }
+    .chip-avatar { width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;letter-spacing:-0.5px;flex-shrink:0; }
+    .p1-col .chip-avatar { background:rgba(74,222,128,0.18);color:var(--p1); }
+    .p2-col .chip-avatar { background:rgba(167,139,250,0.18);color:var(--p2); }
+    .chip-info { flex:1;min-width:0; }
+    .chip-name { font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .chip-meta { font-size:11px;color:var(--text2);margin-top:2px; }
+    .chip-clear { background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:4px 6px;border-radius:6px;transition:var(--trans);flex-shrink:0;line-height:1; }
+    .chip-clear:hover { color:var(--text);background:rgba(255,255,255,0.08); }
+    .odds-grid { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .ctx-grid { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    select.field-inp { appearance:none;-webkit-appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center; }
+    option { background: var(--bg2); color: var(--text); }
+    .field { display:flex;flex-direction:column;gap:7px; }
+    .field-lbl { font-size:10.5px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--text3); }
+    .field-inp { background:rgba(255,255,255,0.055);border:1px solid var(--border);border-radius:var(--r-sm);padding:13px 16px;font-size:15px;font-family:'Inter',sans-serif;color:var(--text);outline:none;transition:var(--trans);width:100%; }
+    .field-inp:focus { border-color:var(--border2);background:rgba(255,255,255,0.08);box-shadow:0 0 0 3px rgba(255,255,255,0.04); }
+    .o1-field .field-inp:focus { border-color:var(--p1-border);box-shadow:0 0 0 3px var(--p1-bg); }
+    .o2-field .field-inp:focus { border-color:var(--p2-border);box-shadow:0 0 0 3px var(--p2-bg); }
+    .odds-hint { font-size:12px;color:var(--text3);margin-top:10px; }
+    .predict-btn { width:100%;padding:18px;border:none;border-radius:var(--r);background:linear-gradient(135deg,#16a34a 0%,#22c55e 100%);color:#fff;font-size:15px;font-weight:700;font-family:'Inter',sans-serif;letter-spacing:0.2px;cursor:pointer;transition:all 0.2s ease;margin-top:6px;position:relative;overflow:hidden; }
+    .predict-btn::before { content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.1),transparent);opacity:0;transition:opacity 0.2s; }
+    .predict-btn:hover:not(:disabled)::before { opacity:1; }
+    .predict-btn:hover:not(:disabled) { transform:translateY(-2px);box-shadow:0 10px 36px rgba(34,197,94,0.35); }
+    .predict-btn:active:not(:disabled) { transform:translateY(0); }
+    .predict-btn:disabled { background:rgba(255,255,255,0.07);color:var(--text3);cursor:not-allowed;box-shadow:none; }
+    .btn-spinner { display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.65s linear infinite;vertical-align:middle;margin-right:8px; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .error-bar { background:rgba(248,113,113,0.09);border:1px solid rgba(248,113,113,0.28);border-radius:var(--r);padding:14px 18px;font-size:13px;color:var(--err);margin-bottom:14px;display:flex;align-items:center;gap:10px; }
+    #results-section { animation:riseIn 0.45s cubic-bezier(0.16,1,0.3,1); }
+    @keyframes riseIn { from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)} }
+    .divider { display:flex;align-items:center;gap:14px;margin:36px 0 22px; }
+    .divider-line { flex:1;height:1px;background:var(--border); }
+    .divider-lbl { font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);flex-shrink:0; }
+    .prob-card { background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:32px 32px 26px;margin-bottom:14px;position:relative;overflow:hidden; }
+    .prob-card::before { content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--p1-bg) 0%,transparent 50%,var(--p2-bg) 100%);opacity:0.5;pointer-events:none; }
+    .prob-header { display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:20px;margin-bottom:28px;position:relative; }
+    .prob-player { display:flex;flex-direction:column; }
+    .prob-player.right { align-items:flex-end;text-align:right; }
+    .prob-pname { font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .prob-pct { font-size:52px;font-weight:900;letter-spacing:-3px;line-height:1; }
+    .prob-pct.c1 { color:var(--p1);text-shadow:0 0 40px var(--p1-glow); }
+    .prob-pct.c2 { color:var(--p2);text-shadow:0 0 40px var(--p2-glow); }
+    .prob-form { display:flex; gap: 4px; margin-bottom: 12px; }
+    .prob-form.right { justify-content: flex-end; }
+    .f-dot { width: 18px; height: 18px; border-radius: 4px; font-size: 10px; font-weight: 800; display:flex; align-items:center; justify-content:center; color: #fff; cursor: help; }
+    .f-w { background: #16a34a; }
+    .f-l { background: #ef4444; }
+    .prob-vs { text-align:center;font-size:12px;font-weight:700;letter-spacing:2px;color:var(--text3); }
+    .prob-bar-wrap { height:6px;background:rgba(255,255,255,0.07);border-radius:99px;overflow:hidden; }
+    .prob-bar { height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--p1) 0%,#a3e635 40%,var(--p2) 100%);transition:width 1.1s cubic-bezier(0.16,1,0.3,1); }
+    .stats-2col { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px; }
+    .stat-card { background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px; }
+    .stat-card-title { font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:16px; }
+    .stat-row { display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px; }
+    .stat-row:last-child { margin-bottom:0; }
+    .stat-lbl { color:var(--text2);flex:1;font-size:12px; }
+    .sv1 { font-weight:700;color:var(--p1); }
+    .sv2 { font-weight:700;color:var(--p2); }
+    .s-sep { color:var(--text3);font-size:11px; }
+    .h2h-bar { background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px 24px;display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:12px; }
+    .h2h-item { text-align:center; }
+    .h2h-num { font-size:34px;font-weight:900;letter-spacing:-1.5px; }
+    .h2h-num.c1 { color:var(--p1); }
+    .h2h-num.c2 { color:var(--p2); }
+    .h2h-lbl { font-size:10px;font-weight:600;letter-spacing:0.5px;color:var(--text3);margin-top:2px; }
+    .h2h-sep { font-size:22px;font-weight:200;color:var(--text3); }
+    .vb-card { border-radius:var(--r);padding:20px;margin-bottom:12px; }
+    .vb-card.hit { background:var(--p1-bg);border:1px solid var(--p1-border); }
+    .vb-card.miss { background:var(--card);border:1px solid var(--border); }
+    .vb-top { display:flex;align-items:center;gap:10px;margin-bottom:16px; }
+    .vb-ttl { font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text2); }
+    .vb-badge { font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 10px; }
+    .vb-badge.on { background:var(--p1-bg);color:var(--p1);border:1px solid var(--p1-border);animation:glowPulse 2.5s ease infinite; }
+    .vb-badge.off { background:var(--card);color:var(--text3);border:1px solid var(--border); }
+    @keyframes glowPulse { 0%,100%{box-shadow:0 0 0 0 var(--p1-glow)}50%{box-shadow:0 0 0 8px transparent} }
+    .vb-tbl { width:100%;border-collapse:collapse;font-size:13px; }
+    .vb-tbl th { text-align:left;font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);padding-bottom:12px; }
+    .vb-tbl th:not(:first-child) { text-align:right; }
+    .vb-tbl td { padding:9px 0;border-top:1px solid var(--border);font-variant-numeric:tabular-nums; }
+    .vb-tbl td:not(:first-child) { text-align:right; }
+    .vb-pname { font-weight:600; }
+    .edge-pos { color:var(--p1);font-weight:700; }
+    .edge-neg { color:var(--text3); }
+    .vb-rec { margin-top:14px;font-size:14px;font-weight:700;color:var(--p1);display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .vb-norec { margin-top:12px;font-size:12px;color:var(--text3); }
+    .no-odds-notice { margin-bottom:12px;font-size:12px;color:var(--text3);background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px; }
+    .reset-btn { width:100%;padding:15px;border:1px solid var(--border);border-radius:var(--r);background:var(--card);color:var(--text2);font-size:14px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer;transition:var(--trans);margin-top:6px; }
+    .reset-btn:hover { background:var(--card-h);border-color:var(--border2);color:var(--text); }
+    .d-none { display:none!important; }
+    
+    .tab-nav { display:flex; gap:12px; margin-bottom:24px; border-bottom:1px solid var(--border); padding-bottom:12px; }
+    .tab-btn { background:none; border:none; color:var(--text2); font-size:16px; font-weight:600; cursor:pointer; padding:8px 4px; position:relative; transition:var(--trans); }
+    .tab-btn:hover { color:var(--text); }
+    .tab-btn.active { color:var(--p1); }
+    .tab-btn.active::after { content:''; position:absolute; bottom:-13px; left:0; width:100%; height:2px; background:var(--p1); box-shadow:0 -2px 10px var(--p1-glow); }
+    
+    .day-btn { background:var(--card); border:1px solid var(--border); color:var(--text2); padding:6px 14px; border-radius:20px; font-size:13px; font-weight:600; cursor:pointer; transition:var(--trans); }
+    .day-btn:hover { background:var(--card-h); color:var(--text); }
+    .day-btn.active { background:var(--p1-bg); color:var(--p1); border-color:var(--p1-border); }
+    
+    @media(max-width:600px){ .players-grid{grid-template-columns:1fr} .vs-col{display:none} .stats-2col{grid-template-columns:1fr} .prob-pct{font-size:38px} .prob-card{padding:20px} .odds-grid{grid-template-columns:1fr} .ctx-grid{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+<header class="header">
+  <div class="header-inner">
+    <div class="logo"><div class="logo-icon">&#x1F3BE;</div>Tennis Predictor</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="header-chip">XGBoost &middot; Elo &middot; Walk-forward</div>
+      <button id="update-btn" onclick="startUpdate()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:var(--trans);">
+        <span id="update-icon">&#x21BB;</span> Mettre &agrave; jour
+      </button>
+    </div>
+  </div>
+</header>
+<main class="container">
+  <div class="hero">
+    <div class="hero-eyebrow">Analyse pr&eacute;dictive ATP</div>
+    <h1 class="hero-title">Qui va gagner&nbsp;?</h1>
+    <p class="hero-sub">S&eacute;lectionnez deux joueurs, entrez les cotes, et obtenez la probabilit&eacute; de victoire + l&apos;analyse value bet en un clic.</p>
+  </div>
+  <div id="err-bar" class="error-bar d-none"><span>&#x26A0;</span><span id="err-msg"></span></div>
+  
+  <div id="update-terminal" class="card d-none" style="margin-bottom:24px;border-color:var(--p1-border);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="section-label" id="update-status-lbl" style="margin:0;color:var(--p1);">Mise &agrave; jour en cours...</div>
+      <button id="close-term-btn" onclick="closeUpdateTerminal()" class="d-none" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;">&#x2715;</button>
+    </div>
+    <div id="update-log" style="background:rgba(0,0,0,0.5);color:#4ade80;font-family:monospace;font-size:11.5px;padding:16px;border-radius:8px;height:220px;overflow-y:auto;white-space:pre-wrap;border:1px solid rgba(0,0,0,0.8);"></div>
+  </div>
+  <div class="tab-nav">
+    <button id="tab-daily" class="tab-btn active" onclick="switchTab('daily')">Matchs du Jour</button>
+    <button id="tab-roi" class="tab-btn" onclick="switchTab('roi')">Simulateur ROI</button>
+  </div>
+
+  <div id="daily-matches-section">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <div style="display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border); border-radius:20px; padding:4px 12px;">
+        <button class="day-btn" onclick="changeDate(-1)" style="padding:4px 8px; background:none; border:none; font-size:16px;">&#8249;</button>
+        <span id="date-display" style="font-size:13px; font-weight:600; color:var(--text); min-width:90px; text-align:center;">Aujourd'hui</span>
+        <button class="day-btn" onclick="changeDate(1)" style="padding:4px 8px; background:none; border:none; font-size:16px;">&#8250;</button>
+      </div>
+      <button class="btn" style="padding:8px 16px; font-size:14px; background:var(--card-bg); border:1px solid var(--border);" onclick="toggleSections()">&#x1F50D; Pr&eacute;diction manuelle</button>
+    </div>
+    
+    <div id="daily-matches-loading" style="text-align:center; padding:40px; color:var(--text3);">
+      <span class="btn-spinner" style="border-color:var(--text3); border-bottom-color:transparent; width:24px; height:24px; display:inline-block;"></span>
+      <p style="margin-top:12px;">R&eacute;cup&eacute;ration des cotes en direct...</p>
+    </div>
+    
+    <div id="daily-matches-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px;">
+      <!-- Matches will be inserted here -->
+    </div>
+  </div>
+
+  <div id="roi-section" class="d-none">
+    <div class="card">
+      <p class="section-label">Param&egrave;tres de Simulation</p>
+      <div class="ctx-grid">
+        <div class="field">
+          <label class="field-lbl">Confiance Minimale</label>
+          <input type="number" id="roi-min-conf" class="field-inp" value="55" min="0" max="100">
+        </div>
+        <div class="field">
+          <label class="field-lbl">Edge Minimum (%)</label>
+          <input type="number" id="roi-min-edge" class="field-inp" value="5" min="0" max="100">
+        </div>
+        <div class="field">
+          <label class="field-lbl">Mise Fixe (&euro;)</label>
+          <input type="number" id="roi-stake" class="field-inp" value="10" min="1">
+        </div>
+      </div>
+      <button class="submit-btn" onclick="runSimulation()" style="margin-top:16px;">Lancer la Simulation</button>
+    </div>
+    
+    <div class="card" id="roi-results-card" class="d-none">
+      <p class="section-label">R&eacute;sultats</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:24px;">
+        <div style="background:var(--card); border:1px solid var(--border); padding:16px; border-radius:var(--r); text-align:center;">
+          <div style="font-size:12px; color:var(--text2); margin-bottom:4px;">Paris Plac&eacute;s</div>
+          <div id="roi-total-bets" style="font-size:24px; font-weight:700;">-</div>
+        </div>
+        <div style="background:var(--card); border:1px solid var(--border); padding:16px; border-radius:var(--r); text-align:center;">
+          <div style="font-size:12px; color:var(--text2); margin-bottom:4px;">Profit Net</div>
+          <div id="roi-profit" style="font-size:24px; font-weight:700;">-</div>
+        </div>
+        <div style="background:var(--card); border:1px solid var(--border); padding:16px; border-radius:var(--r); text-align:center;">
+          <div style="font-size:12px; color:var(--text2); margin-bottom:4px;">ROI (%)</div>
+          <div id="roi-pct" style="font-size:24px; font-weight:700;">-</div>
+        </div>
+      </div>
+      <canvas id="roiChart" width="400" height="200"></canvas>
+    </div>
+  </div>
+
+  <div id="form-section" class="d-none">
+    <div style="margin-bottom:20px; text-align:right;">
+      <button class="btn" style="padding:8px 16px; font-size:14px; background:var(--card-bg); border:1px solid var(--border);" onclick="toggleSections()">&#x1F4C5; Retour aux matchs du jour</button>
+    </div>
+    <div class="card player-card">
+      <p class="section-label">S&eacute;lection des joueurs</p>
+      <div class="players-grid">
+        <div class="player-col p1-col" id="p1-col">
+          <div class="player-col-label">Joueur 1</div>
+          <div class="ac-wrap" id="p1-ac-wrap">
+            <input id="p1-inp" class="player-input" type="text" placeholder="Tapez un nom&hellip;" autocomplete="off" spellcheck="false">
+            <div class="ac-dropdown" id="p1-drop"></div>
+          </div>
+          <div class="selected-chip d-none" id="p1-chip">
+            <div class="chip-avatar" id="p1-av"></div>
+            <div class="chip-info"><div class="chip-name" id="p1-nm"></div><div class="chip-meta" id="p1-mt"></div></div>
+            <button class="chip-clear" onclick="deselect(1)" title="Changer de joueur">&#x2715;</button>
+          </div>
+        </div>
+        <div class="vs-col"><div class="vs-badge">VS</div></div>
+        <div class="player-col p2-col" id="p2-col">
+          <div class="player-col-label">Joueur 2</div>
+          <div class="ac-wrap" id="p2-ac-wrap">
+            <input id="p2-inp" class="player-input" type="text" placeholder="Tapez un nom&hellip;" autocomplete="off" spellcheck="false">
+            <div class="ac-dropdown" id="p2-drop"></div>
+          </div>
+          <div class="selected-chip d-none" id="p2-chip">
+            <div class="chip-avatar" id="p2-av"></div>
+            <div class="chip-info"><div class="chip-name" id="p2-nm"></div><div class="chip-meta" id="p2-mt"></div></div>
+            <button class="chip-clear" onclick="deselect(2)" title="Changer de joueur">&#x2715;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <p class="section-label">&#x1F3BE; Contexte du match <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">&mdash; pas d&eacute;ductible de l'historique, obligatoire</span></p>
+      <div class="ctx-grid">
+        <div class="field">
+          <label class="field-lbl" for="sel-surf">Surface</label>
+          <select class="field-inp" id="sel-surf">
+            <option value="Hard" selected>Dur</option>
+            <option value="Clay">Terre battue</option>
+            <option value="Grass">Gazon</option>
+            <option value="Carpet">Moquette</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-lbl" for="sel-indoor">Indoor / Outdoor</label>
+          <select class="field-inp" id="sel-indoor">
+            <option value="0" selected>Outdoor</option>
+            <option value="1">Indoor</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-lbl" for="sel-level">Niveau du tournoi</label>
+          <select class="field-inp" id="sel-level">
+            <option value="G">Grand Chelem</option>
+            <option value="M" selected>Masters 1000</option>
+            <option value="A">ATP 500</option>
+            <option value="D">ATP 250</option>
+            <option value="F">Masters (fin de saison)</option>
+            <option value="C">Challenger</option>
+          </select>
+        </div>
+                <div class="field">
+          <label class="field-lbl" for="sel-tourney">Tournoi</label>
+          <div class="ac-wrap" id="t-ac-wrap">
+            <input type="text" class="field-inp p-search" id="sel-tourney" placeholder="Ex: Roland Garros" value="Unknown" autocomplete="new-password">
+            <div class="ac-dropdown" id="t-drop" style="max-height:280px;overflow-y:auto;"></div>
+          </div>
+          <div class="selected-chip d-none" id="t-chip" style="background:rgba(255,255,255,0.055); border:1px solid var(--border); min-height:48px;">
+            <div class="chip-info">
+              <div class="chip-nm" id="t-nm" style="font-size:14px;"></div>
+            </div>
+            <button class="chip-clear" onclick="deselectT()" title="Changer de tournoi">&#x2715;</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-lbl" for="sel-round">Tour</label>
+          <select class="field-inp" id="sel-round">
+            <option value="Q">Qualifications</option>
+            <option value="R128">1er tour (R128)</option>
+            <option value="R64">2e tour (R64)</option>
+            <option value="R32">3e tour (R32)</option>
+            <option value="R16">8es de finale</option>
+            <option value="QF" selected>Quart de finale</option>
+            <option value="SF">Demi-finale</option>
+            <option value="F">Finale</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-lbl" for="sel-bo">Format</label>
+          <select class="field-inp" id="sel-bo">
+            <option value="3" selected>3 sets gagnants</option>
+            <option value="5">5 sets gagnants</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <p class="section-label">&#x1F4B0; Cotes bookmaker <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px">&mdash; optionnel, pour le value betting</span></p>
+      <div class="odds-grid">
+        <div class="field o1-field">
+          <label class="field-lbl" for="inp-o1" id="o1-lbl">Cote Joueur 1</label>
+          <input class="field-inp" type="number" id="inp-o1" min="1.01" step="0.01" placeholder="ex : 1.55">
+        </div>
+        <div class="field o2-field">
+          <label class="field-lbl" for="inp-o2" id="o2-lbl">Cote Joueur 2</label>
+          <input class="field-inp" type="number" id="inp-o2" min="1.01" step="0.01" placeholder="ex : 2.50">
+        </div>
+      </div>
+      <p class="odds-hint">Laissez vide pour obtenir uniquement la probabilit&eacute; du mod&egrave;le.</p>
+    </div>
+    <button class="predict-btn" id="pred-btn" onclick="doPrediction()">&#x26A1;&nbsp; Pr&eacute;dire ce match</button>
+  </div>
+  <div id="results-section" class="d-none">
+    <div class="divider"><div class="divider-line"></div><div class="divider-lbl">R&eacute;sultat</div><div class="divider-line"></div></div>
+    <div class="prob-card">
+      <div class="prob-header">
+        <div class="prob-player"><div class="prob-pname" id="r-p1-nm"></div><div class="prob-form" id="r-p1-form"></div><div class="prob-pct c1" id="r-p1-pct"></div></div>
+        <div class="prob-vs">VS</div>
+        <div class="prob-player right"><div class="prob-pname" id="r-p2-nm"></div><div class="prob-form right" id="r-p2-form"></div><div class="prob-pct c2" id="r-p2-pct"></div></div>
+      </div>
+      <div class="prob-bar-wrap"><div class="prob-bar" id="prob-bar"></div></div>
+    </div>
+    <div class="stats-2col">
+      <div class="stat-card">
+        <div class="stat-card-title">&#x26A1; Elo</div>
+        <div class="stat-row"><span class="stat-lbl">G&eacute;n&eacute;ral</span><span class="sv1" id="r-elo1"></span><span class="s-sep">/</span><span class="sv2" id="r-elo2"></span></div>
+        <div class="stat-row"><span class="stat-lbl" id="r-surf-lbl">Sur surface</span><span class="sv1" id="r-elos1"></span><span class="s-sep">/</span><span class="sv2" id="r-elos2"></span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-title">&#x1F4CA; Classement ATP</div>
+        <div class="stat-row"><span class="stat-lbl" id="r-c1-lbl"></span><span class="sv1" id="r-rk1"></span></div>
+        <div class="stat-row"><span class="stat-lbl" id="r-c2-lbl"></span><span class="sv2" id="r-rk2"></span></div>
+      </div>
+    </div>
+    <div class="h2h-bar">
+      <div class="h2h-item"><div class="h2h-num c1" id="r-h1"></div><div class="h2h-lbl" id="r-h1-lbl"></div></div>
+      <div class="h2h-sep">&ndash;</div>
+      <div class="h2h-item"><div class="h2h-num c2" id="r-h2"></div><div class="h2h-lbl" id="r-h2-lbl"></div></div>
+    </div>
+    <div id="r-vb"></div>
+    <p id="r-tn" class="odds-hint d-none" style="margin-top:-4px;margin-bottom:10px;"></p>
+    <div id="recent-history" class="stats-2col" style="margin-top:12px;"></div>
+    <button class="reset-btn" onclick="resetForm()">&#x2191; Nouvelle pr&eacute;diction</button>
+  </div>
+</main>
+<script>
+  function toggleSections() {
+    const daily = document.getElementById('daily-matches-section');
+    const manual = document.getElementById('form-section');
+    if(daily.classList.contains('d-none')) {
+      daily.classList.remove('d-none');
+      manual.classList.add('d-none');
+    } else {
+      daily.classList.add('d-none');
+      manual.classList.remove('d-none');
+    }
+  }
+
+  let currentDate = new Date();
+  
+  function changeDate(offset) {
+    currentDate.setDate(currentDate.getDate() + offset);
+    updateDateDisplay();
+    
+    // Format YYYY-MM-DD
+    const isoDate = currentDate.getFullYear() + "-" + 
+      String(currentDate.getMonth() + 1).padStart(2, '0') + "-" + 
+      String(currentDate.getDate()).padStart(2, '0');
+    
+    loadDailyMatches(isoDate);
+  }
+  
+  function updateDateDisplay() {
+    const today = new Date();
+    const isToday = currentDate.getDate() === today.getDate() && currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear();
+    
+    if (isToday) {
+      document.getElementById('date-display').textContent = "Aujourd'hui";
+    } else {
+      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+      
+      if (currentDate.getDate() === tomorrow.getDate() && currentDate.getMonth() === tomorrow.getMonth() && currentDate.getFullYear() === tomorrow.getFullYear()) {
+        document.getElementById('date-display').textContent = "Demain";
+      } else if (currentDate.getDate() === yesterday.getDate() && currentDate.getMonth() === yesterday.getMonth() && currentDate.getFullYear() === yesterday.getFullYear()) {
+        document.getElementById('date-display').textContent = "Hier";
+      } else {
+        document.getElementById('date-display').textContent = currentDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+      }
+    }
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab === 'daily') {
+      document.getElementById('daily-matches-section').classList.remove('d-none');
+      document.getElementById('roi-section').classList.add('d-none');
+      document.getElementById('form-section').classList.add('d-none');
+    } else {
+      document.getElementById('daily-matches-section').classList.add('d-none');
+      document.getElementById('roi-section').classList.remove('d-none');
+      document.getElementById('form-section').classList.add('d-none');
+    }
+  }
+
+  let roiChartInstance = null;
+  async function runSimulation() {
+    const btn = document.querySelector('.submit-btn');
+    btn.textContent = 'Calcul...';
+    btn.disabled = true;
+    
+    try {
+        const resp = await fetch('/api/roi_simulation');
+        const data = await resp.json();
+        
+        if (data.error || !data.history) {
+            alert("Erreur: " + (data.error || "Pas d'historique"));
+            return;
+        }
+        
+        const minConf = parseInt(document.getElementById('roi-min-conf').value);
+        const minEdge = parseFloat(document.getElementById('roi-min-edge').value) / 100.0;
+        const stake = parseFloat(document.getElementById('roi-stake').value);
+        
+        let profit = 0;
+        let bets = 0;
+        let labels = ['Départ'];
+        let bankroll = [0];
+        
+        data.history.forEach(m => {
+            const conf = m.confidence ? m.confidence.confidence_index : 0;
+            if (conf >= minConf) {
+                // Check edge
+                let betOn = null;
+                let odds = 0;
+                if (m.edge1 >= minEdge) { betOn = 'p1'; odds = m.odds1; }
+                else if (m.edge2 >= minEdge) { betOn = 'p2'; odds = m.odds2; }
+                
+                if (betOn) {
+                    bets++;
+                    if (m.winner === betOn) {
+                        profit += (stake * odds) - stake;
+                    } else {
+                        profit -= stake;
+                    }
+                    labels.push(m.time.split('T')[0]);
+                    bankroll.push(profit);
+                }
+            }
+        });
+        
+        document.getElementById('roi-results-card').classList.remove('d-none');
+        document.getElementById('roi-total-bets').textContent = bets;
+        const sign = profit > 0 ? '+' : '';
+        document.getElementById('roi-profit').textContent = sign + profit.toFixed(2) + ' €';
+        document.getElementById('roi-profit').style.color = profit >= 0 ? 'var(--p1)' : 'var(--err)';
+        
+        const invested = bets * stake;
+        const roiPct = invested > 0 ? (profit / invested) * 100 : 0;
+        document.getElementById('roi-pct').textContent = sign + roiPct.toFixed(1) + ' %';
+        document.getElementById('roi-pct').style.color = roiPct >= 0 ? 'var(--p1)' : 'var(--err)';
+        
+        const ctx = document.getElementById('roiChart').getContext('2d');
+        if (roiChartInstance) roiChartInstance.destroy();
+        
+        roiChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Profit Net (€)',
+                    data: bankroll,
+                    borderColor: '#4ade80',
+                    backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: { ticks: { display: false } },
+                    y: { grid: { color: 'rgba(255,255,255,0.1)' } }
+                }
+            }
+        });
+        
+    } catch (e) {
+        alert("Erreur de simulation");
+    } finally {
+        btn.textContent = 'Lancer la Simulation';
+        btn.disabled = false;
+    }
+  }
+
+  async function loadDailyMatches(day) {
+    try {
+      document.getElementById('daily-matches-grid').innerHTML = '';
+      document.getElementById('daily-matches-loading').classList.remove('d-none');
+      
+      const resp = await fetch('/api/daily_matches?day=' + day);
+      const data = await resp.json();
+      document.getElementById('daily-matches-loading').classList.add('d-none');
+      
+      if(data.error) {
+        document.getElementById('daily-matches-grid').innerHTML = `<div style="color:var(--err);">${data.error}</div>`;
+        return;
+      }
+      
+      let html = '';
+      if(data.matches.length === 0) {
+        html = '<div style="color:var(--text3); grid-column: 1 / -1;">Aucun match pr&eacute;vu à cette date.</div>';
+      } else {
+        const now = new Date();
+        data.matches.forEach(m => {
+          const edge1 = m.edge1 > 0.02 ? `<div style="background:rgba(74, 222, 128, 0.15); color:#4ade80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">&#x1F525; VB ${(m.edge1*100).toFixed(1)}%</div>` : '';
+          const edge2 = m.edge2 > 0.02 ? `<div style="background:rgba(74, 222, 128, 0.15); color:#4ade80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">&#x1F525; VB ${(m.edge2*100).toFixed(1)}%</div>` : '';
+          
+          const matchTime = new Date(m.time);
+          const isLive = matchTime < now;
+          const timeHtml = isLive 
+            ? `<span style="color:#ef4444; font-weight:700; animation:glowPulse 2s infinite;">&#x25CF; LIVE</span>` 
+            : `<span>${matchTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>`;
+            
+          let confHtml = '';
+          if (m.confidence) {
+            const conf = m.confidence;
+            let confColor = conf.confidence_index >= 75 ? '#4ade80' : (conf.confidence_index >= 55 ? '#fbbf24' : (conf.confidence_index >= 35 ? '#f87171' : '#94a3b8'));
+            confHtml = `<div style="font-size:11px; color:${confColor}; font-weight:600; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px;">Conf: ${conf.confidence_index}</div>`;
+          }
+          
+          html += `
+          <div class="card" style="padding:16px; display:flex; flex-direction:column; gap:12px; border:${(m.edge1>0.02 || m.edge2>0.02) ? '1px solid rgba(74,222,128,0.5)' : '1px solid var(--border)'}; box-shadow:${(m.edge1>0.02 || m.edge2>0.02) ? '0 0 15px rgba(74,222,128,0.1)' : 'none'};">
+            <div style="font-size:12px; color:var(--text3); display:flex; justify-content:space-between; align-items:center;">
+              <span>${m.tourney}</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                ${confHtml}
+                ${timeHtml}
+              </div>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-weight:600; color:var(--text1);">${m.p1}</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <span style="font-size:13px; color:var(--text3);">Cote: ${m.odds1.toFixed(2)}</span>
+                ${edge1}
+              </div>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-weight:600; color:var(--text1);">${m.p2}</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <span style="font-size:13px; color:var(--text3);">Cote: ${m.odds2.toFixed(2)}</span>
+                ${edge2}
+              </div>
+            </div>
+            
+            <div style="margin-top:8px; height:6px; border-radius:3px; background:var(--bg); display:flex; overflow:hidden;">
+              <div style="height:100%; width:${m.proba1*100}%; background:var(--p1);"></div>
+              <div style="height:100%; width:${m.proba2*100}%; background:var(--p2);"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text3);">
+              <span>Algo: ${(m.proba1*100).toFixed(1)}%</span>
+              <span>Algo: ${(m.proba2*100).toFixed(1)}%</span>
+            </div>
+          </div>
+          `;
+        });
+      }
+      document.getElementById('daily-matches-grid').innerHTML = html;
+    } catch(e) {
+      document.getElementById('daily-matches-loading').innerHTML = '<span style="color:var(--err);">Erreur de chargement.</span>';
+    }
+  }
+  
+  window.addEventListener('DOMContentLoaded', () => {
+    loadDailyMatches();
+  });
+  const state={p1:null,p2:null};
+  const tourneysList = {{ tourneys | tojson }};
+  
+  document.addEventListener('DOMContentLoaded', () => {
+      // Load today's matches by default
+      const isoDate = currentDate.getFullYear() + "-" + 
+        String(currentDate.getMonth() + 1).padStart(2, '0') + "-" + 
+        String(currentDate.getDate()).padStart(2, '0');
+      loadDailyMatches(isoDate);
+      
+      const tInp = document.getElementById('sel-tourney');
+      const tDrop = document.getElementById('t-drop');
+      
+      tInp.addEventListener('focus', () => {
+          if (tInp.value === 'Unknown') tInp.value = '';
+      });
+      
+      tInp.addEventListener('blur', () => {
+          if (tInp.value.trim() === '') tInp.value = 'Unknown';
+      });
+
+      tInp.addEventListener('input', () => {
+          const q = tInp.value.toLowerCase();
+          tDrop.innerHTML = '';
+          if (q.length < 2) {
+              tDrop.classList.remove('open');
+              return;
+          }
+          const filtered = tourneysList.filter(t => t.toLowerCase().includes(q)).slice(0, 15);
+          if (!filtered.length) {
+              tDrop.classList.remove('open');
+              return;
+          }
+          filtered.forEach(t => {
+              const d = document.createElement('div');
+              d.className = 'ac-item';
+              d.innerHTML = '<span class="ac-name">' + esc(t) + '</span>';
+              d.addEventListener('mousedown', (e) => {
+                  e.preventDefault();
+                  tInp.value = t;
+                  tDrop.classList.remove('open');
+                  document.getElementById('t-ac-wrap').classList.add('d-none');
+                  document.getElementById('t-chip').classList.remove('d-none');
+                  document.getElementById('t-nm').textContent = t;
+              });
+              tDrop.appendChild(d);
+          });
+          
+          const r = tInp.getBoundingClientRect();
+          tDrop.style.top = (r.bottom + 5) + 'px';
+          tDrop.style.left = r.left + 'px';
+          tDrop.style.width = r.width + 'px';
+          tDrop.classList.add('open');
+      });
+
+      document.addEventListener('click', (e) => {
+          if (!tInp.contains(e.target) && !tDrop.contains(e.target)) {
+              tDrop.classList.remove('open');
+          }
+      });
+  });
+
+  document.addEventListener('DOMContentLoaded',()=>{setupAC(1);setupAC(2);const ra=()=>[1,2].forEach(n=>{const d=document.getElementById('p'+n+'-drop');if(d.classList.contains('open'))positionDropdown(n);});window.addEventListener('scroll',ra,{passive:true});window.addEventListener('resize',ra);});
+  function setupAC(n){const inp=document.getElementById('p'+n+'-inp');const drop=document.getElementById('p'+n+'-drop');let t;inp.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>fetchAC(n,inp.value),220);});inp.addEventListener('focus',()=>{if(inp.value.length>=2)fetchAC(n,inp.value);});document.addEventListener('click',(e)=>{if(!inp.contains(e.target)&&!drop.contains(e.target))drop.classList.remove('open');});inp.addEventListener('keydown',(e)=>{const items=[...drop.querySelectorAll('.ac-item')];if(!items.length)return;const fi=items.findIndex(i=>i.classList.contains('focused'));if(e.key==='ArrowDown'){e.preventDefault();const nx=items[Math.min(fi+1,items.length-1)];items.forEach(i=>i.classList.remove('focused'));nx.classList.add('focused');nx.scrollIntoView({block:'nearest'});}else if(e.key==='ArrowUp'){e.preventDefault();const pv=items[Math.max(fi-1,0)];items.forEach(i=>i.classList.remove('focused'));pv.classList.add('focused');}else if(e.key==='Enter'){const f=drop.querySelector('.ac-item.focused');if(f){e.preventDefault();f.click();}}else if(e.key==='Escape'){drop.classList.remove('open');}});}
+  async function fetchAC(n,q){const drop=document.getElementById('p'+n+'-drop');if(q.length<2){drop.classList.remove('open');return;}try{const res=await fetch('/api/players?q='+encodeURIComponent(q));const data=await res.json();renderAC(n,data);}catch{drop.classList.remove('open');}}
+  function positionDropdown(n){const inp=document.getElementById('p'+n+'-inp');const drop=document.getElementById('p'+n+'-drop');const r=inp.getBoundingClientRect();drop.style.top=(r.bottom+5)+'px';drop.style.left=r.left+'px';drop.style.width=r.width+'px';}
+  function renderAC(n,players){const drop=document.getElementById('p'+n+'-drop');if(!players.length){drop.classList.remove('open');return;}drop.innerHTML='';players.forEach(p=>{const item=document.createElement('div');item.className='ac-item';item.innerHTML='<span class="ac-name">'+esc(p.name)+'</span><span class="ac-elo">Elo '+p.elo+'</span>'+(p.rank?'<span class="ac-rank">#'+p.rank+'</span>':'');item.addEventListener('click',()=>selectPlayer(n,p));drop.appendChild(item);});positionDropdown(n);drop.classList.add('open');}
+  function selectPlayer(n,p){state['p'+n]=p;document.getElementById('p'+n+'-drop').classList.remove('open');document.getElementById('p'+n+'-ac-wrap').classList.add('d-none');const chip=document.getElementById('p'+n+'-chip');chip.classList.remove('d-none');document.getElementById('p'+n+'-av').textContent=initials(p.name);document.getElementById('p'+n+'-nm').textContent=p.name;document.getElementById('p'+n+'-mt').textContent=[p.rank?'#'+p.rank:null,'Elo '+p.elo].filter(Boolean).join(' · ');document.getElementById('o1-lbl').textContent=state.p1?state.p1.name.split(' ').slice(-1)[0]:'Cote Joueur 1';document.getElementById('o2-lbl').textContent=state.p2?state.p2.name.split(' ').slice(-1)[0]:'Cote Joueur 2';clearErr();}
+  function deselectT(){
+      const tInp = document.getElementById('sel-tourney');
+      document.getElementById('t-ac-wrap').classList.remove('d-none');
+      document.getElementById('t-chip').classList.add('d-none');
+      tInp.value = '';
+      tInp.focus();
+  }
+  function deselect(n){state['p'+n]=null;document.getElementById('p'+n+'-ac-wrap').classList.remove('d-none');document.getElementById('p'+n+'-chip').classList.add('d-none');const inp=document.getElementById('p'+n+'-inp');inp.value='';inp.focus();document.getElementById('o1-lbl').textContent=state.p1?state.p1.name.split(' ').slice(-1)[0]:'Cote Joueur 1';document.getElementById('o2-lbl').textContent=state.p2?state.p2.name.split(' ').slice(-1)[0]:'Cote Joueur 2';}
+  function initials(name){return name.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();}
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function showErr(msg){const bar=document.getElementById('err-bar');document.getElementById('err-msg').textContent=msg;bar.classList.remove('d-none');bar.scrollIntoView({behavior:'smooth',block:'nearest'});}
+  function clearErr(){document.getElementById('err-bar').classList.add('d-none');}
+  async function doPrediction(){clearErr();if(!state.p1||!state.p2){showErr('Selectionnez les deux joueurs avant de predire.');return;}if(state.p1.name===state.p2.name){showErr('Les deux joueurs doivent etre differents.');return;}const btn=document.getElementById('pred-btn');btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>Calcul en cours...';const gn=(id)=>{const v=document.getElementById(id)?.value.trim();return v?parseFloat(v):null;};const gv=(id)=>document.getElementById(id).value;const payload={p1:state.p1.name,p2:state.p2.name,surface:gv('sel-surf'),indoor:gv('sel-indoor'),level:gv('sel-level'),round:gv('sel-round'),best_of:gv('sel-bo'),odds1:gn('inp-o1'),odds2:gn('inp-o2')};try{const resp=await fetch('/api/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await resp.json();if(!resp.ok||data.error){showErr(data.error||'Erreur '+resp.status);return;}renderResults(data,payload);const rs=document.getElementById('results-section');rs.classList.remove('d-none');setTimeout(()=>rs.scrollIntoView({behavior:'smooth',block:'start'}),60);}catch(e){showErr("Impossible de joindre le serveur.");}finally{btn.disabled=false;btn.innerHTML='&#x26A1;&nbsp; Predire ce match';}}
+  function renderResults(d,p){const pct1=(d.p1_prob*100).toFixed(1);const pct2=(d.p2_prob*100).toFixed(1);document.getElementById('r-p1-nm').textContent=d.p1;document.getElementById('r-p2-nm').textContent=d.p2;document.getElementById('r-p1-pct').textContent=pct1+'%';document.getElementById('r-p2-pct').textContent=pct2+'%';setTimeout(()=>{document.getElementById('prob-bar').style.width=pct1+'%';},80);document.getElementById('r-elo1').textContent=d.elo_p1;document.getElementById('r-elo2').textContent=d.elo_p2;document.getElementById('r-elos1').textContent=d.elo_surf_p1;document.getElementById('r-elos2').textContent=d.elo_surf_p2;document.getElementById('r-surf-lbl').textContent='Sur '+d.surf;document.getElementById('r-c1-lbl').textContent=d.p1.split(' ').slice(-1)[0];document.getElementById('r-c2-lbl').textContent=d.p2.split(' ').slice(-1)[0];document.getElementById('r-rk1').textContent=d.rank_p1?'#'+d.rank_p1:'--';document.getElementById('r-rk2').textContent=d.rank_p2?'#'+d.rank_p2:'--';document.getElementById('r-h1').textContent=d.h2h[0];document.getElementById('r-h2').textContent=d.h2h[1];const s1=d.p1.split(' ').slice(-1)[0],s2=d.p2.split(' ').slice(-1)[0];document.getElementById('r-h1-lbl').textContent=s1;document.getElementById('r-h2-lbl').textContent=s2;renderForm(d.form_p1,'r-p1-form');renderForm(d.form_p2,'r-p2-form');renderDetailedHistory(d);renderVB(d);renderTourneyNote(d);}
+  function renderForm(arr,elId){const el=document.getElementById(elId);el.innerHTML='';if(!arr||!arr.length){el.innerHTML='<span style="font-size:11px;color:var(--text3)">Aucun histo.</span>';return;}arr.forEach(f=>{const d=document.createElement('div');d.className='f-dot '+(f.win?'f-w':'f-l');d.textContent=f.win?'V':'D';d.title=(f.win?'Victoire':'D\u00e9faite')+' sur '+f.surf+'\nTournoi: '+f.tourney+'\nContre: '+f.opp+'\nScore: '+f.score;el.appendChild(d);});}
+  function renderDetailedHistory(d) {
+    const el = document.getElementById('recent-history');
+    if (!el) return;
+    const renderList = (formArr) => {
+        if (!formArr || !formArr.length) return '<div class="stat-row" style="color:var(--text3);font-size:12px;padding:8px 0;">Aucun match r\u00e9cent.</div>';
+        const reversed = [...formArr].reverse();
+        return reversed.map((m, idx) => {
+            const resColor = m.win ? 'var(--p1)' : 'var(--err)';
+            const resText = m.win ? 'V' : 'D';
+            const isLast = idx === reversed.length - 1;
+            const borderStyle = isLast ? '' : 'border-bottom:1px solid rgba(255,255,255,0.04);';
+            return `<div style="display:flex;align-items:flex-start;padding-bottom:12px;margin-bottom:12px;${borderStyle}">
+                <div style="background:${m.win?'rgba(74,222,128,0.15)':'rgba(248,113,113,0.15)'};color:${resColor};width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:11px;font-weight:bold;margin-right:12px;flex-shrink:0;margin-top:2px;">${resText}</div>
+                <div style="flex:1">
+                    <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:3px;line-height:1.2;">vs ${esc(m.opp)}</div>
+                    <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">${esc(m.tourney)} &bull; ${esc(m.surf)}</div>
+                    <div style="font-size:11px;color:var(--text2);font-family:monospace;letter-spacing:-0.2px;">${esc(m.score)}</div>
+                </div>
+            </div>`;
+        }).join('');
+    };
+    el.innerHTML = `
+        <div class="stat-card">
+            <div class="stat-card-title" style="margin-bottom:20px;">&#x1F4C5; 5 Derniers Matchs - ${esc(d.p1.split(' ').slice(-1)[0])}</div>
+            ${renderList(d.form_p1)}
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-title" style="margin-bottom:20px;">&#x1F4C5; 5 Derniers Matchs - ${esc(d.p2.split(' ').slice(-1)[0])}</div>
+            ${renderList(d.form_p2)}
+        </div>
+    `;
+  }
+  function renderTourneyNote(d){const el=document.getElementById('r-tn');const t=d.tourney;const auto=[t.source1==='auto_detected'?d.p1:null,t.source2==='auto_detected'?d.p2:null].filter(Boolean);if(!el)return;if(auto.length){el.textContent='\u2713 Tournoi en cours d\u00e9tect\u00e9 automatiquement pour '+auto.join(' et ')+' (matchs/sets/jeux de\u0301ja\u0300 joue\u0301s dans ce tournoi pris en compte).';el.classList.remove('d-none');}else{el.classList.add('d-none');}}
+  function renderVB(d) {
+    const el = document.getElementById('r-vb');
+    const conf = d.confidence;
+    
+    let confColor = conf.confidence_index >= 75 ? '#4ade80' : (conf.confidence_index >= 55 ? '#fbbf24' : (conf.confidence_index >= 35 ? '#f87171' : '#94a3b8'));
+    let flagsHtml = conf.confidence_flags.map(f => '<div style="font-size:11px; margin-top:4px;">' + f + '</div>').join('');
+    let confHtml = '<div style="margin-top:16px;font-size:13px;color:var(--text2);background:rgba(0,0,0,0.2);padding:14px;border-radius:8px;border:1px solid rgba(255,255,255,0.05);">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+      '<strong>&#x1F4CA; Indice de Confiance Global :</strong> <strong style="color:' + confColor + ';font-size:16px">' + conf.confidence_index + ' / 100</strong></div>' +
+      '<div style="font-size:12px; font-weight:600; margin-bottom:8px;">Tier : ' + conf.bet_tier + '</div>' + flagsHtml + '</div>';
+
+    if (!d.value_bet) {
+      el.innerHTML = '<div class="vb-card miss"><div class="vb-top"><div class="vb-ttl">&#x1F4B0; Analyse et Confiance</div></div><div class="no-odds-notice" style="margin-bottom:0;">&#x1F4A1; Renseignez les cotes bookmaker pour obtenir l\'analyse value bet.</div>' + confHtml + '</div>';
+      return;
+    }
+
+    const vb = d.value_bet;
+    const hit = vb.recommended !== null;
+    const fe = (v) => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+    const fp = (v) => (v * 100).toFixed(1) + '%';
+    
+    const row = (name, prob, pm, edge) => {
+      const cls = edge > 0 ? 'edge-pos' : 'edge-neg';
+      return '<tr><td class="vb-pname">' + esc(name) + '</td><td>' + fp(prob) + '</td><td>' + fp(pm) + '</td><td class="' + cls + '">' + fe(edge) + '</td></tr>';
+    };
+
+    let recHtml = '';
+    if (hit) {
+      const r = vb.recommended;
+      recHtml = '<div class="vb-rec">&#x26A1; Parier sur <strong>' + esc(r.player) + '</strong>&nbsp;@&nbsp;<strong>' + r.odds.toFixed(2) + '</strong>&nbsp;<span class="vb-badge on">Edge ' + fe(r.edge) + '</span></div>';
+    } else {
+      recHtml = '<div class="vb-norec">Aucun edge d&eacute;tect&eacute; sur les cotes fournies.</div>';
+    }
+
+    el.innerHTML = '<div class="vb-card ' + (hit ? 'hit' : 'miss') + '"><div class="vb-top"><div class="vb-ttl">&#x1F4B0; Analyse value bet</div><span class="vb-badge ' + (hit ? 'on' : 'off') + '">' + (hit ? 'VALUE BET &#x2713;' : 'Pas de value') + '</span></div><table class="vb-tbl"><thead><tr><th>Joueur</th><th>p mod&egrave;le</th><th>p march&eacute;</th><th>Edge</th></tr></thead><tbody>' + row(d.p1, d.p1_prob, vb.pm1, vb.edge1) + row(d.p2, d.p2_prob, vb.pm2, vb.edge2) + '</tbody></table>' + recHtml + confHtml + '</div>';
+  }
+  function resetForm(){document.getElementById('results-section').classList.add('d-none');document.getElementById('prob-bar').style.width='0%';document.getElementById('form-section').scrollIntoView({behavior:'smooth',block:'start'});}
+
+  function startUpdate(){
+    const btn = document.getElementById('update-btn');
+    const term = document.getElementById('update-terminal');
+    const log = document.getElementById('update-log');
+    const lbl = document.getElementById('update-status-lbl');
+    const clsBtn = document.getElementById('close-term-btn');
+    const pbtn = document.getElementById('pred-btn');
+    
+    btn.disabled = true;
+    pbtn.disabled = true;
+    btn.style.opacity = '0.5';
+    document.getElementById('update-icon').innerHTML = '<span class="btn-spinner" style="width:10px;height:10px;border-width:1.5px;margin-right:0;"></span>';
+    
+    term.classList.remove('d-none');
+    clsBtn.classList.add('d-none');
+    log.textContent = 'Connexion au serveur...\n';
+    lbl.textContent = 'Mise à jour en cours...';
+    lbl.style.color = 'var(--p1)';
+    
+    term.scrollIntoView({behavior:'smooth',block:'start'});
+    
+    // Use POST with fetch, wait, EventSource doesn't support POST easily without extra libs.
+    // Let's use fetch with a stream reader.
+    fetch('/api/update', { method: 'POST' }).then(response => {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      function read() {
+        reader.read().then(({done, value}) => {
+          if (done) { finishUpdate(); return; }
+          const chunk = decoder.decode(value, {stream: true});
+          // Parse SSE simple format (lines starting with "data: ")
+          const lines = chunk.split('\n');
+          for (let line of lines) {
+            if (line.startsWith('data: ')) {
+              const msg = line.substring(6);
+              if (msg === '[UPDATE_SUCCESS]') {
+                lbl.textContent = 'Mise à jour terminée avec succès !';
+                finishUpdate();
+              } else if (msg === '[UPDATE_FAILED]') {
+                lbl.textContent = 'Échec de la mise à jour.';
+                lbl.style.color = 'var(--err)';
+                finishUpdate();
+              } else {
+                log.textContent += msg + '\n';
+                log.scrollTop = log.scrollHeight;
+              }
+            }
+          }
+          read();
+        }).catch(err => {
+          log.textContent += '\nErreur de connexion : ' + err;
+          lbl.textContent = 'Erreur réseau.';
+          lbl.style.color = 'var(--err)';
+          finishUpdate();
+        });
+      }
+      read();
+    }).catch(err => {
+      log.textContent += '\nImpossible de joindre le serveur.';
+      finishUpdate();
+    });
+  }
+
+  function finishUpdate() {
+    const btn = document.getElementById('update-btn');
+    const pbtn = document.getElementById('pred-btn');
+    const clsBtn = document.getElementById('close-term-btn');
+    btn.disabled = false;
+    pbtn.disabled = false;
+    btn.style.opacity = '1';
+    document.getElementById('update-icon').innerHTML = '&#x21BB;';
+    clsBtn.classList.remove('d-none');
+  }
+
+  function closeUpdateTerminal() {
+    document.getElementById('update-terminal').classList.add('d-none');
+  }
+</script>
+</body>
+</html>

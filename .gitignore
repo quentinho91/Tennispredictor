@@ -1,0 +1,20 @@
+# Environnement Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+
+# Dossier Data (fichiers trop lourds, générés automatiquement)
+data/
+{data/
+*.parquet
+*.pkl
+*.sqlite
+*.db
+
+# Fichiers OS
+.DS_Store
+Thumbs.db

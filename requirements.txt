@@ -1,0 +1,11 @@
+pandas
+numpy
+xgboost
+scikit-learn
+joblib
+flask
+rapidfuzz
+openpyxl
+
+gunicorn
+requests
