@@ -686,10 +686,7 @@
                 const cardHtml = `<div class="premium-card">
                   <div class="pc-top">
                     <div class="pc-badge-vb">VB</div>
-                    <div class="pc-tabs">
-                      <div class="pc-tab active">Pronos</div>
-                      <div class="pc-tab">Stats</div>
-                    </div>
+                    <div class="pc-badge-conf" style="background:var(--bg3); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:600; color:var(--text2);">Indice : ${Math.round(conf)}/100</div>
                     <div style="color:var(--text3); cursor:pointer;">&#x27A4;</div>
                   </div>
                   
@@ -845,13 +842,13 @@
                 p2Color = '#a855f7';
             }
             
+            const conf = m.confidence ? m.confidence.confidence_index : 0;
+            const confBadge = `<div class="pc-badge-conf" style="background:var(--bg3); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:600; color:var(--text2);">Indice : ${Math.round(conf)}/100</div>`;
+            
             html += `<div class="premium-card" style="${isVB?'box-shadow: 0 0 20px rgba(74,222,128,0.1); border-color:rgba(74,222,128,0.3);':''}">
               <div class="pc-top">
                 ${vbBadge}
-                <div class="pc-tabs">
-                  <div class="pc-tab active">Pronos</div>
-                  <div class="pc-tab">Stats</div>
-                </div>
+                ${confBadge}
                 <div style="color:var(--text3); cursor:pointer;">&#x27A4;</div>
               </div>
               
