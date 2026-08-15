@@ -11,6 +11,12 @@ db_path = os.path.join(BASE_DIR, "data", "processed", "predictions_db.json")
 # Clé de l'API the-odds-api.com : ne JAMAIS committer de clé en dur ici.
 # En local : export ODDS_API_KEY=xxxx (ou fichier .env)
 # En CI/Render : secret d'environnement ODDS_API_KEY
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except ImportError:
+    pass
+
 API_KEY = os.environ.get("ODDS_API_KEY", "")
 if not API_KEY:
     print("[AVERTISSEMENT] ODDS_API_KEY n'est pas définie — les cotes ne seront pas récupérées.")
