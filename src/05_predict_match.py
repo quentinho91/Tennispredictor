@@ -213,7 +213,8 @@ def load_resources(circuit="atp"):
     models = [xgb_model]
     
     lgb_path = PROC_DIR / f"lgb_model_{circuit}.txt"
-    if lgb_path.exists():
+    # Désactiver LightGBM et CatBoost sur Render pour éviter tout OOM
+    if lgb_path.exists() and not os.environ.get("RENDER"):
         import lightgbm as lgbm
         lgb_model = lgbm.Booster(model_file=str(lgb_path))
         class LGBMWrapper:
