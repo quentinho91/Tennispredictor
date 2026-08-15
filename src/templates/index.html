@@ -871,6 +871,24 @@
         html += '<div style="color:var(--text3); padding:20px 0;">Aucun match pr&eacute;vu à cette date.</div>';
       } else {
         const now = new Date();
+        
+        // Trier pour avoir l'ATP en premier, puis par tournoi, puis par heure
+        data.matches.sort((a, b) => {
+          const circA = (a.circuit || '').toLowerCase();
+          const circB = (b.circuit || '').toLowerCase();
+          if (circA !== circB) {
+            if (circA === 'atp') return -1;
+            if (circB === 'atp') return 1;
+            return circA.localeCompare(circB);
+          }
+          const tourneyA = a.tourney || '';
+          const tourneyB = b.tourney || '';
+          if (tourneyA !== tourneyB) {
+            return tourneyA.localeCompare(tourneyB);
+          }
+          return new Date(a.time) - new Date(b.time);
+        });
+
         const tourneys = {};
         
         data.matches.forEach(m => {
