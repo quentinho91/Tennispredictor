@@ -2,7 +2,7 @@ name: Daily Model Update
 
 on:
   schedule:
-    - cron: '0 6 * * *' # Tous les jours a 6h00 UTC
+    - cron: '0 6,14,22 * * *' # 3 fois par jour (6h, 14h, 22h UTC)
   workflow_dispatch: # Permet de lancer manuellement depuis l'interface GitHub
 
 # Empêche deux runs de tourner en même temps (cron + déclenchement manuel) :

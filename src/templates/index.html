@@ -167,9 +167,6 @@
     <div class="logo"><div class="logo-icon">&#x1F3BE;</div>Tennis Predictor</div>
     <div style="display:flex;align-items:center;gap:12px;">
       <div class="header-chip">XGBoost &middot; Elo &middot; Walk-forward</div>
-      <button id="update-btn" onclick="startUpdate()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:var(--trans);">
-        <span id="update-icon">&#x21BB;</span> Mettre &agrave; jour
-      </button>
     </div>
   </div>
 </header>
@@ -180,14 +177,6 @@
     <p class="hero-sub">S&eacute;lectionnez deux joueurs, entrez les cotes, et obtenez la probabilit&eacute; de victoire + l&apos;analyse value bet en un clic.</p>
   </div>
   <div id="err-bar" class="error-bar d-none"><span>&#x26A0;</span><span id="err-msg"></span></div>
-  
-  <div id="update-terminal" class="card d-none" style="margin-bottom:24px;border-color:var(--p1-border);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div class="section-label" id="update-status-lbl" style="margin:0;color:var(--p1);">Mise &agrave; jour en cours...</div>
-      <button id="close-term-btn" onclick="closeUpdateTerminal()" class="d-none" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;">&#x2715;</button>
-    </div>
-    <div id="update-log" style="background:rgba(0,0,0,0.5);color:#4ade80;font-family:monospace;font-size:11.5px;padding:16px;border-radius:8px;height:220px;overflow-y:auto;white-space:pre-wrap;border:1px solid rgba(0,0,0,0.8);"></div>
-  </div>
   <div class="tab-nav">
     <button id="tab-daily" class="tab-btn active" onclick="switchTab('daily')">Matchs du Jour</button>
     <button id="tab-roi" class="tab-btn" onclick="switchTab('roi')">Simulateur ROI</button>
@@ -576,21 +565,24 @@
       } else {
         const now = new Date();
         data.matches.forEach(m => {
-          const edge1 = m.edge1 > 0.02 ? `<div style="background:rgba(74, 222, 128, 0.15); color:#4ade80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">&#x1F525; VB ${(m.edge1*100).toFixed(1)}%</div>` : '';
-          const edge2 = m.edge2 > 0.02 ? `<div style="background:rgba(74, 222, 128, 0.15); color:#4ade80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">&#x1F525; VB ${(m.edge2*100).toFixed(1)}%</div>` : '';
+          let vbHit1 = '';
+          let vbHit2 = '';
           
-          const matchTime = new Date(m.time);
-          const isLive = matchTime < now;
-          const timeHtml = isLive 
-            ? `<span style="color:#ef4444; font-weight:700; animation:glowPulse 2s infinite;">&#x25CF; LIVE</span>` 
-            : `<span>${matchTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>`;
-            
-          let confHtml = '';
-          if (m.confidence) {
-            const conf = m.confidence;
-            let confColor = conf.confidence_index >= 75 ? '#4ade80' : (conf.confidence_index >= 55 ? '#fbbf24' : (conf.confidence_index >= 35 ? '#f87171' : '#94a3b8'));
-            confHtml = `<div style="font-size:11px; color:${confColor}; font-weight:600; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px;">Conf: ${conf.confidence_index}</div>`;
+          if (m.winner) {
+              timeHtml = `<span style="color:#94a3b8; font-weight:700;">Termin&eacute;</span>`;
+              if (m.edge1 > 0.02) {
+                  vbHit1 = m.winner === 'p1' ? ' ✅' : ' ❌';
+              }
+              if (m.edge2 > 0.02) {
+                  vbHit2 = m.winner === 'p2' ? ' ✅' : ' ❌';
+              }
           }
+          
+          const edge1 = m.edge1 > 0.02 ? `<div style="background:rgba(74, 222, 128, 0.15); color:#4ade80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">&#x1F525; VB ${(m.edge1*100).toFixed(1)}%${vbHit1}</div>` : '';
+          const edge2 = m.edge2 > 0.02 ? `<div style="background:rgba(74, 222, 128, 0.15); color:#4ade80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">&#x1F525; VB ${(m.edge2*100).toFixed(1)}%${vbHit2}</div>` : '';
+          
+          let p1Style = m.winner === 'p1' ? 'color:#4ade80;' : (m.winner === 'p2' ? 'color:var(--text3);' : 'color:var(--text1);');
+          let p2Style = m.winner === 'p2' ? 'color:#4ade80;' : (m.winner === 'p1' ? 'color:var(--text3);' : 'color:var(--text1);');
           
           html += `
           <div class="card" style="padding:16px; display:flex; flex-direction:column; gap:12px; border:${(m.edge1>0.02 || m.edge2>0.02) ? '1px solid rgba(74,222,128,0.5)' : '1px solid var(--border)'}; box-shadow:${(m.edge1>0.02 || m.edge2>0.02) ? '0 0 15px rgba(74,222,128,0.1)' : 'none'};">
@@ -603,7 +595,7 @@
             </div>
             
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-weight:600; color:var(--text1);">${m.p1}</div>
+              <div style="font-weight:600; ${p1Style}">${m.p1}${m.winner === 'p1' ? ' 🏆' : ''}</div>
               <div style="display:flex; gap:8px; align-items:center;">
                 <span style="font-size:13px; color:var(--text3);">Cote: ${m.odds1.toFixed(2)}</span>
                 ${edge1}
@@ -611,7 +603,7 @@
             </div>
             
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-weight:600; color:var(--text1);">${m.p2}</div>
+              <div style="font-weight:600; ${p2Style}">${m.p2}${m.winner === 'p2' ? ' 🏆' : ''}</div>
               <div style="display:flex; gap:8px; align-items:center;">
                 <span style="font-size:13px; color:var(--text3);">Cote: ${m.odds2.toFixed(2)}</span>
                 ${edge2}
@@ -792,85 +784,6 @@
     el.innerHTML = '<div class="vb-card ' + (hit ? 'hit' : 'miss') + '"><div class="vb-top"><div class="vb-ttl">&#x1F4B0; Analyse value bet</div><span class="vb-badge ' + (hit ? 'on' : 'off') + '">' + (hit ? 'VALUE BET &#x2713;' : 'Pas de value') + '</span></div><table class="vb-tbl"><thead><tr><th>Joueur</th><th>p mod&egrave;le</th><th>p march&eacute;</th><th>Edge</th></tr></thead><tbody>' + row(d.p1, d.p1_prob, vb.pm1, vb.edge1) + row(d.p2, d.p2_prob, vb.pm2, vb.edge2) + '</tbody></table>' + recHtml + confHtml + '</div>';
   }
   function resetForm(){document.getElementById('results-section').classList.add('d-none');document.getElementById('prob-bar').style.width='0%';document.getElementById('form-section').scrollIntoView({behavior:'smooth',block:'start'});}
-
-  function startUpdate(){
-    const btn = document.getElementById('update-btn');
-    const term = document.getElementById('update-terminal');
-    const log = document.getElementById('update-log');
-    const lbl = document.getElementById('update-status-lbl');
-    const clsBtn = document.getElementById('close-term-btn');
-    const pbtn = document.getElementById('pred-btn');
-    
-    btn.disabled = true;
-    pbtn.disabled = true;
-    btn.style.opacity = '0.5';
-    document.getElementById('update-icon').innerHTML = '<span class="btn-spinner" style="width:10px;height:10px;border-width:1.5px;margin-right:0;"></span>';
-    
-    term.classList.remove('d-none');
-    clsBtn.classList.add('d-none');
-    log.textContent = 'Connexion au serveur...\n';
-    lbl.textContent = 'Mise à jour en cours...';
-    lbl.style.color = 'var(--p1)';
-    
-    term.scrollIntoView({behavior:'smooth',block:'start'});
-    
-    // Use POST with fetch, wait, EventSource doesn't support POST easily without extra libs.
-    // Let's use fetch with a stream reader.
-    fetch('/api/update', { method: 'POST' }).then(response => {
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      
-      function read() {
-        reader.read().then(({done, value}) => {
-          if (done) { finishUpdate(); return; }
-          const chunk = decoder.decode(value, {stream: true});
-          // Parse SSE simple format (lines starting with "data: ")
-          const lines = chunk.split('\n');
-          for (let line of lines) {
-            if (line.startsWith('data: ')) {
-              const msg = line.substring(6);
-              if (msg === '[UPDATE_SUCCESS]') {
-                lbl.textContent = 'Mise à jour terminée avec succès !';
-                finishUpdate();
-              } else if (msg === '[UPDATE_FAILED]') {
-                lbl.textContent = 'Échec de la mise à jour.';
-                lbl.style.color = 'var(--err)';
-                finishUpdate();
-              } else {
-                log.textContent += msg + '\n';
-                log.scrollTop = log.scrollHeight;
-              }
-            }
-          }
-          read();
-        }).catch(err => {
-          log.textContent += '\nErreur de connexion : ' + err;
-          lbl.textContent = 'Erreur réseau.';
-          lbl.style.color = 'var(--err)';
-          finishUpdate();
-        });
-      }
-      read();
-    }).catch(err => {
-      log.textContent += '\nImpossible de joindre le serveur.';
-      finishUpdate();
-    });
-  }
-
-  function finishUpdate() {
-    const btn = document.getElementById('update-btn');
-    const pbtn = document.getElementById('pred-btn');
-    const clsBtn = document.getElementById('close-term-btn');
-    btn.disabled = false;
-    pbtn.disabled = false;
-    btn.style.opacity = '1';
-    document.getElementById('update-icon').innerHTML = '&#x21BB;';
-    clsBtn.classList.remove('d-none');
-  }
-
-  function closeUpdateTerminal() {
-    document.getElementById('update-terminal').classList.add('d-none');
-  }
 </script>
 </body>
 </html>
