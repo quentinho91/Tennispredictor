@@ -46,6 +46,8 @@ jobs:
           python src/01_build_dataset.py
           python src/02_feature_engineering.py
           python src/03_train_model.py
+          python src/short_term_rest_features.py
+          python src/06_export_light_state.py
           # NOTE : short_term_rest_features.py retiré du pipeline pour l'instant.
           # C'est un script de démo (liste de joueurs codée en dur, aucune
           # sauvegarde du résultat) — à réintégrer une fois vraiment câblé
