@@ -170,12 +170,12 @@ def load_resources(circuit="atp"):
     STATE_PATH, MODEL_PATH, FCOLS_PATH = get_paths(circuit)
     for path in (STATE_PATH, MODEL_PATH, FCOLS_PATH):
         if not path.exists():
-            print(f"[ERREUR] Fichier manquant : {path}")
+            msg = f"[ERREUR] Fichier manquant : {path}\n"
             if "player_state" in str(path):
-                print(f"  -> Lance d'abord : python 02_feature_engineering.py --circuit {circuit}")
+                msg += f"  -> Lance d'abord : python 02_feature_engineering.py --circuit {circuit}"
             elif "xgb_model" in str(path):
-                print(f"  -> Lance d'abord : python 03_train_model.py --circuit {circuit}")
-            sys.exit(1)
+                msg += f"  -> Lance d'abord : python 03_train_model.py --circuit {circuit}"
+            raise FileNotFoundError(msg)
 
     print(f"Chargement du modele et de l'etat des joueurs ({circuit.upper()})...", end=" ", flush=True)
     with open(STATE_PATH, "rb") as f:
