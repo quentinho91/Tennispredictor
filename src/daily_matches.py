@@ -80,21 +80,37 @@ def get_daily_matches_with_odds(models, pred):
                   and 'itf' not in s['key'].lower()
                   and 'doubles' not in s['key'].lower()]
         
-        # Limiter à 4 sports maximum pour éviter un timeout Gunicorn (30s) sur Render
-        sports = sports[:4]
-        
-        for sport in sports:
+        # Ne pas limiter arbitrairement le nombre de sports, mais utiliser le multi-threading
+        # pour éviter le timeout Gunicorn
+        import concurrent.futures
+
+        # On va stocker les erreurs API (ex: quota dépassé)
+        api_errors = []
+
+        def fetch_odds(sport):
             odds_url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/?apiKey={API_KEY}&regions=eu,uk&markets=h2h"
             try:
-                r_odds = requests.get(odds_url, timeout=8)
-                if r_odds.ok:
-                    sport_events = r_odds.json()
-                    for e in sport_events:
+                r = requests.get(odds_url, timeout=8)
+                if r.ok:
+                    evs = r.json()
+                    for e in evs:
                         e['circuit'] = 'wta' if 'wta' in sport.lower() else 'atp'
-                    events.extend(sport_events)
-            except:
-                continue
+                    return evs
+                elif r.status_code in [401, 403, 429]:
+                    api_errors.append(f"Erreur API ({r.status_code}): Quota ou Clé invalide")
+            except Exception as e:
+                pass
+            return []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            results = executor.map(fetch_odds, sports)
+            for sport_events in results:
+                events.extend(sport_events)
                 
+        warning_msg = None
+        if api_errors:
+            warning_msg = api_errors[0] # On prend la première erreur
+        
         # Save to cache
         try:
             with open(cache_path, "w", encoding="utf-8") as f:
@@ -381,4 +397,8 @@ def get_daily_matches_with_odds(models, pred):
     except Exception as e:
         print(f"Erreur de sauvegarde DB: {e}")
         
-    return {"matches": all_matches}
+    ret = {"matches": all_matches}
+    if 'warning_msg' in locals() and warning_msg:
+        ret['warning'] = warning_msg
+        
+    return ret
