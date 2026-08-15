@@ -176,7 +176,13 @@ if __name__ == "__main__":
     # Sauvegarde pour le backtest de value betting
     model.save_model(str(PROCESSED_DIR / f"xgb_model_{args.circuit}.json"))
     import joblib
-    joblib.dump(calibrator, PROCESSED_DIR / f"calibrator_{args.circuit}.pkl")
+    calib_path = PROCESSED_DIR / f"calibrator_{args.circuit}.pkl"
+    if use_calibration:
+        joblib.dump(calibrator, calib_path)
+    else:
+        if calib_path.exists():
+            calib_path.unlink()
+            
     joblib.dump(feature_cols, PROCESSED_DIR / f"feature_cols_{args.circuit}.pkl")
 
     df_test = df_test.copy()

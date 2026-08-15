@@ -168,6 +168,21 @@ def remove_overround(odds1, odds2):
 # Chargement des ressources
 # --------------------------------------------------------------------------
 
+class CalibratedPredictor:
+    def __init__(self, model, calibrator=None):
+        self.model = model
+        self.calibrator = calibrator
+    
+    def predict_proba(self, X):
+        p_raw = self.model.predict_proba(X)
+        if self.calibrator is not None:
+            p1_raw = p_raw[:, 1]
+            p1_calib = self.calibrator.predict(p1_raw)
+            p0_calib = 1.0 - p1_calib
+            return np.column_stack((p0_calib, p1_calib))
+        return p_raw
+
+
 def load_resources(circuit="atp"):
     STATE_PATH, MODEL_PATH, FCOLS_PATH = get_paths(circuit)
     for path in (STATE_PATH, MODEL_PATH, FCOLS_PATH):
@@ -185,8 +200,16 @@ def load_resources(circuit="atp"):
     model = xgb.XGBClassifier()
     model.load_model(str(MODEL_PATH))
     feature_cols = joblib.load(FCOLS_PATH)
-    print(f"OK  ({len(state['elo'])} joueurs, {len(feature_cols)} features)")
-    return state, model, feature_cols
+    
+    calibrator_path = PROC_DIR / f"calibrator_{circuit}.pkl"
+    calibrator = None
+    if calibrator_path.exists():
+        calibrator = joblib.load(calibrator_path)
+        
+    calibrated_model = CalibratedPredictor(model, calibrator)
+    
+    print(f"OK  ({len(state['elo'])} joueurs, {len(feature_cols)} features, Calibrator={'Oui' if calibrator else 'Non'})")
+    return state, calibrated_model, feature_cols
 
 
 def _get_exact_rest_hours(player_name, last_play_day_offset, date_min, match_date, default_days):
