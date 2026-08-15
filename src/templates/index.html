@@ -159,6 +159,40 @@
     .day-btn.active { background:var(--p1-bg); color:var(--p1); border-color:var(--p1-border); }
     
     @media(max-width:600px){ .players-grid{grid-template-columns:1fr} .vs-col{display:none} .stats-2col{grid-template-columns:1fr} .prob-pct{font-size:38px} .prob-card{padding:20px} .odds-grid{grid-template-columns:1fr} .ctx-grid{grid-template-columns:1fr} }
+    /* Premium Match Card CSS */
+    .premium-card { background: #1a1d2d; border-radius: 16px; padding: 16px; min-width: 280px; position: relative; border: 1px solid rgba(255,255,255,0.05); }
+    .pc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+    .pc-badge-vb { background: #4ade80; color: #000; font-weight: 800; font-size: 10px; padding: 4px 8px; border-radius: 6px; }
+    .pc-tabs { display: flex; gap: 4px; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 20px; }
+    .pc-tab { padding: 4px 12px; font-size: 11px; color: var(--text3); border-radius: 16px; cursor: pointer; }
+    .pc-tab.active { background: #4f46e5; color: #fff; font-weight: 600; }
+    .pc-status { text-align: center; background: rgba(0,0,0,0.4); border-radius: 8px; padding: 6px 12px; }
+    .pc-status-lbl { font-size: 10px; color: #4ade80; font-weight: 700; margin-bottom: 2px; }
+    .pc-score { font-size: 14px; font-weight: 800; letter-spacing: 1px; }
+    .pc-date { font-size: 10px; color: var(--text3); }
+    
+    .pc-players { display: flex; justify-content: space-between; margin-bottom: 20px; }
+    .pc-player { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 40%; text-align: center; }
+    .pc-avatar { width: 40px; height: 40px; background: #2a2d3d; border-radius: 50%; overflow: hidden; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:12px; }
+    .pc-name { font-size: 12px; font-weight: 700; line-height: 1.2; }
+    .pc-atp { font-size: 9px; color: var(--text3); }
+    
+    .pc-bars { display: flex; justify-content: space-around; height: 120px; align-items: flex-end; position: relative; padding-bottom: 10px; }
+    .pc-bar-container { width: 14px; height: 100px; background: rgba(0,0,0,0.5); border-radius: 10px; position: relative; }
+    .pc-bar-fill { position: absolute; bottom: 0; left: 0; width: 100%; border-radius: 10px; }
+    .pc-bar-fill.p1 { background: linear-gradient(to top, #2dd4bf, #4ade80); box-shadow: 0 0 10px rgba(74,222,128,0.3); }
+    .pc-bar-fill.p2 { background: linear-gradient(to top, #6366f1, #a855f7); box-shadow: 0 0 10px rgba(99,102,241,0.3); }
+    
+    .pc-prob-lbl { position: absolute; top: -25px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 800; text-align:center; }
+    .pc-prob-lbl.p1 { color: #4ade80; }
+    .pc-prob-lbl.p2 { color: #6366f1; }
+    .pc-prob-sub { font-size: 9px; opacity: 0.8; font-weight: 500; display:block; }
+    
+    .pc-odds-row { display: flex; justify-content: space-around; margin-top: -5px; }
+    .pc-odd { font-size: 11px; color: var(--text2); background: rgba(0,0,0,0.3); padding: 4px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); }
+    
+    .tourney-list-item { display:flex; justify-content:space-between; align-items:center; background:#1a1d2d; padding:16px 20px; border-radius:12px; margin-bottom:12px; cursor:pointer; border:1px solid transparent; transition:var(--trans); }
+    .tourney-list-item:hover { border-color:rgba(255,255,255,0.1); }
   </style>
 </head>
 <body>
@@ -203,48 +237,79 @@
   </div>
 
   <div id="roi-section" class="d-none">
-    <div id="roi-tourneys-scroll" style="display:flex; gap:12px; overflow-x:auto; padding-bottom:12px; margin-bottom:16px; scrollbar-width:thin;">
-      <!-- Tournament cards will be inserted here -->
-    </div>
     
-    <div class="card" id="roi-results-card">
+    <!-- Liste des Compétitions -->
+    <div id="roi-list-view">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-        <p class="section-label" style="margin:0;" id="roi-current-tourney">Tous les tournois</p>
-        <button class="btn" style="background:var(--card); border:1px solid var(--border); color:var(--text); padding:4px 10px; border-radius:6px; font-size:12px; cursor:pointer;" onclick="document.getElementById('roi-settings').classList.toggle('d-none')">&#x2699; Filtres</button>
+        <h2 style="margin:0; font-size:18px; font-weight:800;">Les comp&eacute;titions</h2>
+        <button class="btn" style="background:var(--card); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:20px; font-size:12px; cursor:pointer;" onclick="document.getElementById('roi-settings').classList.toggle('d-none')">&#x2699; Filtres</button>
       </div>
       
       <div id="roi-settings" class="d-none" style="background:rgba(0,0,0,0.2); padding:16px; border-radius:var(--r); margin-bottom:20px; border:1px solid var(--border);">
         <div class="ctx-grid">
           <div class="field">
             <label class="field-lbl">Confiance Min.</label>
-            <input type="number" id="roi-min-conf" class="field-inp" value="0" min="0" max="100" onchange="renderROI()">
+            <input type="number" id="roi-min-conf" class="field-inp" value="0" min="0" max="100" onchange="renderTourneyCards()">
           </div>
           <div class="field">
             <label class="field-lbl">Edge Min. (%)</label>
-            <input type="number" id="roi-min-edge" class="field-inp" value="0" min="0" max="100" onchange="renderROI()">
+            <input type="number" id="roi-min-edge" class="field-inp" value="0" min="0" max="100" onchange="renderTourneyCards()">
           </div>
           <div class="field">
             <label class="field-lbl">Mise Fixe (&euro;)</label>
-            <input type="number" id="roi-stake" class="field-inp" value="10" min="1" onchange="renderROI()">
+            <input type="number" id="roi-stake" class="field-inp" value="10" min="1" onchange="renderTourneyCards()">
           </div>
         </div>
       </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:24px; overflow-x:auto; padding-bottom:8px; scrollbar-width:none;">
+        <div class="pc-tab active">1s</div><div class="pc-tab">15j</div><div class="pc-tab">1m</div><div class="pc-tab">3m</div><div class="pc-tab">6m</div><div class="pc-tab">1a</div>
+      </div>
       
-      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:24px;">
-        <div style="background:var(--card); border:1px solid var(--border); padding:16px; border-radius:var(--r); text-align:center;">
-          <div style="font-size:12px; color:var(--text2); margin-bottom:4px;">Paris Plac&eacute;s</div>
-          <div id="roi-total-bets" style="font-size:24px; font-weight:700;">-</div>
+      <div id="roi-tourneys-container">
+        <!-- Tournament list rows inserted here -->
+      </div>
+    </div>
+    
+    <!-- Vue Détaillée d'une compétition -->
+    <div id="roi-detail-view" class="d-none">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+        <div style="display:flex; align-items:center; gap:12px; cursor:pointer;" onclick="closeTourneyDetail()">
+          <span style="font-size:20px; color:var(--text2);">&larr;</span>
+          <span style="font-size:24px;" id="detail-flag">&#x1F3C6;</span>
+          <h2 style="margin:0; font-size:20px; font-weight:800;" id="detail-title">Tournament</h2>
         </div>
-        <div style="background:var(--card); border:1px solid var(--border); padding:16px; border-radius:var(--r); text-align:center;">
-          <div style="font-size:12px; color:var(--text2); margin-bottom:4px;">Profit Net</div>
-          <div id="roi-profit" style="font-size:24px; font-weight:700;">-</div>
+        <button class="btn" style="background:rgba(255,255,255,0.05); border:none; border-radius:50%; width:36px; height:36px; cursor:pointer;" onclick="document.getElementById('roi-settings').classList.toggle('d-none')">&#x2699;</button>
+      </div>
+      
+      <div style="display:flex; justify-content:space-around; text-align:center; margin-bottom:30px;">
+        <div>
+          <div id="detail-roi" style="font-size:20px; font-weight:400; font-family:monospace; margin-bottom:4px;">-</div>
+          <div style="font-size:10px; color:var(--text3);">de ROI</div>
         </div>
-        <div style="background:var(--card); border:1px solid var(--border); padding:16px; border-radius:var(--r); text-align:center;">
-          <div style="font-size:12px; color:var(--text2); margin-bottom:4px;">ROI (%)</div>
-          <div id="roi-pct" style="font-size:24px; font-weight:700;">-</div>
+        <div>
+          <div id="detail-avg-odds" style="font-size:20px; font-weight:400; font-family:monospace; margin-bottom:4px;">-</div>
+          <div style="font-size:10px; color:var(--text3);">cote moyenne</div>
+        </div>
+        <div>
+          <div id="detail-win-rate" style="font-size:20px; font-weight:400; font-family:monospace; margin-bottom:4px;">-</div>
+          <div style="font-size:10px; color:var(--text3);">% de r&eacute;ussite</div>
         </div>
       </div>
-      <canvas id="roiChart" width="400" height="200"></canvas>
+      
+      <div style="display:flex; gap:8px; margin-bottom:24px; justify-content:center;">
+        <div class="pc-tab active">1s</div><div class="pc-tab">15j</div><div class="pc-tab">1m</div><div class="pc-tab">3m</div><div class="pc-tab">6m</div><div class="pc-tab">1a</div>
+      </div>
+      
+      <div style="margin-bottom:30px;">
+        <canvas id="roiChart" width="400" height="200"></canvas>
+      </div>
+      
+      <h3 style="font-size:16px; font-weight:800; margin-bottom:16px;" id="detail-vb-title">Les X valuebets de cette comp&eacute;tition</h3>
+      
+      <div id="detail-vb-container" style="display:flex; gap:16px; overflow-x:auto; padding-bottom:16px; scrollbar-width:thin;">
+        <!-- Premium Cards inserted here -->
+      </div>
     </div>
   </div>
 
@@ -481,97 +546,199 @@
   function renderTourneyCards() {
     const tourneys = {};
     const t_order = [];
+    
+    const minConf = parseInt(document.getElementById('roi-min-conf').value) || 0;
+    const minEdge = (parseFloat(document.getElementById('roi-min-edge').value) || 0) / 100.0;
+    const stake = parseFloat(document.getElementById('roi-stake').value) || 10;
+
     roiGlobalHistory.forEach(m => {
         if (!m.tourney) return;
         if (!tourneys.hasOwnProperty(m.tourney)) {
-            tourneys[m.tourney] = 0;
+            tourneys[m.tourney] = { profit: 0, bets: 0, avg_odds_sum: 0, wins: 0, matches: [] };
             t_order.push(m.tourney);
         }
         
-        const stake = 10;
-        let p = 0;
+        const conf = m.confidence ? m.confidence.confidence_index : 0;
+        if (conf < minConf) return;
+
         let edge1 = m.edge1 || 0;
         let edge2 = m.edge2 || 0;
         let betOn = null;
         let odds = 0;
-        if (edge1 > 0) { betOn = 'p1'; odds = m.odds1; }
-        else if (edge2 > 0) { betOn = 'p2'; odds = m.odds2; }
+        if (edge1 >= minEdge && edge1 > 0) { betOn = 'p1'; odds = m.odds1; }
+        else if (edge2 >= minEdge && edge2 > 0) { betOn = 'p2'; odds = m.odds2; }
         
         if (betOn) {
-            if (m.winner === betOn) p = (stake * odds) - stake;
-            else p = -stake;
+            tourneys[m.tourney].bets++;
+            tourneys[m.tourney].avg_odds_sum += odds;
+            let p = 0;
+            if (m.winner === betOn) {
+                p = (stake * odds) - stake;
+                tourneys[m.tourney].wins++;
+            } else {
+                p = -stake;
+            }
+            tourneys[m.tourney].profit += p;
+            tourneys[m.tourney].matches.push({ m, betOn, odds, p });
         }
-        tourneys[m.tourney] += p;
     });
 
-    // Reverse to have latest tourneys first
     t_order.reverse();
 
-    let html = `<div onclick="selectTourney('ALL')" style="flex-shrink:0; padding:12px 16px; border-radius:12px; cursor:pointer; transition:var(--trans); border:1px solid ${roiSelectedTourney==='ALL'?'var(--p1)':'var(--border)'}; background:${roiSelectedTourney==='ALL'?'rgba(74,222,128,0.1)':'var(--card)'};"><div style="font-size:12px; color:var(--text2);">Global</div><div style="font-weight:700; font-size:15px; color:var(--text);">Tous les tournois</div></div>`;
-    
+    let html = '';
     t_order.forEach(t_name => {
-        const profit = tourneys[t_name];
-        const isSel = (roiSelectedTourney === t_name);
-        const col = profit >= 0 ? 'var(--p1)' : 'var(--err)';
-        const sign = profit > 0 ? '+' : '';
-        html += `<div onclick="selectTourney('${t_name.replace(/'/g, "\\'")}')" style="flex-shrink:0; padding:12px 16px; border-radius:12px; cursor:pointer; transition:var(--trans); border:1px solid ${isSel?'var(--p1)':'var(--border)'}; background:${isSel?'rgba(74,222,128,0.1)':'var(--card)'};">
-            <div style="font-size:12px; color:var(--text2); margin-bottom:4px; max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t_name}</div>
-            <div style="font-weight:700; font-size:15px; color:${col};">${sign}${profit.toFixed(2)} €</div>
+        const t = tourneys[t_name];
+        if (t.bets === 0) return; // skip if no bets after filter
+        const roi = (t.profit / (t.bets * stake)) * 100;
+        const roiStr = roi > 0 ? `+${roi.toFixed(1)}` : roi.toFixed(1);
+        
+        html += `<div class="tourney-list-item" onclick="openTourneyDetail('${t_name.replace(/'/g, "\\'")}')">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:24px;">&#x1F3C6;</span>
+            <div>
+              <div style="font-size:16px; font-weight:700;">${t_name}</div>
+              <div style="font-size:12px; color:var(--text3);">${t.bets} valuebets</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <span style="font-size:14px; font-weight:600; color:${roi>=0?'#4ade80':'var(--text3)'};">${roiStr}% de ROI</span>
+            <span style="color:var(--text3);">&rsaquo;</span>
+          </div>
         </div>`;
     });
-    document.getElementById('roi-tourneys-scroll').innerHTML = html;
+    
+    document.getElementById('roi-tourneys-container').innerHTML = html;
+    
+    // If a tournament is currently open, we should re-render it to update its stats and chart with the new filters
+    if (!document.getElementById('roi-detail-view').classList.contains('d-none')) {
+        renderROI();
+    }
   }
 
-  function selectTourney(t_name) {
+  function openTourneyDetail(t_name) {
     roiSelectedTourney = t_name;
-    document.getElementById('roi-current-tourney').textContent = t_name === 'ALL' ? 'Tous les tournois' : t_name;
-    renderTourneyCards();
+    document.getElementById('roi-list-view').classList.add('d-none');
+    document.getElementById('roi-detail-view').classList.remove('d-none');
+    document.getElementById('detail-title').textContent = t_name;
     renderROI();
   }
 
+  function closeTourneyDetail() {
+    roiSelectedTourney = 'ALL';
+    document.getElementById('roi-list-view').classList.remove('d-none');
+    document.getElementById('roi-detail-view').classList.add('d-none');
+  }
+
   function renderROI() {
+    if (roiSelectedTourney === 'ALL') return;
+
     const minConf = parseInt(document.getElementById('roi-min-conf').value) || 0;
     const minEdge = (parseFloat(document.getElementById('roi-min-edge').value) || 0) / 100.0;
     const stake = parseFloat(document.getElementById('roi-stake').value) || 10;
     
     let profit = 0;
     let bets = 0;
+    let wins = 0;
+    let oddsSum = 0;
     let labels = ['Départ'];
     let bankroll = [0];
     
+    const matchesHtml = [];
+    
     roiGlobalHistory.forEach(m => {
-        if (roiSelectedTourney !== 'ALL' && m.tourney !== roiSelectedTourney) return;
+        if (m.tourney !== roiSelectedTourney) return;
         
         const conf = m.confidence ? m.confidence.confidence_index : 0;
         if (conf >= minConf) {
             let betOn = null;
             let odds = 0;
-            if (m.edge1 >= minEdge) { betOn = 'p1'; odds = m.odds1; }
-            else if (m.edge2 >= minEdge) { betOn = 'p2'; odds = m.odds2; }
+            if (m.edge1 >= minEdge && m.edge1 > 0) { betOn = 'p1'; odds = m.odds1; }
+            else if (m.edge2 >= minEdge && m.edge2 > 0) { betOn = 'p2'; odds = m.odds2; }
             
             if (betOn) {
                 bets++;
-                if (m.winner === betOn) {
+                oddsSum += odds;
+                const isWin = m.winner === betOn;
+                if (isWin) {
                     profit += (stake * odds) - stake;
+                    wins++;
                 } else {
                     profit -= stake;
                 }
-                labels.push(m.time.split('T')[0]);
+                const shortDate = m.time.split('T')[0].split('-').slice(1).join('/'); // MM/DD
+                labels.push(shortDate);
                 bankroll.push(profit);
+                
+                // Build the premium match card HTML
+                const p1Prob = Math.round(m.proba1 * 100);
+                const p2Prob = Math.round(m.proba2 * 100);
+                const p1Color = m.winner === 'p1' ? '#4ade80' : 'var(--text3)';
+                const p2Color = m.winner === 'p2' ? '#6366f1' : 'var(--text3)';
+                const date = new Date(m.time).toLocaleDateString([], {day:'2-digit', month:'2-digit'});
+                
+                const cardHtml = `<div class="premium-card">
+                  <div class="pc-top">
+                    <div class="pc-badge-vb">VB</div>
+                    <div class="pc-tabs">
+                      <div class="pc-tab active">Pronos</div>
+                      <div class="pc-tab">Stats</div>
+                    </div>
+                    <div style="color:var(--text3); cursor:pointer;">&#x27A4;</div>
+                  </div>
+                  
+                  <div class="pc-players">
+                    <div class="pc-player">
+                      <div class="pc-avatar">${m.p1.substring(0,2).toUpperCase()}</div>
+                      <div class="pc-name">${m.p1}</div>
+                    </div>
+                    
+                    <div class="pc-status">
+                      <div class="pc-status-lbl">Termin&eacute;</div>
+                      <div class="pc-score">${m.winner === 'p1' ? 'V - D' : (m.winner === 'p2' ? 'D - V' : '-')}</div>
+                      <div class="pc-date">${date}</div>
+                    </div>
+                    
+                    <div class="pc-player">
+                      <div class="pc-avatar">${m.p2.substring(0,2).toUpperCase()}</div>
+                      <div class="pc-name">${m.p2}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="pc-bars">
+                    <div class="pc-bar-container">
+                      <div class="pc-prob-lbl p1" style="color:${p1Color}">${p1Prob}%<span class="pc-prob-sub">${m.winner==='p1'?'validé':''}</span></div>
+                      <div class="pc-bar-fill p1" style="height:${p1Prob}%"></div>
+                    </div>
+                    <div class="pc-bar-container">
+                      <div class="pc-prob-lbl p2" style="color:${p2Color}">${p2Prob}%<span class="pc-prob-sub">${m.winner==='p2'?'validé':''}</span></div>
+                      <div class="pc-bar-fill p2" style="height:${p2Prob}%"></div>
+                    </div>
+                  </div>
+                  
+                  <div class="pc-odds-row">
+                    <div class="pc-odd">${m.odds1.toFixed(2)}</div>
+                    <div class="pc-odd">${m.odds2.toFixed(2)}</div>
+                  </div>
+                </div>`;
+                matchesHtml.push(cardHtml);
             }
         }
     });
     
-    document.getElementById('roi-total-bets').textContent = bets;
-    const sign = profit > 0 ? '+' : '';
-    document.getElementById('roi-profit').textContent = sign + profit.toFixed(2) + ' €';
-    document.getElementById('roi-profit').style.color = profit >= 0 ? 'var(--p1)' : 'var(--err)';
-    
+    // Update stats
     const invested = bets * stake;
     const roiPct = invested > 0 ? (profit / invested) * 100 : 0;
-    document.getElementById('roi-pct').textContent = sign + roiPct.toFixed(1) + ' %';
-    document.getElementById('roi-pct').style.color = roiPct >= 0 ? 'var(--p1)' : 'var(--err)';
+    const avgOdds = bets > 0 ? oddsSum / bets : 0;
+    const winRate = bets > 0 ? (wins / bets) * 100 : 0;
     
+    document.getElementById('detail-roi').textContent = (roiPct > 0 ? '+' : '') + roiPct.toFixed(1) + '%';
+    document.getElementById('detail-avg-odds').textContent = avgOdds.toFixed(2);
+    document.getElementById('detail-win-rate').textContent = winRate.toFixed(1) + '%';
+    
+    document.getElementById('detail-vb-title').textContent = `Les ${bets} valuebets de cette compétition`;
+    document.getElementById('detail-vb-container').innerHTML = matchesHtml.reverse().join('');
+    
+    // Update Chart
     const ctx = document.getElementById('roiChart').getContext('2d');
     if (roiChartInstance) roiChartInstance.destroy();
     
@@ -580,21 +747,21 @@
         data: {
             labels: labels,
             datasets: [{
-                label: 'Profit Net (€)',
                 data: bankroll,
-                borderColor: '#4ade80',
-                backgroundColor: 'rgba(74, 222, 128, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.1
+                borderColor: '#6366f1',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.4,
+                pointRadius: 0,
+                pointHoverRadius: 6
             }]
         },
         options: {
             responsive: true,
             plugins: { legend: { display: false } },
             scales: {
-                x: { ticks: { display: false } },
-                y: { grid: { color: 'rgba(255,255,255,0.1)' } }
+                x: { display: true, grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.4)', maxTicksLimit: 5 } },
+                y: { display: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.4)', callback: function(v){ return v + '€'; } } }
             }
         }
     });
