@@ -46,22 +46,22 @@ DEFAULT_PARAMS = dict(
 )
 
 
-def load_best_params():
-    path = PROCESSED_DIR / "best_params.json"
+def load_best_params(circuit="atp"):
+    path = PROCESSED_DIR / f"best_params_{circuit}.json"
     if path.exists():
         with open(path) as f:
             params = json.load(f)
         print(f"Hyperparamètres chargés depuis {path} (issus de 03b_tune_hyperparameters.py)")
         return params
-    print("Pas de best_params.json trouvé, utilisation des valeurs par défaut "
+    print(f"Pas de best_params_{circuit}.json trouvé, utilisation des valeurs par défaut "
           "(lance 03b_tune_hyperparameters.py pour les optimiser).")
     return DEFAULT_PARAMS
 
 
-def load_data():
-    in_path = PROCESSED_DIR / "features.parquet"
+def load_data(circuit="atp"):
+    in_path = PROCESSED_DIR / f"features_{circuit}.parquet"
     if not in_path.exists():
-        raise FileNotFoundError(f"{in_path} introuvable. Lance d'abord: python 02_feature_engineering.py")
+        raise FileNotFoundError(f"{in_path} introuvable. Lance d'abord: python 02_feature_engineering.py --circuit {circuit}")
     df = pd.read_parquet(in_path)
     df = df[~df["retirement"]]  # on retire les matchs abandonnés (bruit, pas prédictibles)
     df = df.sort_values("tourney_date").reset_index(drop=True)
@@ -101,7 +101,7 @@ def evaluate(y_true, p_pred, label):
 
 
 if __name__ == "__main__":
-    df = load_data()
+    df = load_data(circuit=args.circuit)
     X, y, feature_cols = prepare_xy(df)
 
     # Découpage temporel : ajuste ces dates selon la période que tu veux backtester
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     )
     print(f"Train: {len(X_train)}  Calib: {len(X_calib)}  Test: {len(X_test)}")
 
-    best_params = load_best_params()
+    best_params = load_best_params(circuit=args.circuit)
     model = xgb.XGBClassifier(
         n_estimators=600,
         eval_metric="logloss",
