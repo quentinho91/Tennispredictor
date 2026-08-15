@@ -8,10 +8,17 @@ from typing import List, Dict
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 db_path = os.path.join(BASE_DIR, "data", "processed", "predictions_db.json")
 
-# The API key provided by the user
-API_KEY = "9bc583473b7fd8b19ca147780c94cdc2"
+# Clé de l'API the-odds-api.com : ne JAMAIS committer de clé en dur ici.
+# En local : export ODDS_API_KEY=xxxx (ou fichier .env)
+# En CI/Render : secret d'environnement ODDS_API_KEY
+API_KEY = os.environ.get("ODDS_API_KEY", "")
+if not API_KEY:
+    print("[AVERTISSEMENT] ODDS_API_KEY n'est pas définie — les cotes ne seront pas récupérées.")
 
 def get_daily_matches_with_odds(STATE, MODEL, FEATURE_COLS, pred):
+    if not API_KEY:
+        return {"error": "ODDS_API_KEY non configurée côté serveur."}
+
     predictions_db = {}
     if os.path.exists(db_path):
         try:

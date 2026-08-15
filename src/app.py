@@ -363,6 +363,19 @@ def api_roi_simulation():
 
 @app.route("/api/update", methods=["POST", "GET"])
 def api_update():
+    # Protection : cette route relance tout le pipeline (téléchargement +
+    # réentraînement XGBoost), donc coûteuse en CPU/temps. On exige un
+    # token secret pour éviter que n'importe quel visiteur puisse la
+    # déclencher. Définis UPDATE_TOKEN dans les variables d'environnement
+    # (Render : Settings > Environment) puis appelle avec
+    # /api/update?token=... ou header "X-Update-Token: ...".
+    expected_token = os.environ.get("UPDATE_TOKEN")
+    if not expected_token:
+        return jsonify({"error": "UPDATE_TOKEN non configuré côté serveur — route désactivée."}), 503
+    provided_token = request.headers.get("X-Update-Token") or request.args.get("token")
+    if provided_token != expected_token:
+        return jsonify({"error": "Non autorisé."}), 401
+
     def generate():
         scripts = [
             "src/00_download_data.py",
