@@ -191,6 +191,28 @@
     .pc-odds-row { display: flex; justify-content: space-around; margin-top: -5px; }
     .pc-odd { font-size: 11px; color: var(--text2); background: rgba(0,0,0,0.3); padding: 4px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); }
     
+    .pc-details { max-height: 0; opacity: 0; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; margin-top: 0; padding-top: 0; border-top: 1px solid transparent; }
+    .premium-card.expanded .pc-details { max-height: 800px; opacity: 1; margin-top: 16px; padding-top: 16px; border-color: rgba(255,255,255,0.05); }
+    .premium-card { cursor: pointer; transition: all 0.3s ease; }
+    .premium-card:hover { border-color: rgba(255,255,255,0.15); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
+    
+    .pc-table { display: flex; flex-direction: column; gap: 4px; }
+    .pc-tr { display: grid; grid-template-columns: 1fr 60px 60px; font-size: 11px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
+    .pc-tr span:nth-child(2) { text-align: center; font-weight: 700; }
+    .pc-tr span:nth-child(3) { text-align: center; font-weight: 700; }
+    .pc-tr span:first-child { color: var(--text3); text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px; }
+
+    .pc-perf-row { display: grid; grid-template-columns: 40px 1fr 1fr; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .pc-perf-lbl { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+    .pc-perf-bar-wrap { height: 4px; background: rgba(0,0,0,0.5); border-radius: 4px; position: relative; overflow: hidden; display: flex; align-items: center; }
+    .pc-perf-bar-wrap.right { flex-direction: row-reverse; }
+    .pc-perf-bar { height: 100%; border-radius: 4px; }
+    .pc-perf-bar.p1 { background: #4ade80; }
+    .pc-perf-bar.p2 { background: #6366f1; }
+
+    .pc-fatigue-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .pc-fatigue-box { background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.02); }
+
     .tourney-list-item { display:flex; justify-content:space-between; align-items:center; background:#1a1d2d; padding:16px 20px; border-radius:12px; margin-bottom:12px; cursor:pointer; border:1px solid transparent; transition:var(--trans); }
     .tourney-list-item:hover { border-color:rgba(255,255,255,0.1); }
   </style>
@@ -851,7 +873,7 @@
             
             const confBadge = `<div class="pc-badge-conf" style="background:${confBg}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:600; color:${confColor};">Indice : ${Math.round(conf)}/100</div>`;
             
-            html += `<div class="premium-card" style="${isVB?'box-shadow: 0 0 20px rgba(74,222,128,0.1); border-color:rgba(74,222,128,0.3);':''}">
+            html += `<div class="premium-card" onclick="this.classList.toggle('expanded')" style="${isVB?'box-shadow: 0 0 20px rgba(74,222,128,0.1); border-color:rgba(74,222,128,0.3);':''}">
               <div class="pc-top">
                 ${vbBadge}
                 ${confBadge}
@@ -902,6 +924,60 @@
               <div class="pc-odds-row">
                 <div class="pc-odd" style="${m.edge1>0.02?'color:#4ade80; border-color:#4ade80':''}">${m.odds1.toFixed(2)}</div>
                 <div class="pc-odd" style="${m.edge2>0.02?'color:#6366f1; border-color:#6366f1':''}">${m.odds2.toFixed(2)}</div>
+              </div>
+              
+              <div class="pc-details">
+                <div style="font-size:12px; font-weight:800; margin-bottom:8px; display:flex; gap:8px; align-items:center;">
+                    <span>📊 Comparaison</span>
+                </div>
+                <div class="pc-table">
+                    <div class="pc-tr"><span>Elo surface</span><span style="color:#4ade80">${m.p1_elo_surf}</span><span style="color:#6366f1">${m.p2_elo_surf}</span></div>
+                    <div class="pc-tr"><span>Main</span><span>${m.p1_hand}</span><span>${m.p2_hand}</span></div>
+                    <div class="pc-tr"><span>vs Gaucher</span><span style="${m.p1_wr_vs_L > 0.5 ? 'color:#4ade80':''}">${Math.round((m.p1_wr_vs_L||0.5)*100)}%</span><span style="${m.p2_wr_vs_L > 0.5 ? 'color:#6366f1':''}">${Math.round((m.p2_wr_vs_L||0.5)*100)}%</span></div>
+                    <div class="pc-tr"><span>vs Droitier</span><span style="${m.p1_wr_vs_R > 0.5 ? 'color:#4ade80':''}">${Math.round((m.p1_wr_vs_R||0.5)*100)}%</span><span style="${m.p2_wr_vs_R > 0.5 ? 'color:#6366f1':''}">${Math.round((m.p2_wr_vs_R||0.5)*100)}%</span></div>
+                    <div class="pc-tr"><span>Favori</span><span style="${m.p1_wr_fav > 60 ? 'color:#4ade80':''}">${Math.round(m.p1_wr_fav||50)}%</span><span style="${m.p2_wr_fav > 60 ? 'color:#6366f1':''}">${Math.round(m.p2_wr_fav||50)}%</span></div>
+                    <div class="pc-tr"><span>Outsider</span><span style="${m.p1_wr_out > 40 ? 'color:#4ade80':''}">${Math.round(m.p1_wr_out||30)}%</span><span style="${m.p2_wr_out > 40 ? 'color:#6366f1':''}">${Math.round(m.p2_wr_out||30)}%</span></div>
+                </div>
+                
+                <div style="font-size:12px; font-weight:800; margin:16px 0 8px 0; display:flex; gap:8px; align-items:center;">
+                    <span>⚔️ Index de performance</span>
+                </div>
+                <div class="pc-perf-row">
+                    <span class="pc-perf-lbl">Service</span>
+                    <div class="pc-perf-bar-wrap"><div class="pc-perf-bar p1" style="width:${m.p1_service_idx||50}%;"></div></div>
+                    <div class="pc-perf-bar-wrap right"><div class="pc-perf-bar p2" style="width:${m.p2_service_idx||50}%;"></div></div>
+                </div>
+                <div class="pc-perf-row">
+                    <span class="pc-perf-lbl">Retour</span>
+                    <div class="pc-perf-bar-wrap"><div class="pc-perf-bar p1" style="width:${m.p1_return_idx||50}%;"></div></div>
+                    <div class="pc-perf-bar-wrap right"><div class="pc-perf-bar p2" style="width:${m.p2_return_idx||50}%;"></div></div>
+                </div>
+                <div class="pc-perf-row">
+                    <span class="pc-perf-lbl">Clutch</span>
+                    <div class="pc-perf-bar-wrap"><div class="pc-perf-bar p1" style="width:${m.p1_clutch_idx||50}%;"></div></div>
+                    <div class="pc-perf-bar-wrap right"><div class="pc-perf-bar p2" style="width:${m.p2_clutch_idx||50}%;"></div></div>
+                </div>
+                <div class="pc-perf-row" style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <span class="pc-perf-lbl" style="font-weight:800;">Global</span>
+                    <div class="pc-perf-bar-wrap"><div class="pc-perf-bar p1" style="width:${m.p1_global_idx||50}%;"></div></div>
+                    <div class="pc-perf-bar-wrap right"><div class="pc-perf-bar p2" style="width:${m.p2_global_idx||50}%;"></div></div>
+                </div>
+                
+                <div style="font-size:12px; font-weight:800; margin:16px 0 8px 0; display:flex; gap:8px; align-items:center;">
+                    <span>💪 Fatigue & Récupération</span>
+                </div>
+                <div class="pc-fatigue-grid">
+                    <div class="pc-fatigue-box">
+                        <div style="font-size:10px; color:var(--text3); margin-bottom:4px; display:flex; justify-content:space-between;"><span>Charge</span> <span style="font-weight:700;">${m.p1_fatigue_idx||0}/100</span></div>
+                        <div class="pc-perf-bar-wrap" style="width:100%; height:4px; background:rgba(0,0,0,0.5);"><div class="pc-perf-bar p1" style="width:${m.p1_fatigue_idx||0}%; background:${(m.p1_fatigue_idx||0)>70?'#ef4444':'#4ade80'}"></div></div>
+                        <div style="font-size:9px; color:var(--text3); margin-top:4px;">Repos: ${m.p1_rest_days||0}j</div>
+                    </div>
+                    <div class="pc-fatigue-box">
+                        <div style="font-size:10px; color:var(--text3); margin-bottom:4px; display:flex; justify-content:space-between;"><span>Charge</span> <span style="font-weight:700;">${m.p2_fatigue_idx||0}/100</span></div>
+                        <div class="pc-perf-bar-wrap" style="width:100%; height:4px; background:rgba(0,0,0,0.5);"><div class="pc-perf-bar p2" style="width:${m.p2_fatigue_idx||0}%; background:${(m.p2_fatigue_idx||0)>70?'#ef4444':'#6366f1'}"></div></div>
+                        <div style="font-size:9px; color:var(--text3); margin-top:4px;">Repos: ${m.p2_rest_days||0}j</div>
+                    </div>
+                </div>
               </div>
             </div>`;
           });

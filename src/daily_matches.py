@@ -267,7 +267,38 @@ def get_daily_matches_with_odds(models, pred):
                 "p1_archetype": feat.get("_p1_archetype", "Polyvalent"),
                 "p2_archetype": feat.get("_p2_archetype", "Polyvalent"),
                 "p1_form": _get_recent_form(STATE, p1_real),
-                "p2_form": _get_recent_form(STATE, p2_real)
+                "p2_form": _get_recent_form(STATE, p2_real),
+                "serve_return_edge1": feat.get("serve_return_edge1", 0),
+                "serve_return_edge2": feat.get("serve_return_edge2", 0),
+                
+                # Nouveaux champs pour UI détaillée
+                "p1_elo_surf": feat.get("_p1_elo_surf", 1500),
+                "p2_elo_surf": feat.get("_p2_elo_surf", 1500),
+                "p1_hand": "Droitier" if feat.get("_p1_hand", "R") == "R" else "Gaucher",
+                "p2_hand": "Droitier" if feat.get("_p2_hand", "R") == "R" else "Gaucher",
+                "p1_wr_vs_L": float(feat.get("_p1_wr_vs_L", 0.5)),
+                "p2_wr_vs_L": float(feat.get("_p2_wr_vs_L", 0.5)),
+                "p1_wr_vs_R": float(feat.get("_p1_wr_vs_R", 0.5)),
+                "p2_wr_vs_R": float(feat.get("_p2_wr_vs_R", 0.5)),
+                
+                "p1_service_idx": feat.get("_p1_service_idx", 50),
+                "p2_service_idx": feat.get("_p2_service_idx", 50),
+                "p1_return_idx": feat.get("_p1_return_idx", 50),
+                "p2_return_idx": feat.get("_p2_return_idx", 50),
+                "p1_clutch_idx": feat.get("_p1_clutch_idx", 50),
+                "p2_clutch_idx": feat.get("_p2_clutch_idx", 50),
+                "p1_global_idx": feat.get("_p1_global_idx", 50),
+                "p2_global_idx": feat.get("_p2_global_idx", 50),
+                
+                "p1_fatigue_idx": feat.get("_p1_fatigue_idx", 0),
+                "p2_fatigue_idx": feat.get("_p2_fatigue_idx", 0),
+                "p1_rest_days": feat.get("_p1_rest_days", 3),
+                "p2_rest_days": feat.get("_p2_rest_days", 3),
+                
+                "p1_wr_fav": float(feat.get("_p1_wr_fav", 50)),
+                "p2_wr_fav": float(feat.get("_p2_wr_fav", 50)),
+                "p1_wr_out": float(feat.get("_p1_wr_out", 30)),
+                "p2_wr_out": float(feat.get("_p2_wr_out", 30)),
             }
             
             # Copy previous winner/result info if it exists

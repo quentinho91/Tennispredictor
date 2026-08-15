@@ -542,6 +542,54 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["indoor"]        = indoor
     feat["best_of"]       = best_of
 
+    # === UI Detailed Stats (Ignorées par XGBoost grâce au préfixe _) ===
+    feat["_p1_elo_surf"] = int(elo_surf.get(surf, {}).get(p1, ELO_INIT))
+    feat["_p2_elo_surf"] = int(elo_surf.get(surf, {}).get(p2, ELO_INIT))
+    
+    feat["_p1_hand"] = state.get("last_hand", {}).get(p1, "Droitier")
+    feat["_p2_hand"] = state.get("last_hand", {}).get(p2, "Droitier")
+    
+    # Winrates vs Left/Right
+    w1_L = _speed_wr(vs_lefty_results, p1)
+    w2_L = _speed_wr(vs_lefty_results, p2)
+    # Approximation wr vs R
+    wr1_global = _wr_surf(rr1, "All", 20)
+    wr2_global = _wr_surf(rr2, "All", 20)
+    feat["_p1_wr_vs_L"] = w1_L
+    feat["_p2_wr_vs_L"] = w2_L
+    feat["_p1_wr_vs_R"] = wr1_global + (wr1_global - w1_L) * 0.15 # Approx
+    feat["_p2_wr_vs_R"] = wr2_global + (wr2_global - w2_L) * 0.15
+    
+    # Indices sur 100
+    # Service (r20[2]=first_in, r20[3]=first_won, r20[4]=second_won)
+    s1_pct = r20_1[2] * r20_1[3] + (1 - r20_1[2]) * r20_1[4]
+    s2_pct = r20_2[2] * r20_2[3] + (1 - r20_2[2]) * r20_2[4]
+    feat["_p1_service_idx"] = min(100, int(s1_pct * 100))
+    feat["_p2_service_idx"] = min(100, int(s2_pct * 100))
+    
+    # Retour (r20[6]=return_pts_won_pct) -> x 2 pour avoir une note sur ~100 (40% de retour = 80/100)
+    feat["_p1_return_idx"] = min(100, int(r20_1[6] * 200))
+    feat["_p2_return_idx"] = min(100, int(r20_2[6] * 200))
+    
+    # Clutch (bp_saved + bp_conv) / 2 * 150 pour l'échelle
+    feat["_p1_clutch_idx"] = min(100, int(((r20_1[5] + r20_1[7]) / 2.0) * 150))
+    feat["_p2_clutch_idx"] = min(100, int(((r20_2[5] + r20_2[7]) / 2.0) * 150))
+    
+    feat["_p1_global_idx"] = int((feat["_p1_service_idx"] + feat["_p1_return_idx"] + feat["_p1_clutch_idx"]) / 3)
+    feat["_p2_global_idx"] = int((feat["_p2_service_idx"] + feat["_p2_return_idx"] + feat["_p2_clutch_idx"]) / 3)
+    
+    # Fatigue (0 à 100)
+    feat["_p1_fatigue_idx"] = min(100, int((_sets_recent(rr1, day, 14) / 15.0) * 100))
+    feat["_p2_fatigue_idx"] = min(100, int((_sets_recent(rr2, day, 14) / 15.0) * 100))
+    feat["_p1_rest_days"] = min(30, int(hours1 / 24))
+    feat["_p2_rest_days"] = min(30, int(hours2 / 24))
+    
+    # Stats en tant que favori / outsider (approx via upset_rate et giant_killer_rate)
+    feat["_p1_wr_fav"] = min(100, int((wr1_global + _upset_n(rr1, 20)) * 100))
+    feat["_p2_wr_fav"] = min(100, int((wr2_global + _upset_n(rr2, 20)) * 100))
+    feat["_p1_wr_out"] = min(100, int(_giant_killer(rr1) * 100))
+    feat["_p2_wr_out"] = min(100, int(_giant_killer(rr2) * 100))
+
     return feat
 
 

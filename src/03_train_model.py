@@ -70,6 +70,9 @@ def load_data(circuit="atp"):
 
 def prepare_xy(df):
     cat_cols = ["surface", "tourney_level", "round", "hand_matchup", "indoor"]
+    for c in cat_cols:
+        if c in df.columns:
+            df[c] = df[c].replace("nan", np.nan)
     df = pd.get_dummies(df, columns=cat_cols, dummy_na=True)
 
     drop_cols = ["match_id", "tourney_date", "target", "retirement"]
