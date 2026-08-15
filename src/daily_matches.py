@@ -64,8 +64,11 @@ def get_daily_matches_with_odds(models, pred):
         events = cached_data
     else:
         sports_url = f"https://api.the-odds-api.com/v4/sports/?apiKey={API_KEY}"
-        r_sports = requests.get(sports_url)
-        if not r_sports.ok:
+        try:
+            r_sports = requests.get(sports_url, timeout=8)
+            if not r_sports.ok:
+                raise ValueError("Bad status code")
+        except:
             # Fallback to DB if API fails
             all_matches = list(predictions_db.values())
             all_matches.sort(key=lambda x: x['time'])
@@ -77,14 +80,20 @@ def get_daily_matches_with_odds(models, pred):
                   and 'itf' not in s['key'].lower()
                   and 'doubles' not in s['key'].lower()]
         
+        # Limiter à 4 sports maximum pour éviter un timeout Gunicorn (30s) sur Render
+        sports = sports[:4]
+        
         for sport in sports:
             odds_url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/?apiKey={API_KEY}&regions=eu,uk&markets=h2h"
-            r_odds = requests.get(odds_url)
-            if r_odds.ok:
-                sport_events = r_odds.json()
-                for e in sport_events:
-                    e['circuit'] = 'wta' if 'wta' in sport.lower() else 'atp'
-                events.extend(sport_events)
+            try:
+                r_odds = requests.get(odds_url, timeout=8)
+                if r_odds.ok:
+                    sport_events = r_odds.json()
+                    for e in sport_events:
+                        e['circuit'] = 'wta' if 'wta' in sport.lower() else 'atp'
+                    events.extend(sport_events)
+            except:
+                continue
                 
         # Save to cache
         try:
