@@ -216,8 +216,7 @@ if __name__ == "__main__":
     if use_calibration:
         joblib.dump(calibrator, calib_path)
     else:
-        if calib_path.exists():
-            calib_path.unlink()
+        joblib.dump(None, calib_path)
             
     joblib.dump(feature_cols, PROCESSED_DIR / f"feature_cols_{args.circuit}.pkl")
 
