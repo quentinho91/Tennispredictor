@@ -91,8 +91,13 @@ def basic_clean(df):
     # feature en 2 catégories distinctes. NB: '250'/'500'/'D'(Davis Cup)/
     # 'A'(United Cup, Laver Cup...) sont des catégories réellement
     # distinctes dans TOUTES les sources, on n'y touche pas.
-    df["tourney_level"] = df["tourney_level"].replace({"1000": "M"})
+    df["tourney_level"] = df["tourney_level"].astype(str)
+    df["tourney_level"] = df["tourney_level"].replace({"1000": "M", "1000.0": "M"})
+    
+    df["round"] = df["round"].astype(str)
     df["round"] = df["round"].replace({"Final": "F"})
+    
+    df["surface"] = df["surface"].astype(str)
 
     n_before = len(df)
     df = df[df["tourney_date"].dt.year >= MIN_YEAR]
