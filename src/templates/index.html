@@ -176,7 +176,18 @@
     .tournament-bar.expanded .t-chevron { transform: rotate(90deg); }
     
     /* Horizontal Match Row */
-    .match-row-horizontal { background: rgba(26, 29, 45, 0.6); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; display: flex; align-items: stretch; justify-content: space-between; position: relative; transition: all 0.2s; cursor: pointer; }
+    .match-row-horizontal { background: rgba(26, 29, 45, 0.6); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; position: relative; transition: all 0.2s; cursor: pointer; }
+    .m-details { max-height: 0; opacity: 0; overflow: hidden; transition: all 0.3s ease; margin-top: 0; padding-top: 0; border-top: 1px solid transparent; }
+    .match-row-horizontal.expanded .m-details { max-height: 800px; opacity: 1; margin-top: 16px; padding-top: 16px; border-color: rgba(255,255,255,0.05); }
+    .m-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 11px; }
+    .md-box { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.02); }
+    .md-title { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+    .md-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
+    .md-row:last-child { border-bottom: none; }
+    .md-lbl { color: var(--text2); }
+    .md-val { font-weight: 700; }
+    .md-val.v1 { color: #4ade80; }
+    .md-val.v2 { color: #6366f1; }
     .match-row-horizontal:hover { background: rgba(32, 36, 56, 0.8); border-color: rgba(255,255,255,0.1); }
     .m-header-info { position: absolute; top: 12px; left: 16px; display: flex; gap: 8px; font-size: 9px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
     .m-header-info .surface { padding: 2px 6px; border-radius: 4px; }
@@ -940,8 +951,12 @@
             const formDots1 = (m.p1_form || [1,0,1,1,0]).map(r => `<div class="m-dot ${r===1?'w':'l'}"></div>`).join('');
             const formDots2 = (m.p2_form || [0,1,1,1,1]).map(r => `<div class="m-dot ${r===1?'w':'l'}"></div>`).join('');
             
+            const h2hStr = (m.p1_h2h !== undefined) ? `${m.p1_h2h} - ${m.p2_h2h}` : 'Pas de H2H';
+            const vEdge1 = (m.edge1 > 0) ? `+${(m.edge1*100).toFixed(1)}%` : '-';
+            const vEdge2 = (m.edge2 > 0) ? `+${(m.edge2*100).toFixed(1)}%` : '-';
+            
             html += `
-              <div class="match-row-horizontal" onclick="alert('Vue Détaillée (Prochaine étape)')" style="${isVB?'border-color:rgba(74,222,128,0.3);':''}">
+              <div class="match-row-horizontal" onclick="this.classList.toggle('expanded')" style="${isVB?'border-color:rgba(74,222,128,0.3);':''}">
                 <div class="m-header-info">
                   <span class="surface ${surface.toLowerCase()}">${surface}</span>
                   <span style="${statusStyle}">${matchTime.toLocaleDateString()} - ${statusLbl}</span>
@@ -984,6 +999,30 @@
                       <div class="m-odds-lbl">Cote</div>
                       <div class="m-odds-val" style="${m.edge2 > 0.02 ? 'color:#6366f1':''}">${m.odds2 ? m.odds2.toFixed(2) : '-'}</div>
                     </div>
+                  </div>
+                </div>
+                <div class="m-details" onclick="event.stopPropagation()">
+                  <div class="m-detail-grid">
+                    <div class="md-box">
+                      <div class="md-title">Facteurs Clés</div>
+                      <div class="md-row"><span class="md-lbl">Elo Surface (${surface})</span><span><span class="md-val v1">${m.p1_elo_surf||'-'}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${m.p2_elo_surf||'-'}</span></span></div>
+                      <div class="md-row"><span class="md-lbl">Fatigue (Charge)</span><span><span class="md-val v1">${m.p1_fatigue_idx||'0'}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${m.p2_fatigue_idx||'0'}</span></span></div>
+                      <div class="md-row"><span class="md-lbl">Jours de repos</span><span><span class="md-val v1">${m.p1_rest_days||'-'}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${m.p2_rest_days||'-'}</span></span></div>
+                      <div class="md-row"><span class="md-lbl">Head-to-Head</span><span style="font-weight:700;">${h2hStr}</span></div>
+                    </div>
+                    <div class="md-box">
+                      <div class="md-title">Style de jeu & Avantages</div>
+                      <div class="md-row"><span class="md-lbl">Indice Service</span><span><span class="md-val v1">${m.p1_service_idx||'-'}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${m.p2_service_idx||'-'}</span></span></div>
+                      <div class="md-row"><span class="md-lbl">Indice Retour</span><span><span class="md-val v1">${m.p1_return_idx||'-'}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${m.p2_return_idx||'-'}</span></span></div>
+                      <div class="md-row"><span class="md-lbl">Mental (Clutch)</span><span><span class="md-val v1">${m.p1_clutch_idx||'-'}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${m.p2_clutch_idx||'-'}</span></span></div>
+                      <div class="md-row"><span class="md-lbl">Main</span><span><span class="md-val v1">${m.p1_hand||'-'}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${m.p2_hand||'-'}</span></span></div>
+                    </div>
+                  </div>
+                  <div class="md-box" style="margin-top:16px;">
+                     <div class="md-title">Value Bet (Confiance ${m.confidence?.confidence_index||0}/100)</div>
+                     <div class="md-row"><span class="md-lbl">Probabilité calculée</span><span><span class="md-val v1">${(m.proba1*100).toFixed(1)}%</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${(m.proba2*100).toFixed(1)}%</span></span></div>
+                     <div class="md-row"><span class="md-lbl">Probabilité Bookmaker</span><span><span class="md-val v1">${m.implied1 ? (m.implied1*100).toFixed(1)+'%' : '-'}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${m.implied2 ? (m.implied2*100).toFixed(1)+'%' : '-'}</span></span></div>
+                     <div class="md-row"><span class="md-lbl">Avantage mathématique (Edge)</span><span><span class="md-val v1">${vEdge1}</span> <span style="color:var(--text3)">vs</span> <span class="md-val v2">${vEdge2}</span></span></div>
                   </div>
                 </div>
               </div>
