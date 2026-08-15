@@ -955,12 +955,26 @@
             const vEdge1 = (m.edge1 > 0) ? `+${(m.edge1*100).toFixed(1)}%` : '-';
             const vEdge2 = (m.edge2 > 0) ? `+${(m.edge2*100).toFixed(1)}%` : '-';
             
+            const confVal = m.confidence?.confidence_index || 0;
+            let confColor = 'var(--text2)';
+            let confBorder = 'rgba(255,255,255,0.05)';
+            if (confVal >= 75) {
+                confColor = '#4ade80';
+                confBorder = 'rgba(74,222,128,0.3)';
+            } else if (confVal >= 50) {
+                confColor = '#facc15';
+                confBorder = 'rgba(250,204,21,0.3)';
+            } else if (confVal > 0) {
+                confColor = '#f87171';
+                confBorder = 'rgba(248,113,113,0.3)';
+            }
+            
             html += `
               <div class="match-row-horizontal" onclick="this.classList.toggle('expanded')" style="${isVB?'border-color:rgba(34,197,94,0.3); box-shadow: 0 0 20px rgba(34,197,94,0.1);':''}">
                 <div class="m-header-info">
                   <span class="surface ${surface.toLowerCase()}">${surface}</span>
                   <span style="${statusStyle}">${matchTime.toLocaleDateString()} - ${statusLbl}</span>
-                  <span style="color:var(--text2); margin-left:8px; font-size:8px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.05);">Confiance ${(m.confidence?.confidence_index||0)}%</span>
+                  <span style="color:${confColor}; margin-left:8px; font-size:8px; padding:2px 6px; border-radius:4px; background:rgba(0,0,0,0.2); border:1px solid ${confBorder};">Confiance ${confVal}%</span>
                 </div>
                 
                 <div class="m-body">
