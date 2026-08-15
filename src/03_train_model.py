@@ -116,26 +116,60 @@ if __name__ == "__main__":
     )
     print(f"Train: {len(X_train)}  Calib: {len(X_calib)}  Test: {len(X_test)}")
 
+    import lightgbm as lgbm
+    from catboost import CatBoostClassifier
+
     best_params = load_best_params(circuit=args.circuit)
-    model = xgb.XGBClassifier(
+    
+    # 1. XGBoost
+    xgb_model = xgb.XGBClassifier(
         n_estimators=600,
         eval_metric="logloss",
         early_stopping_rounds=30,
-        n_jobs=2,  # Evite le deadlock (plantage) d'XGBoost sur GitHub Actions (ubuntu-latest a 2 cœurs)
+        n_jobs=2,
         tree_method="hist",
         **best_params,
     )
-    model.fit(X_train, y_train, eval_set=[(X_calib, y_calib)], verbose=False)
+    xgb_model.fit(X_train, y_train, eval_set=[(X_calib, y_calib)], verbose=False)
+    
+    # 2. LightGBM
+    lgb_model = lgbm.LGBMClassifier(
+        n_estimators=600,
+        learning_rate=best_params.get('learning_rate', 0.03),
+        max_depth=best_params.get('max_depth', 4),
+        subsample=best_params.get('subsample', 0.8),
+        colsample_bytree=best_params.get('colsample_bytree', 0.8),
+        n_jobs=2,
+        verbose=-1
+    )
+    lgb_model.fit(X_train, y_train, eval_set=[(X_calib, y_calib)], callbacks=[lgbm.early_stopping(stopping_rounds=30, verbose=False)])
 
-    # Baseline brut (sans calibration)
-    p_raw = model.predict_proba(X_test)[:, 1]
-    metrics_raw = evaluate(y_test, p_raw, "XGBoost brut")
+    # 3. CatBoost
+    cat_model = CatBoostClassifier(
+        iterations=600,
+        learning_rate=best_params.get('learning_rate', 0.03),
+        depth=best_params.get('max_depth', 4),
+        thread_count=2,
+        verbose=False
+    )
+    cat_model.fit(X_train, y_train, eval_set=(X_calib, y_calib), early_stopping_rounds=30)
+
+    # Baseline brut (Ensemble Voting)
+    p_xgb = xgb_model.predict_proba(X_test)[:, 1]
+    p_lgb = lgb_model.predict_proba(X_test)[:, 1]
+    p_cat = cat_model.predict_proba(X_test)[:, 1]
+    
+    p_raw = (p_xgb + p_lgb + p_cat) / 3.0
+    metrics_raw = evaluate(y_test, p_raw, "Ensemble Brut (XGB+LGB+CAT)")
 
     # Calibration isotonique manuelle
     from sklearn.isotonic import IsotonicRegression
     from sklearn.model_selection import KFold
 
-    p_calib_raw = model.predict_proba(X_calib)[:, 1]
+    p_xgb_calib = xgb_model.predict_proba(X_calib)[:, 1]
+    p_lgb_calib = lgb_model.predict_proba(X_calib)[:, 1]
+    p_cat_calib = cat_model.predict_proba(X_calib)[:, 1]
+    p_calib_raw = (p_xgb_calib + p_lgb_calib + p_cat_calib) / 3.0
     
     # Décider d'utiliser la calibration par validation croisée sur le set de calib
     # (pour ne SURTOUT pas regarder les performances sur le set de test)
@@ -159,7 +193,7 @@ if __name__ == "__main__":
     metrics_calib = evaluate(y_test, p_calib, "XGBoost calibré")
 
     p_final = p_calib if use_calibration else p_raw
-    print(f"  => Prédictions finales : {'calibrées (isotonic)' if use_calibration else 'brutes XGBoost (calibration isotonique contre-productive)'}")
+    print(f"  => Prédictions finales : {'calibrées (isotonic)' if use_calibration else 'brutes Ensemble (calibration isotonique contre-productive)'}")
 
     # Baseline naïf : Elo seul (via elo_diff)
     from sklearn.linear_model import LogisticRegression
@@ -169,12 +203,14 @@ if __name__ == "__main__":
     evaluate(y_test, p_rank, "Baseline: Elo seul")
 
     # Importance des features
-    importances = pd.Series(model.feature_importances_, index=feature_cols).sort_values(ascending=False)
-    print("\nTop 15 features:")
+    importances = pd.Series(xgb_model.feature_importances_, index=feature_cols).sort_values(ascending=False)
+    print("\nTop 15 features (XGBoost):")
     print(importances.head(15))
 
     # Sauvegarde pour le backtest de value betting
-    model.save_model(str(PROCESSED_DIR / f"xgb_model_{args.circuit}.json"))
+    xgb_model.save_model(str(PROCESSED_DIR / f"xgb_model_{args.circuit}.json"))
+    lgb_model.booster_.save_model(str(PROCESSED_DIR / f"lgb_model_{args.circuit}.txt"))
+    cat_model.save_model(str(PROCESSED_DIR / f"cat_model_{args.circuit}.cbm"))
     import joblib
     calib_path = PROCESSED_DIR / f"calibrator_{args.circuit}.pkl"
     if use_calibration:

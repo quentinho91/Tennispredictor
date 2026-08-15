@@ -168,6 +168,16 @@ def remove_overround(odds1, odds2):
 # Chargement des ressources
 # --------------------------------------------------------------------------
 
+class EnsemblePredictor:
+    def __init__(self, models):
+        self.models = models
+        
+    def predict_proba(self, X):
+        preds = []
+        for model in self.models:
+            preds.append(model.predict_proba(X))
+        return np.mean(preds, axis=0)
+
 class CalibratedPredictor:
     def __init__(self, model, calibrator=None):
         self.model = model
@@ -194,11 +204,34 @@ def load_resources(circuit="atp"):
                 msg += f"  -> Lance d'abord : python 03_train_model.py --circuit {circuit}"
             raise FileNotFoundError(msg)
 
-    print(f"Chargement du modele et de l'etat des joueurs ({circuit.upper()})...", end=" ", flush=True)
+    print(f"Chargement des modeles et de l'etat des joueurs ({circuit.upper()})...", end=" ", flush=True)
     with open(STATE_PATH, "rb") as f:
         state = pickle.load(f)
-    model = xgb.XGBClassifier()
-    model.load_model(str(MODEL_PATH))
+        
+    xgb_model = xgb.XGBClassifier()
+    xgb_model.load_model(str(MODEL_PATH))
+    models = [xgb_model]
+    
+    lgb_path = PROC_DIR / f"lgb_model_{circuit}.txt"
+    if lgb_path.exists():
+        import lightgbm as lgbm
+        lgb_model = lgbm.Booster(model_file=str(lgb_path))
+        class LGBMWrapper:
+            def __init__(self, booster):
+                self.booster = booster
+            def predict_proba(self, X):
+                p1 = self.booster.predict(X)
+                return np.column_stack((1.0 - p1, p1))
+        models.append(LGBMWrapper(lgb_model))
+        
+    cat_path = PROC_DIR / f"cat_model_{circuit}.cbm"
+    if cat_path.exists():
+        from catboost import CatBoostClassifier
+        cat_model = CatBoostClassifier()
+        cat_model.load_model(str(cat_path))
+        models.append(cat_model)
+        
+    ensemble_model = EnsemblePredictor(models)
     feature_cols = joblib.load(FCOLS_PATH)
     
     calibrator_path = PROC_DIR / f"calibrator_{circuit}.pkl"
@@ -206,9 +239,9 @@ def load_resources(circuit="atp"):
     if calibrator_path.exists():
         calibrator = joblib.load(calibrator_path)
         
-    calibrated_model = CalibratedPredictor(model, calibrator)
+    calibrated_model = CalibratedPredictor(ensemble_model, calibrator)
     
-    print(f"OK  ({len(state['elo'])} joueurs, {len(feature_cols)} features, Calibrator={'Oui' if calibrator else 'Non'})")
+    print(f"OK  ({len(state['elo'])} joueurs, {len(feature_cols)} features, {len(models)} modeles, Calibrator={'Oui' if calibrator else 'Non'})")
     return state, calibrated_model, feature_cols
 
 
