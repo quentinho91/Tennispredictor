@@ -5,8 +5,19 @@ import pandas as pd
 import os
 from typing import List, Dict
 
+import math
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 db_path = os.path.join(BASE_DIR, "data", "processed", "predictions_db.json")
+
+def sanitize_float(val, default=0.0):
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except (TypeError, ValueError):
+        return default
 
 # Clé de l'API the-odds-api.com : ne JAMAIS committer de clé en dur ici.
 # En local : export ODDS_API_KEY=xxxx (ou fichier .env)
@@ -238,7 +249,7 @@ def get_daily_matches_with_odds(models, pred):
             )
             
             row = pred.build_row(feat, FEATURE_COLS)
-            proba1 = float(MODEL.predict_proba(row)[0, 1])
+            proba1 = sanitize_float(MODEL.predict_proba(row)[0, 1])
             proba2 = 1.0 - proba1
             
             if odds1 and odds2:
@@ -251,8 +262,8 @@ def get_daily_matches_with_odds(models, pred):
                     implied1 /= overround
                     implied2 /= overround
                     
-                edge1 = proba1 - implied1
-                edge2 = proba2 - implied2
+                edge1 = sanitize_float(proba1 - implied1)
+                edge2 = sanitize_float(proba2 - implied2)
             else:
                 implied1 = implied2 = edge1 = edge2 = 0.0
             
@@ -301,32 +312,32 @@ def get_daily_matches_with_odds(models, pred):
                 "p2_elo_surf": feat.get("_p2_elo_surf", 1500),
                 "p1_hand": "Droitier" if feat.get("_p1_hand", "R") == "R" else "Gaucher",
                 "p2_hand": "Droitier" if feat.get("_p2_hand", "R") == "R" else "Gaucher",
-                "p1_wr_vs_L": float(feat.get("_p1_wr_vs_L", 0.5)),
-                "p2_wr_vs_L": float(feat.get("_p2_wr_vs_L", 0.5)),
-                "p1_wr_vs_R": float(feat.get("_p1_wr_vs_R", 0.5)),
-                "p2_wr_vs_R": float(feat.get("_p2_wr_vs_R", 0.5)),
+                "p1_wr_vs_L": sanitize_float(feat.get("_p1_wr_vs_L", 0.5)),
+                "p2_wr_vs_L": sanitize_float(feat.get("_p2_wr_vs_L", 0.5)),
+                "p1_wr_vs_R": sanitize_float(feat.get("_p1_wr_vs_R", 0.5)),
+                "p2_wr_vs_R": sanitize_float(feat.get("_p2_wr_vs_R", 0.5)),
                 
-                "p1_service_idx": feat.get("_p1_service_idx", 50),
-                "p2_service_idx": feat.get("_p2_service_idx", 50),
-                "p1_return_idx": feat.get("_p1_return_idx", 50),
-                "p2_return_idx": feat.get("_p2_return_idx", 50),
-                "p1_clutch_idx": feat.get("_p1_clutch_idx", 50),
-                "p2_clutch_idx": feat.get("_p2_clutch_idx", 50),
-                "p1_global_idx": feat.get("_p1_global_idx", 50),
-                "p2_global_idx": feat.get("_p2_global_idx", 50),
+                "p1_service_idx": sanitize_float(feat.get("_p1_service_idx", 50)),
+                "p2_service_idx": sanitize_float(feat.get("_p2_service_idx", 50)),
+                "p1_return_idx": sanitize_float(feat.get("_p1_return_idx", 50)),
+                "p2_return_idx": sanitize_float(feat.get("_p2_return_idx", 50)),
+                "p1_clutch_idx": sanitize_float(feat.get("_p1_clutch_idx", 50)),
+                "p2_clutch_idx": sanitize_float(feat.get("_p2_clutch_idx", 50)),
+                "p1_global_idx": sanitize_float(feat.get("_p1_global_idx", 50)),
+                "p2_global_idx": sanitize_float(feat.get("_p2_global_idx", 50)),
                 
-                "p1_fatigue_idx": feat.get("_p1_fatigue_idx", 0),
-                "p2_fatigue_idx": feat.get("_p2_fatigue_idx", 0),
-                "p1_rest_days": feat.get("_p1_rest_days", 3),
-                "p2_rest_days": feat.get("_p2_rest_days", 3),
+                "p1_fatigue_idx": sanitize_float(feat.get("_p1_fatigue_idx", 0)),
+                "p2_fatigue_idx": sanitize_float(feat.get("_p2_fatigue_idx", 0)),
+                "p1_rest_days": sanitize_float(feat.get("_p1_rest_days", 3)),
+                "p2_rest_days": sanitize_float(feat.get("_p2_rest_days", 3)),
                 
                 "p1_h2h": h2h_rec[0],
                 "p2_h2h": h2h_rec[1],
                 
-                "p1_wr_fav": float(feat.get("_p1_wr_fav", 50)),
-                "p2_wr_fav": float(feat.get("_p2_wr_fav", 50)),
-                "p1_wr_out": float(feat.get("_p1_wr_out", 30)),
-                "p2_wr_out": float(feat.get("_p2_wr_out", 30)),
+                "p1_wr_fav": sanitize_float(feat.get("_p1_wr_fav", 50)),
+                "p2_wr_fav": sanitize_float(feat.get("_p2_wr_fav", 50)),
+                "p1_wr_out": sanitize_float(feat.get("_p1_wr_out", 30)),
+                "p2_wr_out": sanitize_float(feat.get("_p2_wr_out", 30)),
             }
             
             # Copy previous winner/result info if it exists
