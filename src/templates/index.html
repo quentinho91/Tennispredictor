@@ -203,27 +203,33 @@
   </div>
 
   <div id="roi-section" class="d-none">
-    <div class="card">
-      <p class="section-label">Param&egrave;tres de Simulation</p>
-      <div class="ctx-grid">
-        <div class="field">
-          <label class="field-lbl">Confiance Minimale</label>
-          <input type="number" id="roi-min-conf" class="field-inp" value="55" min="0" max="100">
-        </div>
-        <div class="field">
-          <label class="field-lbl">Edge Minimum (%)</label>
-          <input type="number" id="roi-min-edge" class="field-inp" value="5" min="0" max="100">
-        </div>
-        <div class="field">
-          <label class="field-lbl">Mise Fixe (&euro;)</label>
-          <input type="number" id="roi-stake" class="field-inp" value="10" min="1">
-        </div>
-      </div>
-      <button class="submit-btn" onclick="runSimulation()" style="margin-top:16px;">Lancer la Simulation</button>
+    <div id="roi-tourneys-scroll" style="display:flex; gap:12px; overflow-x:auto; padding-bottom:12px; margin-bottom:16px; scrollbar-width:thin;">
+      <!-- Tournament cards will be inserted here -->
     </div>
     
-    <div class="card" id="roi-results-card" class="d-none">
-      <p class="section-label">R&eacute;sultats</p>
+    <div class="card" id="roi-results-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <p class="section-label" style="margin:0;" id="roi-current-tourney">Tous les tournois</p>
+        <button class="btn" style="background:var(--card); border:1px solid var(--border); color:var(--text); padding:4px 10px; border-radius:6px; font-size:12px; cursor:pointer;" onclick="document.getElementById('roi-settings').classList.toggle('d-none')">&#x2699; Filtres</button>
+      </div>
+      
+      <div id="roi-settings" class="d-none" style="background:rgba(0,0,0,0.2); padding:16px; border-radius:var(--r); margin-bottom:20px; border:1px solid var(--border);">
+        <div class="ctx-grid">
+          <div class="field">
+            <label class="field-lbl">Confiance Min.</label>
+            <input type="number" id="roi-min-conf" class="field-inp" value="0" min="0" max="100" onchange="renderROI()">
+          </div>
+          <div class="field">
+            <label class="field-lbl">Edge Min. (%)</label>
+            <input type="number" id="roi-min-edge" class="field-inp" value="0" min="0" max="100" onchange="renderROI()">
+          </div>
+          <div class="field">
+            <label class="field-lbl">Mise Fixe (&euro;)</label>
+            <input type="number" id="roi-stake" class="field-inp" value="10" min="1" onchange="renderROI()">
+          </div>
+        </div>
+      </div>
+      
       <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:24px;">
         <div style="background:var(--card); border:1px solid var(--border); padding:16px; border-radius:var(--r); text-align:center;">
           <div style="font-size:12px; color:var(--text2); margin-bottom:4px;">Paris Plac&eacute;s</div>
@@ -437,6 +443,9 @@
     }
   }
 
+  let roiGlobalHistory = [];
+  let roiSelectedTourney = 'ALL';
+
   function switchTab(tab) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById('tab-' + tab).classList.add('active');
@@ -448,101 +457,147 @@
       document.getElementById('daily-matches-section').classList.add('d-none');
       document.getElementById('roi-section').classList.remove('d-none');
       document.getElementById('form-section').classList.add('d-none');
+      if (roiGlobalHistory.length === 0) {
+        loadROI();
+      }
     }
   }
 
   let roiChartInstance = null;
-  async function runSimulation() {
-    const btn = document.querySelector('.submit-btn');
-    btn.textContent = 'Calcul...';
-    btn.disabled = true;
-    
+  async function loadROI() {
     try {
         const resp = await fetch('/api/roi_simulation');
         const data = await resp.json();
+        if (data.error || !data.history) return;
         
-        if (data.error || !data.history) {
-            alert("Erreur: " + (data.error || "Pas d'historique"));
-            return;
+        roiGlobalHistory = data.history;
+        renderTourneyCards();
+        renderROI();
+    } catch (e) {
+        console.error("Erreur ROI:", e);
+    }
+  }
+
+  function renderTourneyCards() {
+    const tourneys = {};
+    const t_order = [];
+    roiGlobalHistory.forEach(m => {
+        if (!m.tourney) return;
+        if (!tourneys.hasOwnProperty(m.tourney)) {
+            tourneys[m.tourney] = 0;
+            t_order.push(m.tourney);
         }
         
-        const minConf = parseInt(document.getElementById('roi-min-conf').value);
-        const minEdge = parseFloat(document.getElementById('roi-min-edge').value) / 100.0;
-        const stake = parseFloat(document.getElementById('roi-stake').value);
+        const stake = 10;
+        let p = 0;
+        let edge1 = m.edge1 || 0;
+        let edge2 = m.edge2 || 0;
+        let betOn = null;
+        let odds = 0;
+        if (edge1 > 0) { betOn = 'p1'; odds = m.odds1; }
+        else if (edge2 > 0) { betOn = 'p2'; odds = m.odds2; }
         
-        let profit = 0;
-        let bets = 0;
-        let labels = ['Départ'];
-        let bankroll = [0];
-        
-        data.history.forEach(m => {
-            const conf = m.confidence ? m.confidence.confidence_index : 0;
-            if (conf >= minConf) {
-                // Check edge
-                let betOn = null;
-                let odds = 0;
-                if (m.edge1 >= minEdge) { betOn = 'p1'; odds = m.odds1; }
-                else if (m.edge2 >= minEdge) { betOn = 'p2'; odds = m.odds2; }
-                
-                if (betOn) {
-                    bets++;
-                    if (m.winner === betOn) {
-                        profit += (stake * odds) - stake;
-                    } else {
-                        profit -= stake;
-                    }
-                    labels.push(m.time.split('T')[0]);
-                    bankroll.push(profit);
-                }
-            }
-        });
-        
-        document.getElementById('roi-results-card').classList.remove('d-none');
-        document.getElementById('roi-total-bets').textContent = bets;
+        if (betOn) {
+            if (m.winner === betOn) p = (stake * odds) - stake;
+            else p = -stake;
+        }
+        tourneys[m.tourney] += p;
+    });
+
+    // Reverse to have latest tourneys first
+    t_order.reverse();
+
+    let html = `<div onclick="selectTourney('ALL')" style="flex-shrink:0; padding:12px 16px; border-radius:12px; cursor:pointer; transition:var(--trans); border:1px solid ${roiSelectedTourney==='ALL'?'var(--p1)':'var(--border)'}; background:${roiSelectedTourney==='ALL'?'rgba(74,222,128,0.1)':'var(--card)'};"><div style="font-size:12px; color:var(--text2);">Global</div><div style="font-weight:700; font-size:15px; color:var(--text);">Tous les tournois</div></div>`;
+    
+    t_order.forEach(t_name => {
+        const profit = tourneys[t_name];
+        const isSel = (roiSelectedTourney === t_name);
+        const col = profit >= 0 ? 'var(--p1)' : 'var(--err)';
         const sign = profit > 0 ? '+' : '';
-        document.getElementById('roi-profit').textContent = sign + profit.toFixed(2) + ' €';
-        document.getElementById('roi-profit').style.color = profit >= 0 ? 'var(--p1)' : 'var(--err)';
+        html += `<div onclick="selectTourney('${t_name.replace(/'/g, "\\'")}')" style="flex-shrink:0; padding:12px 16px; border-radius:12px; cursor:pointer; transition:var(--trans); border:1px solid ${isSel?'var(--p1)':'var(--border)'}; background:${isSel?'rgba(74,222,128,0.1)':'var(--card)'};">
+            <div style="font-size:12px; color:var(--text2); margin-bottom:4px; max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t_name}</div>
+            <div style="font-weight:700; font-size:15px; color:${col};">${sign}${profit.toFixed(2)} €</div>
+        </div>`;
+    });
+    document.getElementById('roi-tourneys-scroll').innerHTML = html;
+  }
+
+  function selectTourney(t_name) {
+    roiSelectedTourney = t_name;
+    document.getElementById('roi-current-tourney').textContent = t_name === 'ALL' ? 'Tous les tournois' : t_name;
+    renderTourneyCards();
+    renderROI();
+  }
+
+  function renderROI() {
+    const minConf = parseInt(document.getElementById('roi-min-conf').value) || 0;
+    const minEdge = (parseFloat(document.getElementById('roi-min-edge').value) || 0) / 100.0;
+    const stake = parseFloat(document.getElementById('roi-stake').value) || 10;
+    
+    let profit = 0;
+    let bets = 0;
+    let labels = ['Départ'];
+    let bankroll = [0];
+    
+    roiGlobalHistory.forEach(m => {
+        if (roiSelectedTourney !== 'ALL' && m.tourney !== roiSelectedTourney) return;
         
-        const invested = bets * stake;
-        const roiPct = invested > 0 ? (profit / invested) * 100 : 0;
-        document.getElementById('roi-pct').textContent = sign + roiPct.toFixed(1) + ' %';
-        document.getElementById('roi-pct').style.color = roiPct >= 0 ? 'var(--p1)' : 'var(--err)';
-        
-        const ctx = document.getElementById('roiChart').getContext('2d');
-        if (roiChartInstance) roiChartInstance.destroy();
-        
-        roiChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Profit Net (€)',
-                    data: bankroll,
-                    borderColor: '#4ade80',
-                    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    x: { ticks: { display: false } },
-                    y: { grid: { color: 'rgba(255,255,255,0.1)' } }
+        const conf = m.confidence ? m.confidence.confidence_index : 0;
+        if (conf >= minConf) {
+            let betOn = null;
+            let odds = 0;
+            if (m.edge1 >= minEdge) { betOn = 'p1'; odds = m.odds1; }
+            else if (m.edge2 >= minEdge) { betOn = 'p2'; odds = m.odds2; }
+            
+            if (betOn) {
+                bets++;
+                if (m.winner === betOn) {
+                    profit += (stake * odds) - stake;
+                } else {
+                    profit -= stake;
                 }
+                labels.push(m.time.split('T')[0]);
+                bankroll.push(profit);
             }
-        });
-        
-    } catch (e) {
-        alert("Erreur de simulation");
-    } finally {
-        btn.textContent = 'Lancer la Simulation';
-        btn.disabled = false;
-    }
+        }
+    });
+    
+    document.getElementById('roi-total-bets').textContent = bets;
+    const sign = profit > 0 ? '+' : '';
+    document.getElementById('roi-profit').textContent = sign + profit.toFixed(2) + ' €';
+    document.getElementById('roi-profit').style.color = profit >= 0 ? 'var(--p1)' : 'var(--err)';
+    
+    const invested = bets * stake;
+    const roiPct = invested > 0 ? (profit / invested) * 100 : 0;
+    document.getElementById('roi-pct').textContent = sign + roiPct.toFixed(1) + ' %';
+    document.getElementById('roi-pct').style.color = roiPct >= 0 ? 'var(--p1)' : 'var(--err)';
+    
+    const ctx = document.getElementById('roiChart').getContext('2d');
+    if (roiChartInstance) roiChartInstance.destroy();
+    
+    roiChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Profit Net (€)',
+                data: bankroll,
+                borderColor: '#4ade80',
+                backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { display: false } },
+                y: { grid: { color: 'rgba(255,255,255,0.1)' } }
+            }
+        }
+    });
   }
 
   async function loadDailyMatches(day) {
