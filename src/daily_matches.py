@@ -90,6 +90,7 @@ def get_daily_matches_with_odds(models, pred):
     for event in events:
         processed_ids.add(event['id'])
         # Check date: must be upcoming or recent (today)
+        is_live = False
         try:
             start_time = datetime.datetime.fromisoformat(event['commence_time'].replace("Z", "+00:00"))
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -97,6 +98,8 @@ def get_daily_matches_with_odds(models, pred):
                 continue # Match too old
             if start_time > now + datetime.timedelta(days=3):
                 continue # Match too far in future
+            if start_time <= now:
+                is_live = True
         except:
             pass
             
@@ -136,6 +139,11 @@ def get_daily_matches_with_odds(models, pred):
         p2_name = outcomes[1]['name']
         odds1 = outcomes[0]['price']
         odds2 = outcomes[1]['price']
+        
+        # Ignorer les cotes si le match a commencé (Live) pour ne pas fausser les value bets
+        if is_live:
+            odds1 = None
+            odds2 = None
         
         circuit = event.get('circuit', 'atp')
         if circuit not in models or models[circuit] is None:
@@ -233,17 +241,20 @@ def get_daily_matches_with_odds(models, pred):
             proba1 = float(MODEL.predict_proba(row)[0, 1])
             proba2 = 1.0 - proba1
             
-            implied1 = 1.0 / odds1
-            implied2 = 1.0 / odds2
-            
-            # Overround correction
-            overround = implied1 + implied2
-            if overround > 1.0:
-                implied1 /= overround
-                implied2 /= overround
+            if odds1 and odds2:
+                implied1 = 1.0 / odds1
+                implied2 = 1.0 / odds2
                 
-            edge1 = proba1 - implied1
-            edge2 = proba2 - implied2
+                # Overround correction
+                overround = implied1 + implied2
+                if overround > 1.0:
+                    implied1 /= overround
+                    implied2 /= overround
+                    
+                edge1 = proba1 - implied1
+                edge2 = proba2 - implied2
+            else:
+                implied1 = implied2 = edge1 = edge2 = 0.0
             
             conf = pred.calculate_confidence(
                 p1_prob=proba1, p1=p1_real, p2=p2_real, 
