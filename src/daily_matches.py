@@ -16,8 +16,6 @@ if not API_KEY:
     print("[AVERTISSEMENT] ODDS_API_KEY n'est pas définie — les cotes ne seront pas récupérées.")
 
 def get_daily_matches_with_odds(models, pred):
-    if not API_KEY:
-        return {"error": "ODDS_API_KEY non configurée côté serveur."}
 
     predictions_db = {}
     if os.path.exists(db_path):
@@ -26,6 +24,11 @@ def get_daily_matches_with_odds(models, pred):
                 predictions_db = json.load(f)
         except Exception as e:
             print(f"Erreur de chargement DB: {e}")
+
+    if not API_KEY:
+        all_matches = list(predictions_db.values())
+        all_matches.sort(key=lambda x: x['time'])
+        return {"matches": all_matches, "warning": "ODDS_API_KEY non configurée côté serveur. Affichage des données en cache."}
 
     # 1. Fetch all tennis sports with caching
     cache_path = os.path.join(os.path.dirname(db_path), "odds_cache.json")
@@ -46,7 +49,10 @@ def get_daily_matches_with_odds(models, pred):
         sports_url = f"https://api.the-odds-api.com/v4/sports/?apiKey={API_KEY}"
         r_sports = requests.get(sports_url)
         if not r_sports.ok:
-            return {"error": "Impossible de contacter The Odds API (sports)"}
+            # Fallback to DB if API fails
+            all_matches = list(predictions_db.values())
+            all_matches.sort(key=lambda x: x['time'])
+            return {"matches": all_matches, "warning": "Impossible de contacter The Odds API (sports), affichage des données en cache."}
             
         # Only keep main ATP and WTA tours (exclude challenger, ITF, Doubles)
         sports = [s['key'] for s in r_sports.json() if ('tennis_atp' in s['key'].lower() or 'tennis_wta' in s['key'].lower())

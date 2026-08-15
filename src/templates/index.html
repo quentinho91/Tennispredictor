@@ -811,8 +811,12 @@
       }
       
       let html = '';
+      if(data.warning) {
+        html += `<div style="color:#fbbf24; padding-bottom:16px;">⚠️ ${data.warning}</div>`;
+      }
+      
       if(data.matches.length === 0) {
-        html = '<div style="color:var(--text3); padding:20px 0;">Aucun match pr&eacute;vu à cette date.</div>';
+        html += '<div style="color:var(--text3); padding:20px 0;">Aucun match pr&eacute;vu à cette date.</div>';
       } else {
         const now = new Date();
         const tourneys = {};
