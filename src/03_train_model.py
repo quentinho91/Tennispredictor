@@ -113,7 +113,7 @@ if __name__ == "__main__":
         n_estimators=600,
         eval_metric="logloss",
         early_stopping_rounds=30,
-        n_jobs=-1,
+        n_jobs=2,  # Evite le deadlock (plantage) d'XGBoost sur GitHub Actions (ubuntu-latest a 2 cœurs)
         tree_method="hist",
         **best_params,
     )
