@@ -92,12 +92,13 @@ def basic_clean(df):
     # 'A'(United Cup, Laver Cup...) sont des catégories réellement
     # distinctes dans TOUTES les sources, on n'y touche pas.
     df["tourney_level"] = df["tourney_level"].astype(str)
-    df["tourney_level"] = df["tourney_level"].replace({"1000": "M", "1000.0": "M"})
+    df["tourney_level"] = df["tourney_level"].replace({"1000": "M", "1000.0": "M", "nan": None})
     
     df["round"] = df["round"].astype(str)
-    df["round"] = df["round"].replace({"Final": "F"})
+    df["round"] = df["round"].replace({"Final": "F", "nan": None})
     
     df["surface"] = df["surface"].astype(str)
+    df["surface"] = df["surface"].replace({"nan": None})
 
     n_before = len(df)
     df = df[df["tourney_date"].dt.year >= MIN_YEAR]
