@@ -34,7 +34,7 @@ def get_daily_matches_with_odds(STATE, MODEL, FEATURE_COLS, pred):
         try:
             with open(cache_path, "r", encoding="utf-8") as f:
                 c = json.load(f)
-                if (datetime.datetime.now().timestamp() - c['timestamp']) < 3600: # 1 hour cache
+                if (datetime.datetime.now().timestamp() - c['timestamp']) < 21600: # 6 hours cache
                     cached_data = c['events']
         except:
             pass
