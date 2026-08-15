@@ -73,7 +73,7 @@ LATE_ROUNDS = {"QF", "SF", "F", "BR"}
 
 SERVE_RETURN_KEYS = ("ace_rate", "df_rate", "first_in_pct", "first_won_pct",
                       "second_won_pct", "bp_saved_pct",
-                      "return_pts_won_pct", "bp_converted_pct")  # 6 service + 2 retour
+                      "return_pts_won_pct", "bp_converted_pct", "grind_index")  # 6 service + 2 retour + 1 rythme
 
 
 def elo_expected(ra, rb):
@@ -199,6 +199,7 @@ def build_features(df):
             "2ndWon": df[f"{who}_2ndWon"].to_numpy(dtype=float),
             "bpSaved": df[f"{who}_bpSaved"].to_numpy(dtype=float),
             "bpFaced": df[f"{who}_bpFaced"].to_numpy(dtype=float),
+            "SvGms": df[f"{who}_SvGms"].to_numpy(dtype=float),
         }
 
     s1 = stat_arrays("p1")
@@ -230,6 +231,9 @@ def build_features(df):
     tourney_games_total = defaultdict(int)   # jeux totaux dans le tournoi en cours
     tourney_sets_won    = defaultdict(int)   # sets gagnés dans le tournoi en cours
     tourney_sets_total  = defaultdict(int)   # sets totaux dans le tournoi en cours
+    
+    wins_vs_arch = defaultdict(lambda: defaultdict(int))
+    matches_vs_arch = defaultdict(lambda: defaultdict(int))
 
     # --- Infos statiques par joueur (utilisées par 05_predict_match.py) ---
     last_rank    = {}   # dernier classement ATP connu
@@ -338,7 +342,12 @@ def build_features(df):
         "tourney_cpi", "fast_court_winrate_diff", "medium_court_winrate_diff", "slow_court_winrate_diff",
         "tourney_altitude", "high_altitude_winrate_diff", "home_advantage_diff",
         "kryptonite_diff", "dominance_ratio_diff", "is_defending_champion_diff",
-        "clutch_index_diff"
+        "clutch_index_diff",
+        
+        # --- Nouvelles features Archétypes ---
+        "surface_bias_diff", "grind_mismatch", 
+        "serve_return_edge1", "serve_return_edge2",
+        "winrate_vs_arch_diff"
     ]}
 
 
@@ -482,12 +491,35 @@ def build_features(df):
         cr2 = career_retirements[p2] / career_matches[p2] if career_matches[p2] > 0 else 0.0
         out["career_retirement_rate_diff"][i] = cr1 - cr2
 
-        # ---- Stats de service/retour glissantes ----
+        # ---- Stats de service/retour glissantes & Archétypes ----
         sh1, sh2 = serve_return_hist[p1], serve_return_hist[p2]
         r5_1, r20_1 = _rolling_stats(sh1)
         r5_2, r20_2 = _rolling_stats(sh2)
         for k_idx, k in enumerate(SERVE_RETURN_KEYS):
             serve_diff_20[k][i] = r20_1[k_idx] - r20_2[k_idx]
+
+        sb1 = _surface_bias(rr1, day, surf)
+        sb2 = _surface_bias(rr2, day, surf)
+        out["surface_bias_diff"][i] = sb1 - sb2
+
+        arch1 = _get_archetype(r20_1, sb1)
+        arch2 = _get_archetype(r20_2, sb2)
+
+        grind1 = r20_1[8] if len(r20_1) > 8 else np.nan
+        grind2 = r20_2[8] if len(r20_2) > 8 else np.nan
+        out["grind_mismatch"][i] = grind1 - grind2 if (grind1 == grind1 and grind2 == grind2) else 0.0
+
+        serve_win1 = (r20_1[2] * r20_1[3] + (1 - r20_1[2]) * r20_1[4]) if len(r20_1) > 4 else np.nan
+        serve_win2 = (r20_2[2] * r20_2[3] + (1 - r20_2[2]) * r20_2[4]) if len(r20_2) > 4 else np.nan
+        return_won1 = r20_1[6] if len(r20_1) > 6 else np.nan
+        return_won2 = r20_2[6] if len(r20_2) > 6 else np.nan
+        
+        out["serve_return_edge1"][i] = serve_win1 - return_won2 if (serve_win1 == serve_win1 and return_won2 == return_won2) else 0.0
+        out["serve_return_edge2"][i] = serve_win2 - return_won1 if (serve_win2 == serve_win2 and return_won1 == return_won1) else 0.0
+
+        wr_vs_arch1 = wins_vs_arch[p1][arch2] / matches_vs_arch[p1][arch2] if matches_vs_arch[p1][arch2] > 0 else 0.5
+        wr_vs_arch2 = wins_vs_arch[p2][arch1] / matches_vs_arch[p2][arch1] if matches_vs_arch[p2][arch1] > 0 else 0.5
+        out["winrate_vs_arch_diff"][i] = wr_vs_arch1 - wr_vs_arch2
 
         # ---- Statique ----
         a1, a2 = p1_age[i], p2_age[i]
@@ -683,8 +715,15 @@ def build_features(df):
         last_h2h_result[p1][p2] = 1 if p1_won else 0
         last_h2h_result[p2][p1] = 0 if p1_won else 1
 
-        sh1.append(_extract_serve_return_stats(s1, s2, i)); _trim(sh1, MAX_HISTORY)
-        sh2.append(_extract_serve_return_stats(s2, s1, i)); _trim(sh2, MAX_HISTORY)
+        matches_vs_arch[p1][arch2] += 1
+        matches_vs_arch[p2][arch1] += 1
+        if p1_won:
+            wins_vs_arch[p1][arch2] += 1
+        else:
+            wins_vs_arch[p2][arch1] += 1
+
+        sh1.append(_extract_serve_return_stats(s1, s2, i, min_i)); _trim(sh1, MAX_HISTORY)
+        sh2.append(_extract_serve_return_stats(s2, s1, i, min_i)); _trim(sh2, MAX_HISTORY)
 
         # Mise à jour du tenant du titre si finale
         if round_[i] == 'F':
@@ -742,6 +781,8 @@ def build_features(df):
         "last_h2h_day": {p: dict(d) for p, d in last_h2h_day.items()},
         "last_h2h_result": {p: dict(d) for p, d in last_h2h_result.items()},
         "serve_return_hist": dict(serve_return_hist),
+        "wins_vs_arch": {p: dict(d) for p, d in wins_vs_arch.items()},
+        "matches_vs_arch": {p: dict(d) for p, d in matches_vs_arch.items()},
         "tourney_champions": dict(tourney_champions),
         "vs_lefty_results": dict(vs_lefty_results),
         "high_altitude_results": dict(high_altitude_results),
@@ -899,10 +940,10 @@ def _rank_n_days_ago(rank_hist, day, days):
     return np.nan
 
 
-def _extract_serve_return_stats(own, opp, i):
+def _extract_serve_return_stats(own, opp, i, minutes):
     svpt = own["svpt"][i]
     if not (svpt == svpt) or svpt == 0:
-        return (np.nan,) * 8
+        return (np.nan,) * 9
     ace, df_ = own["ace"][i], own["df_"][i]
     first_in, first_won, second_won = own["1stIn"][i], own["1stWon"][i], own["2ndWon"][i]
     bp_saved, bp_faced = own["bpSaved"][i], own["bpFaced"][i]
@@ -914,6 +955,12 @@ def _extract_serve_return_stats(own, opp, i):
     return_pts_won = (opp_svpt - opp_1stWon - opp_2ndWon) if opp_svpt == opp_svpt else np.nan
     bp_converted = (opp_bpFaced - opp_bpSaved) if opp_bpFaced == opp_bpFaced else np.nan
 
+    # Calculate grind index (minutes per game)
+    own_games = own["SvGms"][i] if "SvGms" in own else np.nan
+    opp_games = opp["SvGms"][i] if "SvGms" in opp else np.nan
+    total_games = own_games + opp_games if (own_games == own_games and opp_games == opp_games) else np.nan
+    grind = minutes / total_games if (minutes == minutes and total_games == total_games and total_games > 0) else np.nan
+
     return (
         ace / svpt if ace == ace else np.nan,
         df_ / svpt if df_ == df_ else np.nan,
@@ -923,26 +970,59 @@ def _extract_serve_return_stats(own, opp, i):
         bp_saved / bp_faced if (bp_saved == bp_saved and bp_faced) else np.nan,
         return_pts_won / opp_svpt if (return_pts_won == return_pts_won and opp_svpt) else np.nan,
         bp_converted / opp_bpFaced if (bp_converted == bp_converted and opp_bpFaced) else np.nan,
+        grind
     )
 
 
 def _rolling_stats(history):
-    """Retourne (moyennes 5 derniers, moyennes 20 derniers), tuples de 8
+    """Retourne (moyennes 5 derniers, moyennes 20 derniers), tuples de 9
     valeurs dans l'ordre de SERVE_RETURN_KEYS."""
     if not history:
-        nan8 = (np.nan,) * 8
-        return nan8, nan8
+        nan_val = (np.nan,) * 9
+        return nan_val, nan_val
 
     def avg(window):
         if not window:
-            return (np.nan,) * 8
+            return (np.nan,) * 9
         out = []
-        for k in range(8):
+        for k in range(9):
             vals = [w[k] for w in window if w[k] == w[k]]
             out.append(sum(vals) / len(vals) if vals else np.nan)
         return tuple(out)
 
     return avg(history[-5:]), avg(history[-20:])
+
+def _surface_bias(rr, current_day, current_surf):
+    count_52w = 0
+    surf_count_52w = 0
+    for res in reversed(rr):
+        day = res[0]
+        if current_day - day > 365:
+            break
+        count_52w += 1
+        if res[3] == current_surf:
+            surf_count_52w += 1
+    return surf_count_52w / count_52w if count_52w > 0 else 0.0
+
+def _get_archetype(avg_20, surf_bias):
+    if not avg_20 or avg_20[0] != avg_20[0]: return "Polyvalent" # NaN check
+    ace_rate = avg_20[0]
+    first_won = avg_20[3]
+    return_won = avg_20[6]
+    grind = avg_20[8]
+    
+    if ace_rate > 0.10 and first_won > 0.73:
+        return "Gros Serveur"
+    elif grind > 4.5 and return_won > 0.38:
+        return "Défenseur / Grinder"
+    elif return_won > 0.38 and (avg_20[2] * first_won + (1 - avg_20[2]) * avg_20[4]) > 0.65:
+        return "All-Court Élite"
+    elif surf_bias > 0.65:
+        return "Terrien" if surf_bias > 0.65 else "Spécialiste Surface" # Simplifié pour la démo
+    elif grind < 4.0 and first_won > 0.70:
+        return "Attaquant de Fond"
+    else:
+        return "Polyvalent"
 
 
 if __name__ == "__main__":

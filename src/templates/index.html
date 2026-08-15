@@ -858,20 +858,33 @@
                 <div style="color:var(--text3); cursor:pointer;">&#x27A4;</div>
               </div>
               
-              <div class="pc-players">
+              <div class="pc-players" style="align-items:center;">
                 <div class="pc-player">
                   <div class="pc-avatar">${m.p1.substring(0,2).toUpperCase()}</div>
                   <div class="pc-name" style="${m.winner==='p1'?'color:#4ade80':''}">${m.p1}</div>
+                  <div style="font-size:9px; color:var(--text3); background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${m.p1_archetype || 'Polyvalent'}</div>
+                  <div style="display:flex; gap:3px; margin-top:2px;">
+                    ${(m.p1_form || []).map(r => `<div style="width:6px; height:6px; border-radius:50%; background:${r===1?'#4ade80':'#ef4444'}; opacity:0.8;"></div>`).join('')}
+                  </div>
                 </div>
                 
-                <div class="pc-status">
+                <div class="pc-status" style="display:flex; flex-direction:column; gap:6px;">
                   <div class="pc-status-lbl" style="${statusStyle}">${statusLbl}</div>
                   <div class="pc-score">${scoreHtml}</div>
+                  <div style="font-size:10px; color:var(--text3); margin-top:4px;">Matchup Edge</div>
+                  <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700;">
+                    <span style="color:${m.serve_return_edge1 > 0 ? '#4ade80' : 'var(--text3)'}">${m.serve_return_edge1 > 0 ? '+' : ''}${Math.round((m.serve_return_edge1||0)*100)}%</span>
+                    <span style="color:${m.serve_return_edge2 > 0 ? '#6366f1' : 'var(--text3)'}">${m.serve_return_edge2 > 0 ? '+' : ''}${Math.round((m.serve_return_edge2||0)*100)}%</span>
+                  </div>
                 </div>
                 
                 <div class="pc-player">
                   <div class="pc-avatar">${m.p2.substring(0,2).toUpperCase()}</div>
                   <div class="pc-name" style="${m.winner==='p2'?'color:#6366f1':''}">${m.p2}</div>
+                  <div style="font-size:9px; color:var(--text3); background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${m.p2_archetype || 'Polyvalent'}</div>
+                  <div style="display:flex; gap:3px; margin-top:2px;">
+                    ${(m.p2_form || []).map(r => `<div style="width:6px; height:6px; border-radius:50%; background:${r===1?'#6366f1':'#ef4444'}; opacity:0.8;"></div>`).join('')}
+                  </div>
                 </div>
               </div>
               

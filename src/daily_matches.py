@@ -243,7 +243,10 @@ def get_daily_matches_with_odds(models, pred):
                 hours1=24.0, 
                 hours2=24.0
             )
-            
+            def _get_recent_form(state, player):
+                rr = state.get("recent_results", {}).get(player, [])
+                return [1 if r[1] else 0 for r in rr[-5:]]
+                
             match_data = {
                 "id": event['id'],
                 "time": event['commence_time'],
@@ -260,7 +263,11 @@ def get_daily_matches_with_odds(models, pred):
                 "edge2": float(edge2),
                 "bookie": bet365['title'],
                 "confidence": conf,
-                "circuit": circuit
+                "circuit": circuit,
+                "p1_archetype": feat.get("_p1_archetype", "Polyvalent"),
+                "p2_archetype": feat.get("_p2_archetype", "Polyvalent"),
+                "p1_form": _get_recent_form(STATE, p1_real),
+                "p2_form": _get_recent_form(STATE, p2_real)
             }
             
             # Copy previous winner/result info if it exists

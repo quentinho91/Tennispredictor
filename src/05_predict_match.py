@@ -63,6 +63,8 @@ _rank_ago      = fe._rank_n_days_ago
 _rolling_stats = fe._rolling_stats
 _wr_surf       = fe._winrate_surface
 _wr_surf_days  = fe._winrate_surface_days
+_get_arch      = fe._get_archetype
+_surf_bias     = fe._surface_bias
 _gk_n          = fe._giant_killer_rate_n
 _upset_n       = fe._upset_rate_n
 _wr_round      = fe._winrate_round_type
@@ -441,6 +443,44 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     r5_2, r20_2 = _rolling_stats(sh2)
     for k_idx, k in enumerate(SERVE_KEYS):
         feat[f"{k}_20_diff"] = r20_1[k_idx] - r20_2[k_idx]
+
+    # --- Nouvelles features Archétypes ---
+    sb1 = _surf_bias(rr1, day, surf)
+    sb2 = _surf_bias(rr2, day, surf)
+    feat["surface_bias_diff"] = sb1 - sb2
+
+    arch1 = _get_arch(r20_1, sb1)
+    arch2 = _get_arch(r20_2, sb2)
+    # Exporter les archétypes pour le JSON du site web
+    feat["_p1_archetype"] = arch1
+    feat["_p2_archetype"] = arch2
+
+    grind1 = r20_1[8] if len(r20_1) > 8 else np.nan
+    grind2 = r20_2[8] if len(r20_2) > 8 else np.nan
+    feat["grind_mismatch"] = grind1 - grind2 if (grind1 == grind1 and grind2 == grind2) else 0.0
+
+    serve_win1 = (r20_1[2] * r20_1[3] + (1 - r20_1[2]) * r20_1[4]) if len(r20_1) > 4 else np.nan
+    serve_win2 = (r20_2[2] * r20_2[3] + (1 - r20_2[2]) * r20_2[4]) if len(r20_2) > 4 else np.nan
+    return_won1 = r20_1[6] if len(r20_1) > 6 else np.nan
+    return_won2 = r20_2[6] if len(r20_2) > 6 else np.nan
+    
+    feat["serve_return_edge1"] = serve_win1 - return_won2 if (serve_win1 == serve_win1 and return_won2 == return_won2) else 0.0
+    feat["serve_return_edge2"] = serve_win2 - return_won1 if (serve_win2 == serve_win2 and return_won1 == return_won1) else 0.0
+
+    wins_vs = state.get("wins_vs_arch", {})
+    matches_vs = state.get("matches_vs_arch", {})
+    
+    p1_w_vs = wins_vs.get(p1, {}).get(arch2, 0)
+    p1_m_vs = matches_vs.get(p1, {}).get(arch2, 0)
+    wr_vs_arch1 = p1_w_vs / p1_m_vs if p1_m_vs > 0 else 0.5
+    
+    p2_w_vs = wins_vs.get(p2, {}).get(arch1, 0)
+    p2_m_vs = matches_vs.get(p2, {}).get(arch1, 0)
+    wr_vs_arch2 = p2_w_vs / p2_m_vs if p2_m_vs > 0 else 0.5
+    
+    feat["winrate_vs_arch_diff"] = wr_vs_arch1 - wr_vs_arch2
+    feat["_p1_wr_vs_arch"] = wr_vs_arch1
+    feat["_p2_wr_vs_arch"] = wr_vs_arch2
 
     # Statique
     feat["age_diff"]  = (age1 - age2) if (age1 == age1 and age2 == age2) else np.nan
