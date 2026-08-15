@@ -67,12 +67,16 @@ def get_daily_matches_with_odds(models, pred):
         try:
             r_sports = requests.get(sports_url, timeout=8)
             if not r_sports.ok:
-                raise ValueError("Bad status code")
-        except:
+                err_code = r_sports.status_code
+                msg = f"Clé The Odds API invalide ou quota dépassé (Code {err_code})."
+                all_matches = list(predictions_db.values())
+                all_matches.sort(key=lambda x: x['time'])
+                return {"matches": all_matches, "warning": msg}
+        except Exception as e:
             # Fallback to DB if API fails
             all_matches = list(predictions_db.values())
             all_matches.sort(key=lambda x: x['time'])
-            return {"matches": all_matches, "warning": "Impossible de contacter The Odds API (sports), affichage des données en cache."}
+            return {"matches": all_matches, "warning": "Impossible de contacter The Odds API (connexion timeout/échouée)."}
             
         # Only keep main ATP and WTA tours (exclude challenger, ITF, Doubles)
         sports = [s['key'] for s in r_sports.json() if ('tennis_atp' in s['key'].lower() or 'tennis_wta' in s['key'].lower())

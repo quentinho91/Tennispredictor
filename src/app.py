@@ -343,17 +343,18 @@ def api_daily_matches():
         data = get_daily_matches_with_odds(models_dict, pred)
         day_filter = request.args.get("day", "all")
         
-        if day_filter != "all" and "matches" in data:
+        if day_filter != "all" and "matches" in data and data["matches"]:
             import datetime
             filtered = []
             for m in data["matches"]:
                 try:
                     m_time = datetime.datetime.fromisoformat(m["time"].replace("Z", "+00:00"))
+                    m_time_utc = m_time.astimezone(datetime.timezone.utc)
                     m_time_local = m_time.astimezone(None)
-                    if m_time_local.date().isoformat() == day_filter:
+                    if m_time_utc.date().isoformat() == day_filter or m_time_local.date().isoformat() == day_filter:
                         filtered.append(m)
                 except:
-                    pass
+                    filtered.append(m)
             data["matches"] = filtered
             
         return jsonify(data)

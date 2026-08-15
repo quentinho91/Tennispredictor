@@ -14,6 +14,7 @@ Le script demande interactivement les infos du match et retourne :
     - Si tu entres les cotes du bookmaker : edge calcule + recommandation
 """
 
+import os
 import sys
 import pickle
 import json
@@ -225,7 +226,6 @@ def load_resources(circuit="atp"):
                 return np.column_stack((1.0 - p1, p1))
         models.append(LGBMWrapper(lgb_model))
         
-    import os
     cat_path = PROC_DIR / f"cat_model_{circuit}.cbm"
     # Désactiver CatBoost sur Render pour éviter le Out-Of-Memory (OOM) sur le Free Tier (512MB)
     if cat_path.exists() and not os.environ.get("RENDER"):
