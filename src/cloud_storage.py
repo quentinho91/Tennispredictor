@@ -34,7 +34,7 @@ def download_data_from_github():
         # On essaie de telecharger seulement s'il n'existe pas ou en forcant
         print(f"  -> Telechargement de {file_name}...")
         try:
-            response = requests.get(url, stream=True)
+            response = requests.get(url, stream=True, timeout=30)
             if response.status_code == 200:
                 with open(file_path, "wb") as f:
                     for chunk in response.iter_content(chunk_size=8192):
