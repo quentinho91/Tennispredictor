@@ -29,11 +29,19 @@ jobs:
 
       - name: Run Data Pipeline
         run: |
+          # Télécharge l'ancienne base de données de prédictions si elle existe
+          python src/cloud_storage.py || true
+          
           python src/00_download_data.py
           python src/01_build_dataset.py
           python src/02_feature_engineering.py
           python src/03_train_model.py
           python src/short_term_rest_features.py
+          
+          # Sécurité : créer un fichier vide s'il n'existe toujours pas pour éviter le plantage du release
+          if [ ! -f data/processed/predictions_db.json ]; then
+            echo "{}" > data/processed/predictions_db.json
+          fi
 
       - name: Upload to GitHub Releases
         env:
