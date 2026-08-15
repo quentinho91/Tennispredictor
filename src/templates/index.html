@@ -683,10 +683,13 @@
                 const p2Color = m.winner === 'p2' ? '#6366f1' : 'var(--text3)';
                 const date = new Date(m.time).toLocaleDateString([], {day:'2-digit', month:'2-digit'});
                 
+                const confColor = conf >= 80 ? '#4ade80' : (conf >= 60 ? '#fbbf24' : '#ef4444');
+                const confBg = conf >= 80 ? 'rgba(74,222,128,0.1)' : (conf >= 60 ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)');
+                
                 const cardHtml = `<div class="premium-card">
                   <div class="pc-top">
                     <div class="pc-badge-vb">VB</div>
-                    <div class="pc-badge-conf" style="background:var(--bg3); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:600; color:var(--text2);">Indice : ${Math.round(conf)}/100</div>
+                    <div class="pc-badge-conf" style="background:${confBg}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:600; color:${confColor};">Indice : ${Math.round(conf)}/100</div>
                     <div style="color:var(--text3); cursor:pointer;">&#x27A4;</div>
                   </div>
                   
@@ -843,7 +846,10 @@
             }
             
             const conf = m.confidence ? m.confidence.confidence_index : 0;
-            const confBadge = `<div class="pc-badge-conf" style="background:var(--bg3); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:600; color:var(--text2);">Indice : ${Math.round(conf)}/100</div>`;
+            const confColor = conf >= 80 ? '#4ade80' : (conf >= 60 ? '#fbbf24' : '#ef4444');
+            const confBg = conf >= 80 ? 'rgba(74,222,128,0.1)' : (conf >= 60 ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)');
+            
+            const confBadge = `<div class="pc-badge-conf" style="background:${confBg}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:600; color:${confColor};">Indice : ${Math.round(conf)}/100</div>`;
             
             html += `<div class="premium-card" style="${isVB?'box-shadow: 0 0 20px rgba(74,222,128,0.1); border-color:rgba(74,222,128,0.3);':''}">
               <div class="pc-top">
