@@ -355,6 +355,10 @@ def get_daily_matches_with_odds(models, pred):
     # Add all historical matches from DB that were not in the API response
     for ev_id, match in predictions_db.items():
         if ev_id not in processed_ids:
+            # Sanitize old matches to fix lingering NaN values from older versions
+            for k, v in match.items():
+                if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                    match[k] = 0.0
             all_matches.append(match)
             
     # Sort by commence time
