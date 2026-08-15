@@ -231,7 +231,7 @@
       <p style="margin-top:12px;">R&eacute;cup&eacute;ration des cotes en direct...</p>
     </div>
     
-    <div id="daily-matches-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px;">
+    <div id="daily-matches-grid">
       <!-- Matches will be inserted here -->
     </div>
   </div>
@@ -783,79 +783,110 @@
       
       let html = '';
       if(data.matches.length === 0) {
-        html = '<div style="color:var(--text3); grid-column: 1 / -1;">Aucun match pr&eacute;vu à cette date.</div>';
+        html = '<div style="color:var(--text3); padding:20px 0;">Aucun match pr&eacute;vu à cette date.</div>';
       } else {
         const now = new Date();
+        const tourneys = {};
+        
         data.matches.forEach(m => {
-          let vbHit1 = '';
-          let vbHit2 = '';
-          const matchTime = new Date(m.time);
-          const isLive = matchTime < now;
-          let timeHtml = isLive 
-            ? `<span style="color:#ef4444; font-weight:700; animation:glowPulse 2s infinite;">&#x25CF; LIVE</span>` 
-            : `<span>${matchTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>`;
-          
-          if (m.winner) {
-              timeHtml = `<span style="color:#94a3b8; font-weight:700;">Termin&eacute;</span>`;
-              if (m.edge1 > 0.02) {
-                  vbHit1 = m.winner === 'p1' ? ' ✅' : ' ❌';
-              }
-              if (m.edge2 > 0.02) {
-                  vbHit2 = m.winner === 'p2' ? ' ✅' : ' ❌';
-              }
-          }
-          
-          const edge1 = m.edge1 > 0.02 ? `<div style="background:rgba(74, 222, 128, 0.15); color:#4ade80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">&#x1F525; VB ${(m.edge1*100).toFixed(1)}%${vbHit1}</div>` : '';
-          const edge2 = m.edge2 > 0.02 ? `<div style="background:rgba(74, 222, 128, 0.15); color:#4ade80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">&#x1F525; VB ${(m.edge2*100).toFixed(1)}%${vbHit2}</div>` : '';
-          
-          let p1Style = m.winner === 'p1' ? 'color:#4ade80;' : (m.winner === 'p2' ? 'color:var(--text3);' : 'color:var(--text1);');
-          let p2Style = m.winner === 'p2' ? 'color:#4ade80;' : (m.winner === 'p1' ? 'color:var(--text3);' : 'color:var(--text1);');
-          
-          let confHtml = '';
-          if (m.confidence) {
-            const conf = m.confidence;
-            let confColor = conf.confidence_index >= 75 ? '#4ade80' : (conf.confidence_index >= 55 ? '#fbbf24' : (conf.confidence_index >= 35 ? '#f87171' : '#94a3b8'));
-            confHtml = `<div style="font-size:11px; color:${confColor}; font-weight:600; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px;">Conf: ${conf.confidence_index}</div>`;
-          }
-          
-          html += `
-          <div class="card" style="padding:16px; display:flex; flex-direction:column; gap:12px; border:${(m.edge1>0.02 || m.edge2>0.02) ? '1px solid rgba(74,222,128,0.5)' : '1px solid var(--border)'}; box-shadow:${(m.edge1>0.02 || m.edge2>0.02) ? '0 0 15px rgba(74,222,128,0.1)' : 'none'};">
-            <div style="font-size:12px; color:var(--text3); display:flex; justify-content:space-between; align-items:center;">
-              <span>${m.tourney}</span>
-              <div style="display:flex; gap:8px; align-items:center;">
-                ${confHtml}
-                ${timeHtml}
-              </div>
-            </div>
-            
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-weight:600; ${p1Style}">${m.p1}${m.winner === 'p1' ? ' 🏆' : ''}</div>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <span style="font-size:13px; color:var(--text3);">Cote: ${m.odds1.toFixed(2)}</span>
-                ${edge1}
-              </div>
-            </div>
-            
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-weight:600; ${p2Style}">${m.p2}${m.winner === 'p2' ? ' 🏆' : ''}</div>
-              <div style="display:flex; gap:8px; align-items:center;">
-                <span style="font-size:13px; color:var(--text3);">Cote: ${m.odds2.toFixed(2)}</span>
-                ${edge2}
-              </div>
-            </div>
-            
-            <div style="margin-top:8px; height:6px; border-radius:3px; background:var(--bg); display:flex; overflow:hidden;">
-              <div style="height:100%; width:${m.proba1*100}%; background:var(--p1);"></div>
-              <div style="height:100%; width:${m.proba2*100}%; background:var(--p2);"></div>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text3);">
-              <span>Algo: ${(m.proba1*100).toFixed(1)}%</span>
-              <span>Algo: ${(m.proba2*100).toFixed(1)}%</span>
-            </div>
-          </div>
-          `;
+          if (!tourneys[m.tourney]) tourneys[m.tourney] = [];
+          tourneys[m.tourney].push(m);
         });
+        
+        for (const [t_name, matches] of Object.entries(tourneys)) {
+          html += `
+            <div style="margin-bottom:24px;">
+              <h3 style="font-size:16px; font-weight:800; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+                <span style="font-size:20px;">&#x1F3C6;</span> ${t_name}
+              </h3>
+              <div style="display:flex; gap:16px; overflow-x:auto; padding-bottom:16px; scrollbar-width:thin;">
+          `;
+          
+          matches.forEach(m => {
+            const matchTime = new Date(m.time);
+            const isLive = matchTime < now;
+            
+            let statusLbl = '&Agrave; venir';
+            let statusStyle = 'color:var(--text3);';
+            let scoreHtml = matchTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            if (m.winner) {
+                statusLbl = 'Termin&eacute;';
+                statusStyle = 'color:#4ade80;';
+                scoreHtml = m.winner === 'p1' ? 'V - D' : (m.winner === 'p2' ? 'D - V' : '-');
+            } else if (isLive) {
+                statusLbl = 'LIVE';
+                statusStyle = 'color:#ef4444; animation:glowPulse 2s infinite;';
+            }
+            
+            const isVB = m.edge1 > 0.02 || m.edge2 > 0.02;
+            const vbBadge = isVB ? `<div class="pc-badge-vb">VB</div>` : `<div></div>`;
+            
+            const p1Prob = Math.round(m.proba1 * 100);
+            const p2Prob = Math.round(m.proba2 * 100);
+            
+            let p1Color = 'var(--text3)';
+            let p2Color = 'var(--text3)';
+            let p1Sub = '';
+            let p2Sub = '';
+            
+            if (m.winner) {
+                if (m.winner === 'p1') { p1Color = '#4ade80'; p1Sub = 'valid&eacute;'; }
+                if (m.winner === 'p2') { p2Color = '#6366f1'; p2Sub = 'valid&eacute;'; }
+            } else {
+                p1Color = '#2dd4bf';
+                p2Color = '#a855f7';
+            }
+            
+            html += `<div class="premium-card" style="${isVB?'box-shadow: 0 0 20px rgba(74,222,128,0.1); border-color:rgba(74,222,128,0.3);':''}">
+              <div class="pc-top">
+                ${vbBadge}
+                <div class="pc-tabs">
+                  <div class="pc-tab active">Pronos</div>
+                  <div class="pc-tab">Stats</div>
+                </div>
+                <div style="color:var(--text3); cursor:pointer;">&#x27A4;</div>
+              </div>
+              
+              <div class="pc-players">
+                <div class="pc-player">
+                  <div class="pc-avatar">${m.p1.substring(0,2).toUpperCase()}</div>
+                  <div class="pc-name" style="${m.winner==='p1'?'color:#4ade80':''}">${m.p1}</div>
+                </div>
+                
+                <div class="pc-status">
+                  <div class="pc-status-lbl" style="${statusStyle}">${statusLbl}</div>
+                  <div class="pc-score">${scoreHtml}</div>
+                </div>
+                
+                <div class="pc-player">
+                  <div class="pc-avatar">${m.p2.substring(0,2).toUpperCase()}</div>
+                  <div class="pc-name" style="${m.winner==='p2'?'color:#6366f1':''}">${m.p2}</div>
+                </div>
+              </div>
+              
+              <div class="pc-bars">
+                <div class="pc-bar-container">
+                  <div class="pc-prob-lbl p1" style="color:${p1Color}">${p1Prob}%<span class="pc-prob-sub">${p1Sub}</span></div>
+                  <div class="pc-bar-fill p1" style="height:${p1Prob}%; ${!m.winner?'background:linear-gradient(to top, #115e59, #2dd4bf);':''}"></div>
+                </div>
+                <div class="pc-bar-container">
+                  <div class="pc-prob-lbl p2" style="color:${p2Color}">${p2Prob}%<span class="pc-prob-sub">${p2Sub}</span></div>
+                  <div class="pc-bar-fill p2" style="height:${p2Prob}%; ${!m.winner?'background:linear-gradient(to top, #3730a3, #a855f7);':''}"></div>
+                </div>
+              </div>
+              
+              <div class="pc-odds-row">
+                <div class="pc-odd" style="${m.edge1>0.02?'color:#4ade80; border-color:#4ade80':''}">${m.odds1.toFixed(2)}</div>
+                <div class="pc-odd" style="${m.edge2>0.02?'color:#6366f1; border-color:#6366f1':''}">${m.odds2.toFixed(2)}</div>
+              </div>
+            </div>`;
+          });
+          
+          html += `</div></div>`;
+        }
       }
+      
       document.getElementById('daily-matches-grid').innerHTML = html;
     } catch(e) {
       document.getElementById('daily-matches-loading').innerHTML = '<span style="color:var(--err);">Erreur de chargement.</span>';
