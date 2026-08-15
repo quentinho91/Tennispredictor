@@ -8,10 +8,14 @@ GITHUB_REPO = "Tennispredictor"
 
 # Liste des fichiers a telecharger depuis les Releases GitHub
 FILES_TO_DOWNLOAD = [
-    "player_state.pkl",
-    "xgb_model.json",
-    "calibrator.pkl",
-    "feature_cols.pkl",
+    "player_state_atp.pkl",
+    "xgb_model_atp.json",
+    "calibrator_atp.pkl",
+    "feature_cols_atp.pkl",
+    "player_state_wta.pkl",
+    "xgb_model_wta.json",
+    "calibrator_wta.pkl",
+    "feature_cols_wta.pkl",
     "predictions_db.json"
 ]
 

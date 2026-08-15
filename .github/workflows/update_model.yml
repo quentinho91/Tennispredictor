@@ -43,11 +43,18 @@ jobs:
           python src/cloud_storage.py || true
           
           python src/00_download_data.py
-          python src/01_build_dataset.py
-          python src/02_feature_engineering.py
-          python src/03_train_model.py
-          python src/short_term_rest_features.py
-          python src/06_export_light_state.py
+          
+          # ATP Pipeline
+          python src/01_build_dataset.py --circuit atp
+          python src/02_feature_engineering.py --circuit atp
+          python src/03_train_model.py --circuit atp
+          python src/06_export_light_state.py --circuit atp
+          
+          # WTA Pipeline
+          python src/01_build_dataset.py --circuit wta
+          python src/02_feature_engineering.py --circuit wta
+          python src/03_train_model.py --circuit wta
+          python src/06_export_light_state.py --circuit wta
           # NOTE : short_term_rest_features.py retiré du pipeline pour l'instant.
           # C'est un script de démo (liste de joueurs codée en dur, aucune
           # sauvegarde du résultat) — à réintégrer une fois vraiment câblé
@@ -69,13 +76,17 @@ jobs:
           
           # On recree une release avec le tag latest_model
           gh release create latest_model \
-            data/processed/player_state.pkl \
-            data/processed/xgb_model.json \
-            data/processed/calibrator.pkl \
-            data/processed/feature_cols.pkl \
+            data/processed/player_state_atp.pkl \
+            data/processed/xgb_model_atp.json \
+            data/processed/calibrator_atp.pkl \
+            data/processed/feature_cols_atp.pkl \
+            data/processed/player_state_wta.pkl \
+            data/processed/xgb_model_wta.json \
+            data/processed/calibrator_wta.pkl \
+            data/processed/feature_cols_wta.pkl \
             data/processed/predictions_db.json \
             --title "Dernieres previsions & modele" \
-            --notes "Mise a jour automatique du modele et des donnees"
+            --notes "Mise a jour automatique du modele et des donnees (ATP & WTA)"
 
       - name: Trigger Render Deployment
         if: env.RENDER_DEPLOY_HOOK != ''

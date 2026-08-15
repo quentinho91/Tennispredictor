@@ -34,57 +34,54 @@ app = Flask(__name__, template_folder="templates")
 app.config["TEMPLATES_AUTO_RELOAD"] = True  # sinon index.html reste en cache tant que le serveur n'est pas redémarré
 
 # Ressources chargees une seule fois au demarrage
-STATE         = None
-MODEL         = None
-FEATURE_COLS  = None
-KNOWN_PLAYERS = None  # tous les joueurs
-ACTIVE_PLAYERS = None  # joueurs ayant joue dans les 18 derniers mois
+MODELS = {"atp": None, "wta": None}
 _RESOURCES_LOADED = False
 
 # Seuil d'inactivite : joueurs absents depuis plus de N mois sont caches
 _ACTIVE_MONTHS = 18
 
-# Un tournoi dure rarement plus de ~20 jours (Grand Chelem inclus). Si le
-# dernier match connu d'un joueur est plus vieux que ca, on considere qu'il
-# demarre un tournoi tout frais plutot que d'utiliser des stats "intra-
-# tournoi" perimees d'un tournoi different termine depuis longtemps.
+# Un tournoi dure rarement plus de ~20 jours (Grand Chelem inclus).
 _TOURNEY_RECENCY_DAYS = 20
 
-
 def load_all():
-    global STATE, MODEL, FEATURE_COLS, KNOWN_PLAYERS, ACTIVE_PLAYERS, _RESOURCES_LOADED
+    global MODELS, _RESOURCES_LOADED
     if _RESOURCES_LOADED:
         return
         
-    # Telechargement des donnees si on est sur Render
     if os.environ.get("RENDER"):
         from cloud_storage import download_data_from_github
         download_data_from_github()
         
-    STATE, MODEL, FEATURE_COLS = pred.load_resources()
-    KNOWN_PLAYERS = sorted(STATE["elo"].keys())
-
-    # Filtrer les joueurs actifs : dernier match dans les 18 derniers mois
-    last_day = int(STATE["last_day"])
-    threshold = last_day - _ACTIVE_MONTHS * 30
-    lpd = STATE["last_play_date"]
-    ACTIVE_PLAYERS = sorted(
-        p for p in KNOWN_PLAYERS
-        if int(lpd.get(p, 0)) >= threshold
-    )
-    print(f"  Joueurs actifs ({_ACTIVE_MONTHS} mois) : {len(ACTIVE_PLAYERS)} / {len(KNOWN_PLAYERS)}")
+    for circuit in ["atp", "wta"]:
+        try:
+            STATE, MODEL, FEATURE_COLS = pred.load_resources(circuit)
+            KNOWN_PLAYERS = sorted(STATE["elo"].keys())
+            last_day = int(STATE["last_day"])
+            threshold = last_day - _ACTIVE_MONTHS * 30
+            lpd = STATE["last_play_date"]
+            ACTIVE_PLAYERS = sorted(
+                p for p in KNOWN_PLAYERS
+                if int(lpd.get(p, 0)) >= threshold
+            )
+            print(f"  Joueurs actifs ({circuit}, {_ACTIVE_MONTHS} mois) : {len(ACTIVE_PLAYERS)} / {len(KNOWN_PLAYERS)}")
+            MODELS[circuit] = {
+                "state": STATE,
+                "model": MODEL,
+                "feature_cols": FEATURE_COLS,
+                "known_players": KNOWN_PLAYERS,
+                "active_players": ACTIVE_PLAYERS
+            }
+        except Exception as e:
+            print(f"Erreur chargement circuit {circuit}: {e}")
+            MODELS[circuit] = None
     _RESOURCES_LOADED = True
 
 
-def auto_tourney_context(player):
-    """Récupère automatiquement la progression du joueur dans son tournoi
-    en cours, à partir de l'état sauvegardé par 02_feature_engineering.py
-    (matches_this_tourney, tourney_games_won/total, tourney_sets_won/total).
-
-    Ces compteurs reflètent l'état APRES le dernier match connu du joueur.
-    Si ce dernier match est trop ancien (> _TOURNEY_RECENCY_DAYS), on
-    considère qu'il s'agit d'un tournoi différent et on repart à zéro
-    plutôt que de réutiliser des stats obsolètes."""
+def auto_tourney_context(player, circuit="atp"):
+    if MODELS.get(circuit) is None:
+        return {"mt": 0, "gw": 0, "gt": 0, "sw": 0, "st": 0, "source": "fresh_default"}
+        
+    STATE = MODELS[circuit]["state"]
     last_play = STATE["last_play_date"].get(player)
     current_day = STATE["last_day"]
 
@@ -108,19 +105,27 @@ def auto_tourney_context(player):
 @app.route("/")
 def index():
     tourneys = []
-    if STATE and "tourney_champions" in STATE:
-        tourneys = sorted(list(STATE["tourney_champions"].keys()))
+    for circuit in ["atp", "wta"]:
+        if MODELS.get(circuit):
+            STATE = MODELS[circuit]["state"]
+            if "tourney_champions" in STATE:
+                for t in STATE["tourney_champions"].keys():
+                    tourneys.append(f"{'[WTA] ' if circuit == 'wta' else ''}{t}")
+    tourneys = sorted(list(set(tourneys)))
     return render_template("index.html", tourneys=tourneys)
-
 
 
 @app.route("/api/players")
 def api_players():
     """Autocomplete : renvoie les joueurs actifs correspondant a la requete q."""
     q = request.args.get("q", "").strip()
-    if len(q) < 2:
+    circuit = request.args.get("circuit", "atp")
+    if len(q) < 2 or MODELS.get(circuit) is None:
         return jsonify([])
-    # Chercher uniquement parmi les joueurs actifs
+        
+    STATE = MODELS[circuit]["state"]
+    ACTIVE_PLAYERS = MODELS[circuit]["active_players"]
+    
     matches = pred.fuzzy_find(q, ACTIVE_PLAYERS, n=8, cutoff=0.4)
     return jsonify([
         {
@@ -134,12 +139,9 @@ def api_players():
 
 @app.route("/api/data_status")
 def api_data_status():
-    """Age des donnees : jusqu'a quand remonte le dernier match connu, tous
-    joueurs confondus. Sert a detecter les trous comme celui rencontre avec
-    Washington/Canada -- un tournoi deja termine mais pas encore absorbe
-    dans l'archive annuelle, et plus 'en cours' dans ongoing_tourneys.csv.
-    Ce n'est pas un bug corrigeable cote pipeline (limite de la source de
-    donnees), donc on rend l'info visible plutot que silencieuse."""
+    if MODELS.get("atp") is None:
+        return jsonify({"error": "Modele non charge"}), 500
+    STATE = MODELS["atp"]["state"]
     date_min = STATE["date_min"]
     last_day = int(STATE["last_day"])
     last_date = date_min + pd.Timedelta(days=last_day)
@@ -169,6 +171,14 @@ def api_predict():
             return None
 
     try:
+        circuit = data.get("circuit", "atp")
+        if MODELS.get(circuit) is None:
+            return jsonify({"error": f"Modèle {circuit} non disponible"}), 500
+            
+        STATE = MODELS[circuit]["state"]
+        MODEL = MODELS[circuit]["model"]
+        FEATURE_COLS = MODELS[circuit]["feature_cols"]
+        
         p1 = (data.get("p1") or "").strip()
         p2 = (data.get("p2") or "").strip()
         if not p1 or not p2:
@@ -182,7 +192,7 @@ def api_predict():
         best_of = _int(data.get("best_of"), 3)
         indoor  = _int(data.get("indoor"),  0)
         match_date = pd.Timestamp.today()
-        tourney_name = data.get("tourney_name", "Unknown")
+        tourney_name = data.get("tourney_name", "Unknown").replace("[WTA] ", "")
 
         # Classement : automatique (compute_features retombe sur le dernier
         # classement connu en base si rank1/rank2 vaut None)
@@ -195,8 +205,8 @@ def api_predict():
         entry1 = entry2 = None
 
         # Stats intra-tournoi : automatique, voir auto_tourney_context()
-        ctx1 = auto_tourney_context(p1)
-        ctx2 = auto_tourney_context(p2)
+        ctx1 = auto_tourney_context(p1, circuit)
+        ctx2 = auto_tourney_context(p2, circuit)
         mt1, gw1, gt1, sw1, st1 = ctx1["mt"], ctx1["gw"], ctx1["gt"], ctx1["sw"], ctx1["st"]
         mt2, gw2, gt2, sw2, st2 = ctx2["mt"], ctx2["gw"], ctx2["gt"], ctx2["sw"], ctx2["st"]
 
@@ -321,20 +331,29 @@ def api_predict():
 
 from src.daily_matches import get_daily_matches_with_odds
 
-@app.route("/api/daily_matches", methods=["GET"])
+@app.route("/api/daily_matches")
 def api_daily_matches():
     try:
-        data = get_daily_matches_with_odds(STATE, MODEL, FEATURE_COLS, pred)
+        # Prépare le dict des modèles pour get_daily_matches_with_odds
+        models_dict = {}
+        for c in ["atp", "wta"]:
+            if MODELS.get(c):
+                models_dict[c] = (MODELS[c]["state"], MODELS[c]["model"], MODELS[c]["feature_cols"])
+                
+        data = get_daily_matches_with_odds(models_dict, pred)
         day_filter = request.args.get("day", "all")
         
         if day_filter != "all" and "matches" in data:
             import datetime
             filtered = []
             for m in data["matches"]:
-                m_time = datetime.datetime.fromisoformat(m["time"].replace("Z", "+00:00"))
-                m_time_local = m_time.astimezone(None)
-                if m_time_local.date().isoformat() == day_filter:
-                    filtered.append(m)
+                try:
+                    m_time = datetime.datetime.fromisoformat(m["time"].replace("Z", "+00:00"))
+                    m_time_local = m_time.astimezone(None)
+                    if m_time_local.date().isoformat() == day_filter:
+                        filtered.append(m)
+                except:
+                    pass
             data["matches"] = filtered
             
         return jsonify(data)

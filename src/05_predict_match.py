@@ -32,9 +32,13 @@ from rapidfuzz import process, fuzz
 # --------------------------------------------------------------------------
 BASE_DIR    = Path(__file__).resolve().parent.parent
 PROC_DIR    = BASE_DIR / "data" / "processed"
-STATE_PATH  = PROC_DIR / "player_state.pkl"
-MODEL_PATH  = PROC_DIR / "xgb_model.json"
-FCOLS_PATH  = PROC_DIR / "feature_cols.pkl"
+
+def get_paths(circuit="atp"):
+    return (
+        PROC_DIR / f"player_state_{circuit}.pkl",
+        PROC_DIR / f"xgb_model_{circuit}.json",
+        PROC_DIR / f"feature_cols_{circuit}.pkl"
+    )
 
 # --------------------------------------------------------------------------
 # Import des helpers de 02_feature_engineering.py via importlib
@@ -162,17 +166,18 @@ def remove_overround(odds1, odds2):
 # Chargement des ressources
 # --------------------------------------------------------------------------
 
-def load_resources():
+def load_resources(circuit="atp"):
+    STATE_PATH, MODEL_PATH, FCOLS_PATH = get_paths(circuit)
     for path in (STATE_PATH, MODEL_PATH, FCOLS_PATH):
         if not path.exists():
             print(f"[ERREUR] Fichier manquant : {path}")
             if "player_state" in str(path):
-                print("  -> Lance d'abord : python 02_feature_engineering.py")
+                print(f"  -> Lance d'abord : python 02_feature_engineering.py --circuit {circuit}")
             elif "xgb_model" in str(path):
-                print("  -> Lance d'abord : python 03_train_model.py")
+                print(f"  -> Lance d'abord : python 03_train_model.py --circuit {circuit}")
             sys.exit(1)
 
-    print("Chargement du modele et de l'etat des joueurs...", end=" ", flush=True)
+    print(f"Chargement du modele et de l'etat des joueurs ({circuit.upper()})...", end=" ", flush=True)
     with open(STATE_PATH, "rb") as f:
         state = pickle.load(f)
     model = xgb.XGBClassifier()
@@ -651,7 +656,12 @@ def select_player(prompt, known_players):
 
 
 def main():
-    state, model, feature_cols = load_resources()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit to predict (atp or wta)")
+    args = parser.parse_args()
+    
+    state, model, feature_cols = load_resources(args.circuit)
     known_players = sorted(state["elo"].keys())
 
     print("\n" + "=" * 60)

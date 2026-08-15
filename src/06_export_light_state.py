@@ -1,18 +1,19 @@
 import pickle
 from pathlib import Path
 import os
+import argparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
-STATE_PATH = PROCESSED_DIR / "player_state.pkl"
 ACTIVE_MONTHS = 18
 
-def lighten_state():
+def lighten_state(circuit):
+    STATE_PATH = PROCESSED_DIR / f"player_state_{circuit}.pkl"
     if not STATE_PATH.exists():
         print(f"{STATE_PATH} introuvable.")
         return
 
-    print("Chargement de l'état complet...")
+    print(f"Chargement de l'état complet ({circuit})...")
     with open(STATE_PATH, "rb") as f:
         state = pickle.load(f)
 
@@ -84,7 +85,7 @@ def lighten_state():
                     light_state["h2h_surface"][p1] = filtered_d
 
     # Sauvegarde
-    print("Sauvegarde de l'état allégé...")
+    print(f"Sauvegarde de l'état allégé ({circuit})...")
     with open(STATE_PATH, "wb") as f:
         pickle.dump(light_state, f)
         
@@ -92,4 +93,7 @@ def lighten_state():
     print(f"Opération terminée. Taille du fichier : {old_size:.1f} Mo")
 
 if __name__ == "__main__":
-    lighten_state()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit to process (atp or wta)")
+    args = parser.parse_args()
+    lighten_state(args.circuit)

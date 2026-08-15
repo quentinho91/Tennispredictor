@@ -15,7 +15,7 @@ API_KEY = os.environ.get("ODDS_API_KEY", "")
 if not API_KEY:
     print("[AVERTISSEMENT] ODDS_API_KEY n'est pas définie — les cotes ne seront pas récupérées.")
 
-def get_daily_matches_with_odds(STATE, MODEL, FEATURE_COLS, pred):
+def get_daily_matches_with_odds(models, pred):
     if not API_KEY:
         return {"error": "ODDS_API_KEY non configurée côté serveur."}
 
@@ -48,8 +48,8 @@ def get_daily_matches_with_odds(STATE, MODEL, FEATURE_COLS, pred):
         if not r_sports.ok:
             return {"error": "Impossible de contacter The Odds API (sports)"}
             
-        # Only keep main ATP tours (exclude challenger, ITF, WTA, Doubles)
-        sports = [s['key'] for s in r_sports.json() if 'tennis_atp' in s['key'].lower() 
+        # Only keep main ATP and WTA tours (exclude challenger, ITF, Doubles)
+        sports = [s['key'] for s in r_sports.json() if ('tennis_atp' in s['key'].lower() or 'tennis_wta' in s['key'].lower())
                   and 'challenger' not in s['key'].lower() 
                   and 'itf' not in s['key'].lower()
                   and 'doubles' not in s['key'].lower()]
@@ -58,7 +58,10 @@ def get_daily_matches_with_odds(STATE, MODEL, FEATURE_COLS, pred):
             odds_url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/?apiKey={API_KEY}&regions=eu,uk&markets=h2h"
             r_odds = requests.get(odds_url)
             if r_odds.ok:
-                events.extend(r_odds.json())
+                sport_events = r_odds.json()
+                for e in sport_events:
+                    e['circuit'] = 'wta' if 'wta' in sport.lower() else 'atp'
+                events.extend(sport_events)
                 
         # Save to cache
         try:
@@ -121,6 +124,12 @@ def get_daily_matches_with_odds(STATE, MODEL, FEATURE_COLS, pred):
         p2_name = outcomes[1]['name']
         odds1 = outcomes[0]['price']
         odds2 = outcomes[1]['price']
+        
+        circuit = event.get('circuit', 'atp')
+        if circuit not in models or models[circuit] is None:
+            continue
+            
+        STATE, MODEL, FEATURE_COLS = models[circuit]
         
         # Fuzzy find player names in our database
         p1_matches = pred.fuzzy_find(p1_name, STATE["elo"].keys(), n=1, cutoff=0.7)
@@ -238,19 +247,20 @@ def get_daily_matches_with_odds(STATE, MODEL, FEATURE_COLS, pred):
             match_data = {
                 "id": event['id'],
                 "time": event['commence_time'],
-                "tourney": t_name,
+                "tourney": f"{'[WTA] ' if circuit == 'wta' else ''}{t_name}",
                 "p1": p1_real,
                 "p2": p2_real,
                 "odds1": odds1,
                 "odds2": odds2,
-                "proba1": proba1,
-                "proba2": proba2,
-                "implied1": implied1,
-                "implied2": implied2,
-                "edge1": edge1,
-                "edge2": edge2,
+                "proba1": float(proba1),
+                "proba2": float(proba2),
+                "implied1": float(implied1),
+                "implied2": float(implied2),
+                "edge1": float(edge1),
+                "edge2": float(edge2),
                 "bookie": bet365['title'],
-                "confidence": conf
+                "confidence": conf,
+                "circuit": circuit
             }
             
             # Copy previous winner/result info if it exists

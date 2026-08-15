@@ -946,20 +946,25 @@ def _rolling_stats(history):
 
 
 if __name__ == "__main__":
-    in_path = PROCESSED_DIR / "matches_symmetric.parquet"
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit to process (atp or wta)")
+    args = parser.parse_args()
+
+    in_path = PROCESSED_DIR / f"matches_symmetric_{args.circuit}.parquet"
     if not in_path.exists():
-        raise FileNotFoundError(f"{in_path} introuvable. Lance d'abord: python 01_build_dataset.py")
+        raise FileNotFoundError(f"{in_path} introuvable. Lance d'abord: python 01_build_dataset.py --circuit {args.circuit}")
     df = pd.read_parquet(in_path)
     t0 = time.time()
     feats, player_state = build_features(df)
     print(f"Temps total: {time.time() - t0:.1f}s")
-    out_path = PROCESSED_DIR / "features.parquet"
+    out_path = PROCESSED_DIR / f"features_{args.circuit}.parquet"
     feats.to_parquet(out_path, index=False)
     print(f"{len(feats)} lignes, {feats.shape[1]} colonnes -> {out_path}")
 
     # Sauvegarde de l'état des joueurs pour 05_predict_match.py
     import pickle
-    state_path = PROCESSED_DIR / "player_state.pkl"
+    state_path = PROCESSED_DIR / f"player_state_{args.circuit}.pkl"
     with open(state_path, "wb") as f:
         pickle.dump(player_state, f)
     print(f"Etat des joueurs sauvegarde -> {state_path}")

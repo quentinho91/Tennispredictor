@@ -16,18 +16,20 @@ import pandas as pd
 import numpy as np
 import glob
 from pathlib import Path
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit to process (atp or wta)")
+args = parser.parse_args()
 
 np.random.seed(42)
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # racine du projet
-RAW_DIR = BASE_DIR / "data" / "raw" / "atp"  # uniquement ATP (voir data/raw/wta et data/raw/doubles)
+RAW_DIR = BASE_DIR / "data" / "raw" / args.circuit
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-MIN_YEAR = 2000  # matchs avant cette saison ignorés (peu utile pour un modèle actuel).
-                  # Changer cette valeur ne nécessite PAS de retélécharger les données,
-                  # tout l'historique dispo est déjà dans data/raw/atp/.
-
+MIN_YEAR = 2000
 
 def load_raw(pattern=None):
     if pattern:
@@ -182,9 +184,9 @@ if __name__ == "__main__":
     raw = load_raw()
     raw = basic_clean(raw)
     sym = to_symmetric(raw)
-    out_path = PROCESSED_DIR / "matches_symmetric.parquet"
-    sym.to_parquet(out_path, index=False)
-    print(f"{len(sym)} matchs traités -> {out_path}")
+    output_path = PROCESSED_DIR / f"matches_symmetric_{args.circuit}.parquet"
+    sym.to_parquet(output_path, index=False)
+    print(f"{len(sym)} matchs traités -> {output_path}")
     print(sym["target"].value_counts(normalize=True))
 
     # --- UPDATE PREDICTIONS DB RESULTS ---
@@ -202,6 +204,8 @@ if __name__ == "__main__":
             sym_recent['date_dt'] = pd.to_datetime(sym_recent['tourney_date'], format='%Y%m%d', errors='coerce')
             
             for ev_id, match in db.items():
+                if match.get("circuit", "atp") != args.circuit:
+                    continue
                 if "winner" not in match:
                     p1, p2 = match['p1'], match['p2']
                     m_time = pd.to_datetime(match['time']).tz_localize(None)

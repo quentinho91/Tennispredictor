@@ -27,6 +27,11 @@ import xgboost as xgb
 from sklearn.metrics import log_loss, brier_score_loss, accuracy_score, roc_auc_score
 from pathlib import Path
 import json
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit to process (atp or wta)")
+args = parser.parse_args()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
@@ -166,12 +171,12 @@ if __name__ == "__main__":
     print(importances.head(15))
 
     # Sauvegarde pour le backtest de value betting
-    model.save_model(str(PROCESSED_DIR / "xgb_model.json"))
+    model.save_model(str(PROCESSED_DIR / f"xgb_model_{args.circuit}.json"))
     import joblib
-    joblib.dump(calibrator, PROCESSED_DIR / "calibrator.pkl")
-    joblib.dump(feature_cols, PROCESSED_DIR / "feature_cols.pkl")
+    joblib.dump(calibrator, PROCESSED_DIR / f"calibrator_{args.circuit}.pkl")
+    joblib.dump(feature_cols, PROCESSED_DIR / f"feature_cols_{args.circuit}.pkl")
 
     df_test = df_test.copy()
     df_test["p_model"] = p_final
-    df_test.to_parquet(PROCESSED_DIR / "test_predictions.parquet", index=False)
+    df_test.to_parquet(PROCESSED_DIR / f"test_predictions_{args.circuit}.parquet", index=False)
     print("\nModèle et prédictions test sauvegardés.")
