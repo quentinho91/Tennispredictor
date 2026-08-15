@@ -56,7 +56,7 @@ def lighten_state(circuit):
                 light_state[k][surf] = {p: v for p, v in d.items() if p in active_players}
                 
     # Dictionnaires {joueur: {surface: valeur}}
-    dict_1d_surf = ["surface_career_count", "surface_career_wins"]
+    dict_1d_surf = ["surface_career_count", "surface_career_wins", "wins_vs_arch", "matches_vs_arch"]
     for k in dict_1d_surf:
         if k in state:
             light_state[k] = {p: v for p, v in state[k].items() if p in active_players}

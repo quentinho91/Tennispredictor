@@ -281,12 +281,23 @@ def backtest(merged, edge_threshold=0.03, label="", flat_unit=1.0):
 
 
 if __name__ == "__main__":
-    pred_path = PROCESSED_DIR / "test_predictions.parquet"
-    matches_path = PROCESSED_DIR / "matches_symmetric.parquet"
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit (atp or wta)")
+    args = parser.parse_args()
+
+    pred_path = PROCESSED_DIR / f"test_predictions_{args.circuit}.parquet"
     if not pred_path.exists():
-        raise FileNotFoundError(f"{pred_path} introuvable. Lance d'abord: python 03_train_model.py")
+        pred_path = PROCESSED_DIR / "test_predictions.parquet"
+        
+    matches_path = PROCESSED_DIR / f"matches_symmetric_{args.circuit}.parquet"
     if not matches_path.exists():
-        raise FileNotFoundError(f"{matches_path} introuvable. Lance d'abord: python 01_build_dataset.py")
+        matches_path = PROCESSED_DIR / "matches_symmetric.parquet"
+
+    if not pred_path.exists():
+        raise FileNotFoundError(f"{pred_path} introuvable. Lance d'abord: python 03_train_model.py --circuit {args.circuit}")
+    if not matches_path.exists():
+        raise FileNotFoundError(f"{matches_path} introuvable. Lance d'abord: python 01_build_dataset.py --circuit {args.circuit}")
 
     preds = pd.read_parquet(pred_path)[["match_id", "p_model", "target"]]
     matches = pd.read_parquet(matches_path)[["match_id", "tourney_date", "p1_name", "p2_name"]]
