@@ -159,6 +159,58 @@
     .day-btn.active { background:var(--p1-bg); color:var(--p1); border-color:var(--p1-border); }
     
     @media(max-width:600px){ .players-grid{grid-template-columns:1fr} .vs-col{display:none} .stats-2col{grid-template-columns:1fr} .prob-pct{font-size:38px} .prob-card{padding:20px} .odds-grid{grid-template-columns:1fr} .ctx-grid{grid-template-columns:1fr} }
+    
+    /* Tournament Accordion */
+    .tournament-bar { background: rgba(20, 24, 38, 0.8); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s ease; margin-bottom: 8px; }
+    .tournament-bar:hover { background: rgba(30, 36, 54, 0.8); border-color: rgba(255, 255, 255, 0.1); }
+    .t-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .t-flag { font-size: 14px; }
+    .t-badges { display: flex; align-items: center; gap: 8px; }
+    .t-badge { background: transparent; border: 1px solid rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+    .t-badge.surface-dur { color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); background: rgba(59, 130, 246, 0.1); }
+    .t-badge.surface-terre { color: #f97316; border-color: rgba(249, 115, 22, 0.3); background: rgba(249, 115, 22, 0.1); }
+    .t-badge.surface-gazon { color: #22c55e; border-color: rgba(34, 197, 94, 0.3); background: rgba(34, 197, 94, 0.1); }
+    .t-chevron { color: var(--text3); font-size: 12px; transition: transform 0.3s ease; }
+    .tournament-content { max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; display: flex; flex-direction: column; gap: 8px; }
+    .tournament-content.expanded { max-height: 5000px; opacity: 1; padding-bottom: 24px; padding-top: 8px; }
+    .tournament-bar.expanded .t-chevron { transform: rotate(90deg); }
+    
+    /* Horizontal Match Row */
+    .match-row-horizontal { background: rgba(26, 29, 45, 0.6); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; display: flex; align-items: stretch; justify-content: space-between; position: relative; transition: all 0.2s; cursor: pointer; }
+    .match-row-horizontal:hover { background: rgba(32, 36, 56, 0.8); border-color: rgba(255,255,255,0.1); }
+    .m-header-info { position: absolute; top: 12px; left: 16px; display: flex; gap: 8px; font-size: 9px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+    .m-header-info .surface { padding: 2px 6px; border-radius: 4px; }
+    .m-header-info .surface.dur { background: #3b82f6; color: #fff; }
+    .m-header-info .surface.terre { background: #f97316; color: #fff; }
+    .m-header-info .surface.gazon { background: #22c55e; color: #fff; }
+    
+    .m-body { display: flex; flex: 1; margin-top: 24px; align-items: center; justify-content: space-between; }
+    .m-player-box { flex: 1; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.02); }
+    .m-player-info { display: flex; flex-direction: column; gap: 4px; }
+    .m-p-name { font-size: 14px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
+    .m-p-flag { font-size: 13px; }
+    .m-p-elo { font-size: 10px; color: var(--text3); font-weight: 600; }
+    .m-p-arch { font-size: 10px; color: var(--text2); }
+    
+    .m-p-stats { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+    .m-p-form { display: flex; gap: 2px; }
+    .m-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .m-dot.w { background: #22c55e; }
+    .m-dot.l { background: #ef4444; }
+    .m-p-wr { font-size: 11px; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.3); }
+    .m-p-wr.green { color: #4ade80; border-color: rgba(74,222,128,0.3); }
+    
+    .m-odds-box { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 8px; text-align: center; }
+    .m-odds-lbl { font-size: 8px; color: var(--text3); text-transform: uppercase; margin-bottom: 2px; }
+    .m-odds-val { font-size: 14px; font-weight: 800; color: var(--text); }
+    
+    .m-vs { font-size: 11px; font-weight: 800; color: var(--text3); padding: 0 16px; }
+    
+    @media(max-width: 768px) {
+        .m-body { flex-direction: column; gap: 12px; margin-top: 32px; }
+        .m-vs { display: none; }
+        .m-player-box { width: 100%; }
+    }
     /* Premium Match Card CSS */
     .premium-card { background: #1a1d2d; border-radius: 16px; padding: 16px; min-width: 280px; position: relative; border: 1px solid rgba(255,255,255,0.05); }
     .pc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
@@ -826,167 +878,102 @@
           tourneys[m.tourney].push(m);
         });
         
+        let t_index = 0;
         for (const [t_name, matches] of Object.entries(tourneys)) {
+          const surface = matches[0].surface || 'Dur';
+          const surfaceClass = 'surface-' + surface.toLowerCase().replace(' ', '');
+          const isFirst = t_index === 0;
+          
           html += `
-            <div style="margin-bottom:24px;">
-              <h3 style="font-size:16px; font-weight:800; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
-                <span style="font-size:20px;">&#x1F3C6;</span> ${t_name}
-              </h3>
-              <div style="display:flex; gap:16px; overflow-x:auto; padding-bottom:16px; scrollbar-width:thin;">
+            <div class="tournament-section" style="margin-bottom:8px;">
+              <div class="tournament-bar ${isFirst ? 'expanded' : ''}" onclick="toggleTournament('t-${t_index}', this)">
+                <div class="t-title">
+                  <span class="t-flag">&#x1F3C6;</span> 
+                  ${t_name}
+                </div>
+                <div class="t-badges">
+                  <div class="t-badge ${surfaceClass}">${surface}</div>
+                  <div class="t-badge" style="background:var(--card); border-color:var(--border);">${matches.length} &rsaquo;</div>
+                  <div class="t-chevron">&#x27A4;</div>
+                </div>
+              </div>
+              <div id="t-${t_index}" class="tournament-content ${isFirst ? 'expanded' : ''}">
           `;
           
           matches.forEach(m => {
             const matchTime = new Date(m.time);
             const isLive = matchTime < now;
             
-            let statusLbl = '&Agrave; venir';
+            let statusLbl = matchTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             let statusStyle = 'color:var(--text3);';
-            let scoreHtml = matchTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             
             if (m.winner) {
-                statusLbl = 'Termin&eacute;';
+                statusLbl = m.winner === 'p1' ? 'V - D' : (m.winner === 'p2' ? 'D - V' : 'Terminé');
                 statusStyle = 'color:#4ade80;';
-                scoreHtml = m.winner === 'p1' ? 'V - D' : (m.winner === 'p2' ? 'D - V' : '-');
             } else if (isLive) {
                 statusLbl = 'LIVE';
                 statusStyle = 'color:#ef4444; animation:glowPulse 2s infinite;';
             }
             
             const isVB = m.edge1 > 0.02 || m.edge2 > 0.02;
-            const vbBadge = isVB ? `<div class="pc-badge-vb">VB</div>` : `<div></div>`;
+            const p1Color = m.winner === 'p1' ? '#4ade80' : 'var(--text)';
+            const p2Color = m.winner === 'p2' ? '#6366f1' : 'var(--text)';
             
-            const p1Prob = Math.round(m.proba1 * 100);
-            const p2Prob = Math.round(m.proba2 * 100);
+            const formDots1 = (m.p1_form || [1,0,1,1,0]).map(r => `<div class="m-dot ${r===1?'w':'l'}"></div>`).join('');
+            const formDots2 = (m.p2_form || [0,1,1,1,1]).map(r => `<div class="m-dot ${r===1?'w':'l'}"></div>`).join('');
             
-            let p1Color = 'var(--text3)';
-            let p2Color = 'var(--text3)';
-            let p1Sub = '';
-            let p2Sub = '';
-            
-            if (m.winner) {
-                if (m.winner === 'p1') { p1Color = '#4ade80'; p1Sub = 'valid&eacute;'; }
-                if (m.winner === 'p2') { p2Color = '#6366f1'; p2Sub = 'valid&eacute;'; }
-            } else {
-                p1Color = '#2dd4bf';
-                p2Color = '#a855f7';
-            }
-            
-            const conf = m.confidence ? m.confidence.confidence_index : 0;
-            const confColor = conf >= 80 ? '#4ade80' : (conf >= 60 ? '#fbbf24' : '#ef4444');
-            const confBg = conf >= 80 ? 'rgba(74,222,128,0.1)' : (conf >= 60 ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)');
-            
-            const confBadge = `<div class="pc-badge-conf" style="background:${confBg}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:600; color:${confColor};">Indice : ${Math.round(conf)}/100</div>`;
-            
-            html += `<div class="premium-card" onclick="this.classList.toggle('expanded')" style="${isVB?'box-shadow: 0 0 20px rgba(74,222,128,0.1); border-color:rgba(74,222,128,0.3);':''}">
-              <div class="pc-top">
-                ${vbBadge}
-                ${confBadge}
-                <div style="color:var(--text3); cursor:pointer;">&#x27A4;</div>
-              </div>
-              
-              <div class="pc-players" style="align-items:center;">
-                <div class="pc-player">
-                  <div class="pc-avatar">${m.p1.substring(0,2).toUpperCase()}</div>
-                  <div class="pc-name" style="${m.winner==='p1'?'color:#4ade80':''}">${m.p1}</div>
-                  <div style="font-size:9px; color:var(--text3); background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${m.p1_archetype || 'Polyvalent'}</div>
-                  <div style="display:flex; gap:3px; margin-top:2px;">
-                    ${(m.p1_form || []).map(r => `<div style="width:6px; height:6px; border-radius:50%; background:${r===1?'#4ade80':'#ef4444'}; opacity:0.8;"></div>`).join('')}
-                  </div>
+            html += `
+              <div class="match-row-horizontal" onclick="alert('Vue Détaillée (Prochaine étape)')" style="${isVB?'border-color:rgba(74,222,128,0.3);':''}">
+                <div class="m-header-info">
+                  <span class="surface ${surface.toLowerCase()}">${surface}</span>
+                  <span style="${statusStyle}">${matchTime.toLocaleDateString()} - ${statusLbl}</span>
                 </div>
                 
-                <div class="pc-status" style="display:flex; flex-direction:column; gap:6px;">
-                  <div class="pc-status-lbl" style="${statusStyle}">${statusLbl}</div>
-                  <div class="pc-score">${scoreHtml}</div>
-                  <div style="font-size:10px; color:var(--text3); margin-top:4px;">Matchup Edge</div>
-                  <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700;">
-                    <span style="color:${m.serve_return_edge1 > 0 ? '#4ade80' : 'var(--text3)'}">${m.serve_return_edge1 > 0 ? '+' : ''}${Math.round((m.serve_return_edge1||0)*100)}%</span>
-                    <span style="color:${m.serve_return_edge2 > 0 ? '#6366f1' : 'var(--text3)'}">${m.serve_return_edge2 > 0 ? '+' : ''}${Math.round((m.serve_return_edge2||0)*100)}%</span>
-                  </div>
-                </div>
-                
-                <div class="pc-player">
-                  <div class="pc-avatar">${m.p2.substring(0,2).toUpperCase()}</div>
-                  <div class="pc-name" style="${m.winner==='p2'?'color:#6366f1':''}">${m.p2}</div>
-                  <div style="font-size:9px; color:var(--text3); background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${m.p2_archetype || 'Polyvalent'}</div>
-                  <div style="display:flex; gap:3px; margin-top:2px;">
-                    ${(m.p2_form || []).map(r => `<div style="width:6px; height:6px; border-radius:50%; background:${r===1?'#6366f1':'#ef4444'}; opacity:0.8;"></div>`).join('')}
-                  </div>
-                </div>
-              </div>
-              
-              <div class="pc-bars">
-                <div class="pc-bar-container">
-                  <div class="pc-prob-lbl p1" style="color:${p1Color}">${p1Prob}%<span class="pc-prob-sub">${p1Sub}</span></div>
-                  <div class="pc-bar-fill p1" style="height:${p1Prob}%; ${!m.winner?'background:linear-gradient(to top, #115e59, #2dd4bf);':''}"></div>
-                </div>
-                <div class="pc-bar-container">
-                  <div class="pc-prob-lbl p2" style="color:${p2Color}">${p2Prob}%<span class="pc-prob-sub">${p2Sub}</span></div>
-                  <div class="pc-bar-fill p2" style="height:${p2Prob}%; ${!m.winner?'background:linear-gradient(to top, #3730a3, #a855f7);':''}"></div>
-                </div>
-              </div>
-              
-              <div class="pc-odds-row">
-                <div class="pc-odd" style="${m.edge1>0.02?'color:#4ade80; border-color:#4ade80':''}">${m.odds1.toFixed(2)}</div>
-                <div class="pc-odd" style="${m.edge2>0.02?'color:#6366f1; border-color:#6366f1':''}">${m.odds2.toFixed(2)}</div>
-              </div>
-              
-              <div class="pc-details">
-                <div style="font-size:12px; font-weight:800; margin-bottom:8px; display:flex; gap:8px; align-items:center;">
-                    <span>📊 Comparaison</span>
-                </div>
-                <div class="pc-table">
-                    <div class="pc-tr"><span>Elo surface</span><span style="color:#4ade80">${m.p1_elo_surf}</span><span style="color:#6366f1">${m.p2_elo_surf}</span></div>
-                    <div class="pc-tr"><span>Main</span><span>${m.p1_hand}</span><span>${m.p2_hand}</span></div>
-                    <div class="pc-tr"><span>vs Gaucher</span><span style="${m.p1_wr_vs_L > 0.5 ? 'color:#4ade80':''}">${Math.round((m.p1_wr_vs_L||0.5)*100)}%</span><span style="${m.p2_wr_vs_L > 0.5 ? 'color:#6366f1':''}">${Math.round((m.p2_wr_vs_L||0.5)*100)}%</span></div>
-                    <div class="pc-tr"><span>vs Droitier</span><span style="${m.p1_wr_vs_R > 0.5 ? 'color:#4ade80':''}">${Math.round((m.p1_wr_vs_R||0.5)*100)}%</span><span style="${m.p2_wr_vs_R > 0.5 ? 'color:#6366f1':''}">${Math.round((m.p2_wr_vs_R||0.5)*100)}%</span></div>
-                    <div class="pc-tr"><span>Favori</span><span style="${m.p1_wr_fav > 60 ? 'color:#4ade80':''}">${Math.round(m.p1_wr_fav||50)}%</span><span style="${m.p2_wr_fav > 60 ? 'color:#6366f1':''}">${Math.round(m.p2_wr_fav||50)}%</span></div>
-                    <div class="pc-tr"><span>Outsider</span><span style="${m.p1_wr_out > 40 ? 'color:#4ade80':''}">${Math.round(m.p1_wr_out||30)}%</span><span style="${m.p2_wr_out > 40 ? 'color:#6366f1':''}">${Math.round(m.p2_wr_out||30)}%</span></div>
-                </div>
-                
-                <div style="font-size:12px; font-weight:800; margin:16px 0 8px 0; display:flex; gap:8px; align-items:center;">
-                    <span>⚔️ Index de performance</span>
-                </div>
-                <div class="pc-perf-row">
-                    <span class="pc-perf-lbl">Service</span>
-                    <div class="pc-perf-bar-wrap"><div class="pc-perf-bar p1" style="width:${m.p1_service_idx||50}%;"></div></div>
-                    <div class="pc-perf-bar-wrap right"><div class="pc-perf-bar p2" style="width:${m.p2_service_idx||50}%;"></div></div>
-                </div>
-                <div class="pc-perf-row">
-                    <span class="pc-perf-lbl">Retour</span>
-                    <div class="pc-perf-bar-wrap"><div class="pc-perf-bar p1" style="width:${m.p1_return_idx||50}%;"></div></div>
-                    <div class="pc-perf-bar-wrap right"><div class="pc-perf-bar p2" style="width:${m.p2_return_idx||50}%;"></div></div>
-                </div>
-                <div class="pc-perf-row">
-                    <span class="pc-perf-lbl">Clutch</span>
-                    <div class="pc-perf-bar-wrap"><div class="pc-perf-bar p1" style="width:${m.p1_clutch_idx||50}%;"></div></div>
-                    <div class="pc-perf-bar-wrap right"><div class="pc-perf-bar p2" style="width:${m.p2_clutch_idx||50}%;"></div></div>
-                </div>
-                <div class="pc-perf-row" style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05);">
-                    <span class="pc-perf-lbl" style="font-weight:800;">Global</span>
-                    <div class="pc-perf-bar-wrap"><div class="pc-perf-bar p1" style="width:${m.p1_global_idx||50}%;"></div></div>
-                    <div class="pc-perf-bar-wrap right"><div class="pc-perf-bar p2" style="width:${m.p2_global_idx||50}%;"></div></div>
-                </div>
-                
-                <div style="font-size:12px; font-weight:800; margin:16px 0 8px 0; display:flex; gap:8px; align-items:center;">
-                    <span>💪 Fatigue & Récupération</span>
-                </div>
-                <div class="pc-fatigue-grid">
-                    <div class="pc-fatigue-box">
-                        <div style="font-size:10px; color:var(--text3); margin-bottom:4px; display:flex; justify-content:space-between;"><span>Charge</span> <span style="font-weight:700;">${m.p1_fatigue_idx||0}/100</span></div>
-                        <div class="pc-perf-bar-wrap" style="width:100%; height:4px; background:rgba(0,0,0,0.5);"><div class="pc-perf-bar p1" style="width:${m.p1_fatigue_idx||0}%; background:${(m.p1_fatigue_idx||0)>70?'#ef4444':'#4ade80'}"></div></div>
-                        <div style="font-size:9px; color:var(--text3); margin-top:4px;">Repos: ${m.p1_rest_days||0}j</div>
+                <div class="m-body">
+                  <div class="m-player-box">
+                    <div class="m-player-info">
+                      <div class="m-p-name" style="color:${p1Color}">${m.p1}</div>
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="m-p-elo">ELO ${m.p1_elo_surf || '-'}</span>
+                        <span class="m-p-arch">${m.p1_archetype || 'Polyvalent'}</span>
+                      </div>
+                      <div class="m-p-stats">
+                        <div class="m-p-form">${formDots1}</div>
+                        <div class="m-p-wr ${m.p1_wr_fav > 50 ? 'green':''}">${Math.round(m.p1_wr_fav||50)}% fav</div>
+                      </div>
                     </div>
-                    <div class="pc-fatigue-box">
-                        <div style="font-size:10px; color:var(--text3); margin-bottom:4px; display:flex; justify-content:space-between;"><span>Charge</span> <span style="font-weight:700;">${m.p2_fatigue_idx||0}/100</span></div>
-                        <div class="pc-perf-bar-wrap" style="width:100%; height:4px; background:rgba(0,0,0,0.5);"><div class="pc-perf-bar p2" style="width:${m.p2_fatigue_idx||0}%; background:${(m.p2_fatigue_idx||0)>70?'#ef4444':'#6366f1'}"></div></div>
-                        <div style="font-size:9px; color:var(--text3); margin-top:4px;">Repos: ${m.p2_rest_days||0}j</div>
+                    <div class="m-odds-box">
+                      <div class="m-odds-lbl">Cote</div>
+                      <div class="m-odds-val" style="${m.edge1 > 0.02 ? 'color:#4ade80':''}">${m.odds1 ? m.odds1.toFixed(2) : '-'}</div>
                     </div>
+                  </div>
+                  
+                  <div class="m-vs">VS</div>
+                  
+                  <div class="m-player-box">
+                    <div class="m-player-info">
+                      <div class="m-p-name" style="color:${p2Color}">${m.p2}</div>
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="m-p-elo">ELO ${m.p2_elo_surf || '-'}</span>
+                        <span class="m-p-arch">${m.p2_archetype || 'Polyvalent'}</span>
+                      </div>
+                      <div class="m-p-stats">
+                        <div class="m-p-form">${formDots2}</div>
+                        <div class="m-p-wr ${m.p2_wr_fav > 50 ? 'green':''}">${Math.round(m.p2_wr_fav||50)}% fav</div>
+                      </div>
+                    </div>
+                    <div class="m-odds-box">
+                      <div class="m-odds-lbl">Cote</div>
+                      <div class="m-odds-val" style="${m.edge2 > 0.02 ? 'color:#6366f1':''}">${m.odds2 ? m.odds2.toFixed(2) : '-'}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>`;
+            `;
           });
           
           html += `</div></div>`;
+          t_index++;
         }
       }
       
@@ -995,6 +982,17 @@
       document.getElementById('daily-matches-loading').innerHTML = '<span style="color:var(--err);">Erreur de chargement.</span>';
     }
   }
+  function toggleTournament(contentId, barElement) {
+    const content = document.getElementById(contentId);
+    if (content.classList.contains('expanded')) {
+        content.classList.remove('expanded');
+        barElement.classList.remove('expanded');
+    } else {
+        content.classList.add('expanded');
+        barElement.classList.add('expanded');
+    }
+  }
+
   const state={p1:null,p2:null};
   const tourneysList = {{ tourneys | tojson }};
   
