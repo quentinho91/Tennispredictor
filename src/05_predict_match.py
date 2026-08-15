@@ -224,8 +224,10 @@ def load_resources(circuit="atp"):
                 return np.column_stack((1.0 - p1, p1))
         models.append(LGBMWrapper(lgb_model))
         
+    import os
     cat_path = PROC_DIR / f"cat_model_{circuit}.cbm"
-    if cat_path.exists():
+    # Désactiver CatBoost sur Render pour éviter le Out-Of-Memory (OOM) sur le Free Tier (512MB)
+    if cat_path.exists() and not os.environ.get("RENDER"):
         from catboost import CatBoostClassifier
         cat_model = CatBoostClassifier()
         cat_model.load_model(str(cat_path))
