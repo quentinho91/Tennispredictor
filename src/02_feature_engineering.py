@@ -597,32 +597,6 @@ def build_features(df):
         # ================= MISE A JOUR DE L'ETAT (après calcul des features) =================
         p1_won = bool(target[i])
         exp1 = elo_expected(e1, e2)
-        new_e1 = e1 + K_ELO * ((1.0 if p1_won else 0.0) - exp1)
-        new_e2 = e2 + K_ELO * ((0.0 if p1_won else 1.0) - (1.0 - exp1))
-        elo[p1], elo[p2] = new_e1, new_e2
-        eh1.append(new_e1); _trim(eh1, 60)
-        eh2.append(new_e2); _trim(eh2, 60)
-
-        exps1 = elo_expected(es1, es2)
-        elo_surface[surf][p1] = es1 + K_ELO * ((1.0 if p1_won else 0.0) - exps1)
-        elo_surface[surf][p2] = es2 + K_ELO * ((0.0 if p1_won else 1.0) - (1.0 - exps1))
-
-        # Elo surface avec K adaptatif (GC>M1000>ATP500)
-        k_lvl = K_ELO_BY_LEVEL.get(str(tourney_level[i]), K_ELO)
-        expsw = elo_expected(esw1, esw2)
-        elo_surface_w[surf][p1] = esw1 + k_lvl * ((1.0 if p1_won else 0.0) - expsw)
-        elo_surface_w[surf][p2] = esw2 + k_lvl * ((0.0 if p1_won else 1.0) - (1.0 - expsw))
-
-        if r1 == r1:
-            peak_rank[p1] = min(peak_rank[p1], r1)
-            rh1.append((day, r1)); _trim(rh1, 60)
-        if r2 == r2:
-            peak_rank[p2] = min(peak_rank[p2], r2)
-            rh2.append((day, r2)); _trim(rh2, 60)
-
-        opp_better_1 = bool(r2 < r1) if has_rank else None
-        opp_better_2 = bool(r1 < r2) if has_rank else None
-
         outcome = derive_match_outcome_stats(score_arr[i], p1_won, best_of[i])
         p1_dec, p2_dec, p1_tbp, p1_tbw, p1_cb, p2_cb, p2_tbp, p2_tbw = outcome
 
@@ -636,8 +610,42 @@ def build_features(df):
             g_total_m = gw1_m + gw2_m
             sw1_m    = sum(1 for a, b, _ in parsed_sets_i if a > b)  # sets gagnés p1
             sw2_m    = n_sets_i - sw1_m
+            
+            # Calcul du Margin of Victory (MoV) pour pondérer l'Elo
+            game_diff = abs(gw1_m - gw2_m)
+            mov_mult = ((game_diff / max(1, n_sets_i)) + 1) / 3.0
+            mov_mult = max(0.5, min(mov_mult, 3.0)) # Borner entre x0.5 (très serré) et x3.0 (boucherie)
         else:
             gw1_m = gw2_m = g_total_m = sw1_m = sw2_m = 0
+            mov_mult = 1.0
+
+        # Mise à jour Elo (pondérée par MoV)
+        actual_k = K_ELO * mov_mult
+        new_e1 = e1 + actual_k * ((1.0 if p1_won else 0.0) - exp1)
+        new_e2 = e2 + actual_k * ((0.0 if p1_won else 1.0) - (1.0 - exp1))
+        elo[p1], elo[p2] = new_e1, new_e2
+        eh1.append(new_e1); _trim(eh1, 60)
+        eh2.append(new_e2); _trim(eh2, 60)
+
+        exps1 = elo_expected(es1, es2)
+        elo_surface[surf][p1] = es1 + actual_k * ((1.0 if p1_won else 0.0) - exps1)
+        elo_surface[surf][p2] = es2 + actual_k * ((0.0 if p1_won else 1.0) - (1.0 - exps1))
+
+        # Elo surface avec K adaptatif (GC>M1000>ATP500) pondéré par MoV
+        k_lvl = K_ELO_BY_LEVEL.get(str(tourney_level[i]), K_ELO) * mov_mult
+        expsw = elo_expected(esw1, esw2)
+        elo_surface_w[surf][p1] = esw1 + k_lvl * ((1.0 if p1_won else 0.0) - expsw)
+        elo_surface_w[surf][p2] = esw2 + k_lvl * ((0.0 if p1_won else 1.0) - (1.0 - expsw))
+
+        if r1 == r1:
+            peak_rank[p1] = min(peak_rank[p1], r1)
+            rh1.append((day, r1)); _trim(rh1, 60)
+        if r2 == r2:
+            peak_rank[p2] = min(peak_rank[p2], r2)
+            rh2.append((day, r2)); _trim(rh2, 60)
+
+        opp_better_1 = bool(r2 < r1) if has_rank else None
+        opp_better_2 = bool(r1 < r2) if has_rank else None
 
         min_i = minutes_arr[i]
         rr1.append((day, p1_won, opp_better_1, surf, p1_dec, p1_cb, p1_tbp, p1_tbw, min_i, n_sets_i, is_late_i, p2, tourney_name_arr[i], score_arr[i])); _trim(rr1, MAX_HISTORY)
