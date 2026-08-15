@@ -12,15 +12,15 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:#0f172a;--bg2:#1e293b;--card:rgba(255,255,255,0.04);--card-h:rgba(255,255,255,0.065);
-      --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.16);--text:#e2e8f0;--text2:#94a3b8;--text3:#475569;
-      --p1:#4ade80;--p1-bg:rgba(74,222,128,0.10);--p1-glow:rgba(74,222,128,0.22);--p1-border:rgba(74,222,128,0.28);
-      --p2:#a78bfa;--p2-bg:rgba(167,139,250,0.10);--p2-glow:rgba(167,139,250,0.22);--p2-border:rgba(167,139,250,0.28);
-      --err:#f87171;--r-sm:8px;--r:14px;--r-lg:20px;--blur:blur(16px);--trans:all 0.18s ease;
+      --bg:#050714;--bg2:#101426;--card:rgba(255,255,255,0.03);--card-h:rgba(255,255,255,0.06);
+      --border:rgba(255,255,255,0.05);--border2:rgba(255,255,255,0.12);--text:#f8fafc;--text2:#94a3b8;--text3:#64748b;
+      --p1:#22c55e;--p1-bg:rgba(34,197,94,0.12);--p1-glow:rgba(34,197,94,0.3);--p1-border:rgba(34,197,94,0.35);
+      --p2:#6366f1;--p2-bg:rgba(99,102,241,0.12);--p2-glow:rgba(99,102,241,0.3);--p2-border:rgba(99,102,241,0.35);
+      --err:#ef4444;--r-sm:10px;--r:16px;--r-lg:24px;--blur:blur(24px);--trans:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     html { scroll-behavior: smooth; }
     body { font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased; }
-    body::before { content:'';position:fixed;inset:0;background:radial-gradient(ellipse 900px 700px at 15% 5%,rgba(74,222,128,0.05) 0%,transparent 65%),radial-gradient(ellipse 900px 700px at 85% 95%,rgba(167,139,250,0.05) 0%,transparent 65%);pointer-events:none;z-index:0; }
+    body::before { content:'';position:fixed;inset:0;background:radial-gradient(ellipse 1200px 900px at 20% -10%,rgba(99,102,241,0.08) 0%,transparent 70%),radial-gradient(ellipse 1200px 900px at 80% 110%,rgba(34,197,94,0.08) 0%,transparent 70%);pointer-events:none;z-index:0; }
     .header { position:sticky;top:0;z-index:100;background:rgba(9,16,31,0.82);backdrop-filter:var(--blur);border-bottom:1px solid var(--border); }
     .header-inner { max-width:720px;margin:0 auto;padding:0 24px;height:58px;display:flex;align-items:center;justify-content:space-between; }
     .logo { display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;letter-spacing:-0.3px; }
@@ -176,19 +176,19 @@
     .tournament-bar.expanded .t-chevron { transform: rotate(90deg); }
     
     /* Horizontal Match Row */
-    .match-row-horizontal { background: rgba(26, 29, 45, 0.6); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; position: relative; transition: all 0.2s; cursor: pointer; }
-    .m-details { max-height: 0; opacity: 0; overflow: hidden; transition: all 0.3s ease; margin-top: 0; padding-top: 0; border-top: 1px solid transparent; }
-    .match-row-horizontal.expanded .m-details { max-height: 800px; opacity: 1; margin-top: 16px; padding-top: 16px; border-color: rgba(255,255,255,0.05); }
-    .m-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 11px; }
-    .md-box { background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.02); }
-    .md-title { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
-    .md-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
+    .match-row-horizontal { background: rgba(18, 22, 41, 0.4); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; position: relative; transition: var(--trans); cursor: pointer; box-shadow: 0 4px 24px rgba(0,0,0,0.2); }
+    .match-row-horizontal:hover { background: rgba(26, 31, 56, 0.6); border-color: rgba(255,255,255,0.1); box-shadow: 0 12px 48px -12px rgba(0,0,0,0.5); transform: translateY(-3px); }
+    .m-details { max-height: 0; opacity: 0; overflow: hidden; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); margin-top: 0; padding-top: 0; border-top: 1px solid transparent; }
+    .match-row-horizontal.expanded .m-details { max-height: 800px; opacity: 1; margin-top: 20px; padding-top: 20px; border-color: rgba(255,255,255,0.05); }
+    .m-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 12px; }
+    .md-box { background: rgba(0,0,0,0.25); padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.02); }
+    .md-title { font-size: 10px; font-weight: 800; color: var(--text3); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.8px; }
+    .md-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
     .md-row:last-child { border-bottom: none; }
     .md-lbl { color: var(--text2); }
     .md-val { font-weight: 700; }
-    .md-val.v1 { color: #4ade80; }
-    .md-val.v2 { color: #6366f1; }
-    .match-row-horizontal:hover { background: rgba(32, 36, 56, 0.8); border-color: rgba(255,255,255,0.1); }
+    .md-val.v1 { color: var(--p1); }
+    .md-val.v2 { color: var(--p2); }
     .m-header-info { position: absolute; top: 12px; left: 16px; display: flex; gap: 8px; font-size: 9px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
     .m-header-info .surface { padding: 2px 6px; border-radius: 4px; }
     .m-header-info .surface.dur { background: #3b82f6; color: #fff; }
@@ -956,10 +956,11 @@
             const vEdge2 = (m.edge2 > 0) ? `+${(m.edge2*100).toFixed(1)}%` : '-';
             
             html += `
-              <div class="match-row-horizontal" onclick="this.classList.toggle('expanded')" style="${isVB?'border-color:rgba(74,222,128,0.3);':''}">
+              <div class="match-row-horizontal" onclick="this.classList.toggle('expanded')" style="${isVB?'border-color:rgba(34,197,94,0.3); box-shadow: 0 0 20px rgba(34,197,94,0.1);':''}">
                 <div class="m-header-info">
                   <span class="surface ${surface.toLowerCase()}">${surface}</span>
                   <span style="${statusStyle}">${matchTime.toLocaleDateString()} - ${statusLbl}</span>
+                  <span style="color:var(--text2); margin-left:8px; font-size:8px; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.05);">Confiance ${(m.confidence?.confidence_index||0)}%</span>
                 </div>
                 
                 <div class="m-body">

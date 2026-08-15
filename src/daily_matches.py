@@ -270,6 +270,8 @@ def get_daily_matches_with_odds(models, pred):
                 rr = state.get("recent_results", {}).get(player, [])
                 return [1 if r[1] else 0 for r in rr[-5:]]
                 
+            h2h_rec = STATE.get("h2h", {}).get(p1_real, {}).get(p2_real, [0, 0])
+                
             match_data = {
                 "id": event['id'],
                 "time": event['commence_time'],
@@ -317,6 +319,9 @@ def get_daily_matches_with_odds(models, pred):
                 "p2_fatigue_idx": feat.get("_p2_fatigue_idx", 0),
                 "p1_rest_days": feat.get("_p1_rest_days", 3),
                 "p2_rest_days": feat.get("_p2_rest_days", 3),
+                
+                "p1_h2h": h2h_rec[0],
+                "p2_h2h": h2h_rec[1],
                 
                 "p1_wr_fav": float(feat.get("_p1_wr_fav", 50)),
                 "p2_wr_fav": float(feat.get("_p2_wr_fav", 50)),
