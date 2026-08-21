@@ -1,0 +1,6344 @@
+[
+  {
+    "name": "ATP Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Acapulco",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Australian Open",
+    "surface": "Hard",
+    "level": "G",
+    "indoor": 0,
+    "best_of": 5
+  },
+  {
+    "name": "Barcelona",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Basel",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Bastad",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Beijing",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Buenos Aires",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cincinnati Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cincinnati Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Doha",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dubai",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Eastbourne",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Geneva",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gstaad",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Halle",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Indian Wells Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Indian Wells Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kitzbuhel",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lyon",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Madrid Masters",
+    "surface": "Clay",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Madrid Masters",
+    "surface": "Clay",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mallorca",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Marseille",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Metz",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Miami Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Miami Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Monte Carlo Masters",
+    "surface": "Clay",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Monte Carlo Masters",
+    "surface": "Clay",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Montpellier",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Montreal Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Munich",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Paris Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Queen's Club (Londres)",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rio de Janeiro",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Roland Garros",
+    "surface": "Clay",
+    "level": "G",
+    "indoor": 0,
+    "best_of": 5
+  },
+  {
+    "name": "Rome Masters",
+    "surface": "Clay",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rome Masters",
+    "surface": "Clay",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rotterdam",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Santiago",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shanghai Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shanghai Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Stuttgart",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tokyo",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Toronto Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "US Open",
+    "surface": "Hard",
+    "level": "G",
+    "indoor": 0,
+    "best_of": 5
+  },
+  {
+    "name": "Umag",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Vienna",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "WTA Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Washington",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Wimbledon",
+    "surface": "Grass",
+    "level": "G",
+    "indoor": 0,
+    "best_of": 5
+  },
+  {
+    "name": "Paris (Bercy)",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Bogota",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Canada Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Auckland",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "'s-Hertogenbosch",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nottingham",
+    "surface": "Grass",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sydney",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Moscow",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Prague",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Istanbul",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hamburg",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Estoril",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Charleston",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Seoul",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Birmingham",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Budapest",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Stockholm",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Brisbane",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Delray Beach",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bangkok",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Memphis",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Bucharest",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "St. Petersburg",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Chennai",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zagreb",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Houston",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Newport",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tashkent",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Los Angeles",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Casablanca",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dallas",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Palermo",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "New Haven",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Guangzhou",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Winston-Salem",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Prostejov",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Linz",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cherbourg",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Strasbourg",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sao Paulo",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Valencia",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Tallahassee",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Braunschweig",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Granby",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hobart",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Milan",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Tampere",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Monterrey",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ostrava",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Jose",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Bratislava",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lexington",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Seville",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Szczecin",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Heilbronn",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Quito",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Diego",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Atlanta",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Barletta",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Luis Potosi",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Luxembourg",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shenzhen",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cordenons",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Segovia",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Busan",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Berlin",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Antwerp",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Banja Luka",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Burnie",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Champaign",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Helsinki",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Poznan",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Marrakech",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bergamo",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Montevideo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Napoli",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Belgrade",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Samarkand",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "St. Brieuc",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kuala Lumpur",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Hamburg Masters",
+    "surface": "Clay",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cordoba",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Quebec City",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rennes",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Aptos",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lugano",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Adelaide",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Noumea",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Binghamton",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Como",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Eckental",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Guayaquil",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kyoto",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Marino",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Astana",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Sarasota",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Surbiton",
+    "surface": "Grass",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Canberra",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Indianapolis",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brasov",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Fergana",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Furth",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Knoxville",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Lima",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mexico City",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Salinas",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Vina del Mar",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Leon",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Yokohama",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sopot",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tunis",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cali",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Orleans",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Rabat",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Recanati",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Scheveningen",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Todi",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Vancouver",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Stanford",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hong Kong",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Savannah",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Amelia Island",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Wuhan",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Costa do Sauipe",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sofia",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Quimper",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Bordeaux",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Oberstaufen",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Pattaya",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Charlottesville",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Guadalajara",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Olympics",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Pune",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Biella",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Genova",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Manerbio",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Oeiras 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Tiburon",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Paris",
+    "surface": "Carpet",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Las Vegas",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Warsaw",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Campinas",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Florianopolis",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Medellin",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ortisei",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Portoroz",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Benedetto",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Turin",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Almaty",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Liberec",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Wroclaw",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Amersfoort",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nice",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Osaka",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chengdu",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Los Cabos",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cleveland",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Vicenza",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Columbus",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Drummondville",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Morelos",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Belo Horizonte",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Karshi",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kosice",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Manchester",
+    "surface": "Grass",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "New Delhi",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sassuolo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sibiu",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Waikoloa",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Winnetka",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zhuhai",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Marbella",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lisbon",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nanchang",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Aachen",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Caltanissetta",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cary",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Freudenstadt",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Izmir",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ljubljana",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mons",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nonthaburi 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Perugia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Pozoblanco",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sacramento",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sarajevo",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Trnava",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Wolfsburg",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Iasi",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Taipei",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Scottsdale",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Koblenz",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Pau",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Asuncion",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bad Gastein",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bermuda",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Blois",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brest",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Bronx",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bukhara",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Campos Do Jordao-1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Graz",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Grenoble",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ilkley",
+    "surface": "Grass",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Maia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Meerbusch",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Monza",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tulsa",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ningbo",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Japan Open",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gwangju",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lille",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Traralgon",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Johannesburg",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Forest Hills",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "World Team Championship",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Athens",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Bucaramanga",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Calabasas",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Fairfield",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kazan",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Manta",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Marburg",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Meknes",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Pereira",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Puebla",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Remo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Santos",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sao Paulo-1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tenerife 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Togliatti",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Toyota",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Trani",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rimouski",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cagliari",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zurich",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Singapore",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Gold Coast",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Aix en Provence",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bengaluru",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Little Rock",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Murcia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Orlando",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bali",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Parma",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "United Cup",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Alphen aan den Rijn",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Barranquilla",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Besancon",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Concepcion",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Copenhagen",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Donetsk",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Fes",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gramado",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kaohsiung",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mantova",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Montauban",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mouilleron le Captif",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Nuremberg",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Olbia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Penza",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Poprad Tatry",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rimini",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rio De Janeiro",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Santo Domingo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "St. Remy",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tianjin",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Timisoara",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Winnipeg",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Wrexham",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bangalore",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dusseldorf",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Braga",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Playford",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Antalya",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tour Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Naples",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Long Island",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Punta del Este",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Andrezieux",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Andria",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Austin",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Biella 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Carson",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Forli 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ho Chi Minh",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ho Chi Minh City",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Hua Hin",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ismaning",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Joplin",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kiev",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kobe",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Porto Alegre",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Reggio Emilia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Saransk",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "St. Poelten",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Trieste",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tyler",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zadar",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bad Homburg",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bol",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Le Gosier",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Merida",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Reunion Island",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Oeiras",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Abu Dhabi",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Alicante",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Calgary",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Puerto Vallarta",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shymkent",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zhangjiagang",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "ATP Cup",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Phoenix",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Filderstadt",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brussels",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Baku",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Blumenau",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Budaors",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Caloundra",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cassis",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chicago",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cluj-Napoca",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Curitiba",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dnepropetrovsk",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Francavilla al Mare",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Glasgow",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Grodzisk Mazowiecki",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Karlsruhe",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kolding",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kolkata",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Manama",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Maui",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mauthausen",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nashville",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Orbetello",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Panama City",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Porto",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Prague 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rijeka",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Salzburg",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sao Leopoldo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Split",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sunrise",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Troyes",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tulln",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Vigo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Weiden",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zug",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "WTA Tour Championships",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nur-Sultan",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Mumbai",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Anning",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Aix-en-Provence",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Newport Beach",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Alessandria",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "An-Ning",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Andorra",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Antalya 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Aracaju",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Baton Rouge",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Biel",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bloomfield Hills",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brasilia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bratislava 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brescia",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bristol",
+    "surface": "Grass",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Buenos Aires (Argentino)",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Burbank",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bytom",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Constanta",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cortina",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dublin",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Forli",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gimcheon",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Jersey",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Jinan",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Katowice",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kenitra",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lausanne",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Matsuyama",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mersin",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mestre",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Milan-1",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Modena",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Monastir",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Monchengladbach",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Piracicaba",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Roanne",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Saint-Tropez",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Sebastian",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Santa Cruz",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Santa Fe",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sao Paulo-2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "St Petersburg",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Suzhou",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tarragona",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tigre 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tunica Resorts",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Verona",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Waco",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Yuba City",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Masters Cup",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "New York",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Francavilla",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hangzhou",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Leipzig",
+    "surface": "Carpet",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Philadelphia",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Melbourne",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bangkok 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Stuttgart Masters",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Aguascalientes",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Alphen",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Antofagasta",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Arad",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Aschaffenburg",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Augsburg",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bad Waltersdorf",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bonn",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brindisi",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cairo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Campos Do Jordao",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Canberra 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chiasso",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Coquimbo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cremona",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cuenca",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Denver",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dresden",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Edinburgh",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Genoa",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Girona",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hamilton",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hilversum",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Honolulu",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hull",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hyderabad",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Itajai",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Jiujiang",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kigali 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lanzarote",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lincoln",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Loughborough",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Louisville",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lubbock",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lubeck",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Luedenscheid",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mohammedia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mouilleron Le Captif",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nur-Sultan 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Oeiras 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Padova",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Poertschach",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ramat Hasharon",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rome 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Salvador",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Antonio",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Juan",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Miguel de Tucuman",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sao Paulo 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Skopje",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Stockton",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tanger",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tarzana",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Temuco",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tenerife",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ulm",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Valladolid",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Villa Maria",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Wuxi",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Yokkaichi",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rouen",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hasselt",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brazzaville",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Adelaide 2",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Adelaide 1",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sophia Antipolis",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Winston Salem",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "World Team Cup",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "ATP Challenger Tour Finals",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tournament of Champions",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Florence",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Athens Olympics",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Beijing Olympics",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "London Olympics",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Paris Olympics",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rio Olympics",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sydney Olympics",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tokyo Olympics",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "GA",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Abidjan 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Aix En Provence",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Amsterdam",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bangkok1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bath",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Belem",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bolton",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brasilia-1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bressanone",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brisbane 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brisbane 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bucharest 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Buenos Aires (Argentino) 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bunschoten",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Campinas-1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cancun",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cardiff",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cary 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cherkassy",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Columbus 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Corrientes",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Costa Rica",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Courmayeur",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dobrich 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Eisenach",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Eskisehir",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Espinho",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ettlingen",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Fresno",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gatineau",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gran Canaria 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Groningen",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hagen",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Happy Valley",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hiroshima",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Indian Wells 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ischgl",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Jerusalem",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kigali 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Knokke-Heist",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "La Serena",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lima 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Luebeck",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Magdeburg",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Malaga",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mexico City 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Montemar",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Napa",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "New Orleans",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nonthaburi 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nottingham 3",
+    "surface": "Grass",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Oporto",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ottignies-Louvain-la-Neuve",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Petange",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Pingguo",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ponte Vedra Beach",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Potchefstroom 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Qingdao",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Quimper 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Raanana",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Recife",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rhodes",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rio Quente",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rosario",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rovereto",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Royan",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Benedetto Del Tronto",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "San Francisco",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sanremo",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Santa Cruz De La Sierra 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Santa Cruz de la Sierra",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sao Jose Do Rio Preto",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sao Paulo-3",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shenzhen (Longhua)",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shymkent 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sioux Falls",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Soma Bay",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Split 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "St. Petersburg 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sylt",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tangier",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Targu Mures",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tehran",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Telde",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tenerife 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Thionville",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Toulouse",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Troisdorf",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tyumen",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Venice",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Vercelli",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Villena",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Vilnius",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "West Lakes",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Wuning",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zell",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Morelia",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "WTA Championships",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Adelaide-1",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Oklahoma City",
+    "surface": "Carpet",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Charleston 1",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chicago 2",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Great Ocean Road Open",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Guadalajara 2",
+    "surface": "Hard",
+    "level": "M",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hilton Head",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Murray River Open",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Phillip Island Trophy",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Adelaide-2",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bahia",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cap Cana",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zhengzhou",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Yarra Valley Classic",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gippsland Trophy",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ann Arbor",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bendigo",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bendigo 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Canberra (Bendigo 1)",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Da Nang",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Next Gen Finals",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "NextGen Finals",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Cologne 1",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Cologne 2",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Gijon",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Portschach",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sardinia",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tel Aviv",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "CA",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "''s-Hertogenbosch",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Aarhus",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Abidjan",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Abidjan 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Agri",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ahmedabad",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Almaty 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Amarillo",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ambato",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Armonk",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Astana 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Astana II",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Astana-2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Atlantic City",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bari",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Barnstaple",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Basle",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Batman",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Belgaum",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Belo Horizonte-2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bengaluru 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bengaluru 3",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bercuit",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Boca Raton",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bogota (Los Lagartos)",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bogota-2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Boston",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bradenton",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brasilia-2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Bratislava 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Brighton",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Brisbane 3",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Brownsburg",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Buenos Aires (Argentino) 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Calcutta",
+    "surface": "Grass",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Calvia",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Caracas",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Casablanca 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cattolica",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Centurion",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Centurion 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cervia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cesenatico",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Chandigarh",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Charleroi",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Charleston 2",
+    "surface": "Clay",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chicago 1",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chikmagalur",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chisinau",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chitre",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Chuncheon",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cluj-Napoca 2",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "College Station",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Contrexeville",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Covington",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Crete 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Crete 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cuernavaca (Morelos)",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Danderyd",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dharwad",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dortmund",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Dubrovnik",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Durban",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "East London",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Fano",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Florianopolis II",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Floridablanca",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gdynia",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gosford",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Gran Canaria",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Guangzhou (Huangpu)",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Guimaraes",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Heilbronn - Bad Rappenau",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Heilbronn II",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hersonissos 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hersonissos 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hersonissos 3",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hersonissos 4",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hersonissos 5",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hersonissos 6",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Homestead",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Houston -1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hua Hin 2",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Humacao",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ibague",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Indore",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Iquique",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Japan Open Tokyo",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Joinville",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Jonkoping",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Jurmala",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kachreti",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kamnik",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kawana",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kerrville",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Khanty-Mansiysk",
+    "surface": "Carpet",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Khorat",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kigali",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kish Island",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kranj",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kyiv",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "L'Aquila",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Launceston",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lermontov",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Les Franqueses del Valles",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Liege",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lima - Los Inkas",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Limoges",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "London",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Losinj",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lyon 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Manacor",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Manama 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mandeville",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Manila",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Manzanillo",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mas Palomas",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Maspalomas",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mauritius",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Medjugorje",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Melbourne 1",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Melbourne 2",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mendoza",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Menorca",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Metepec",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Miyazaki",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Moldova",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Moncton",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Montechiarugolo-Parma",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mordovia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Mouilleron-Le-Captif",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nanjing",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "New Caledonia",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Next Gen ATP Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Nonthaburi 3",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "North Miami Beach",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nottingham 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Nottingham 2",
+    "surface": "Grass",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nur Sultan",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Nur Sultan 3",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Oeiras 3",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Oeiras 4",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Oeiras 5",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ojai",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ostend",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Palmas del Mar",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Pamplona",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Perth",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Phan Thiet 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Phan Thiet 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Plovdiv",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Plovdiv 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Porto 2",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Prague 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Prague Open",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Pullach",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Quanzhou",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Qujing",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rancho Mirage",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Ribeirao Preto",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rio de  Janeiro",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rocky Mount",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Roseto Degli Abruzzi",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Roseto Degli Abruzzi 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rosmalen",
+    "surface": "Grass",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Saint-Brieuc",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Salvador De Bahia",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Salzburg-Anif",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Samsun",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Santiago-2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sao Paulo1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shanghai1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shenzhen (Futian)",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shenzhen (Luohu)",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sofia 1",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sofia 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Southampton",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "St. Jean De Luz",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "St. Tropez",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Stuttgart Outdoor",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sunderland",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sydney1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Szekesfehervar",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tallinn",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Targu Mures 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tasmania",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tbilisi",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tempe",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tigre",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tigre 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Torrance",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tumkur",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Urbana",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Villa Allende",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Vina Del Mar",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Wuhai",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Yeongwol",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Zabrze",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cluj-Napoca 1",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Islamabad",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Klagenfurt",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Lima 2",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Cabo San Lucas",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Carlsbad",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Hanover",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "New York Open",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Serbia",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sumter",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Grampians Trophy",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Kingston 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Roehampton 1",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Sion",
+    "surface": "Clay",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Potchefstroom",
+    "surface": "Hard",
+    "level": "C",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "ATP Tour Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Cancun Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Fort Worth Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Guadalajara Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Riyadh Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Shenzhen Finals",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Tennis Masters Cup",
+    "surface": "Hard",
+    "level": "F",
+    "indoor": 1,
+    "best_of": 3
+  },
+  {
+    "name": "Belgrade 1",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Belgrade 2",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Buenoa Aires",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Marrakesh",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Rio de Jainero",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Play-offs - Group A",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Play-offs - Group B",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Play-offs - Group C",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Play-offs - Group D",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Play-offs - Group E",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Play-offs - Group F",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Play-offs - Group G",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Qualifying Round - Group A",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Qualifying Round - Group B",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Qualifying Round - Group C",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Qualifying Round - Group D",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Qualifying Round - Group E",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup Qualifying Round - Group F",
+    "surface": "Clay",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  },
+  {
+    "name": "Billie Jean King Cup qualifying round: Switzerland vs. Czechia",
+    "surface": "Hard",
+    "level": "A",
+    "indoor": 0,
+    "best_of": 3
+  }
+]

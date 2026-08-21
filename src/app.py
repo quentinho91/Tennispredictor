@@ -99,29 +99,115 @@ def get_status():
     }
 
 
+TOURNAMENTS_FILE = BASE_DIR / "data" / "processed" / "tournaments.json"
+TOURNAMENTS_DATA: List[Dict[str, Any]] = []
+
+
+def get_tournaments() -> List[Dict[str, Any]]:
+    global TOURNAMENTS_DATA
+    if not TOURNAMENTS_DATA and TOURNAMENTS_FILE.exists():
+        import json
+        with open(TOURNAMENTS_FILE, "r", encoding="utf-8") as f:
+            TOURNAMENTS_DATA = json.load(f)
+    return TOURNAMENTS_DATA
+
+
+@app.get("/api/tournaments")
+def search_tournaments(q: str = Query("", min_length=0), limit: int = 12):
+    """Recherche intelligente de tournois avec autocomplétion et métadonnées (surface, niveau, indoor)."""
+    tourneys = get_tournaments()
+    query = q.lower().strip()
+    if not query:
+        return tourneys[:limit]
+
+    q_tokens = query.split()
+    scored = []
+    for t in tourneys:
+        t_name = t["name"].lower()
+        tokens = t_name.split()
+
+        matched = False
+        score = 0
+        if t_name == query:
+            matched = True
+            score = 100
+        elif any(token.startswith(query) for token in tokens):
+            matched = True
+            score = 80
+        elif t_name.startswith(query):
+            matched = True
+            score = 70
+        elif all(any(token.startswith(qt) or qt in token for token in tokens) for qt in q_tokens):
+            matched = True
+            score = 50
+        elif query in t_name:
+            matched = True
+            score = 30
+
+        if matched:
+            # Bonus de visibilité pour les tournois majeurs
+            lvl = t.get("level", "A")
+            level_boost = 35 if lvl == "G" else (20 if lvl == "M" else (10 if lvl == "F" else 0))
+            scored.append((t, score + level_boost))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [item[0] for item in scored[:limit]]
+
+
 @app.get("/api/players")
 def search_players(circuit: str = "atp", q: str = Query("", min_length=1), limit: int = 10):
+    """Recherche intelligente de joueurs avec tri par pertinence, classement et Elo."""
     res = get_cached_resources(circuit)
     players = res["players"]
     state = res["state"]
     query = q.lower().strip()
+    if not query:
+        return []
 
-    starts = []
-    contains = []
+    q_tokens = query.split()
+    last_ranks = state.get("last_rank", {})
+    last_play_dates = state.get("last_play_date", {})
+    last_d = state.get("last_day", 0)
+
+    scored_players = []
     for p in players:
         p_lower = p.lower()
-        if p_lower.startswith(query):
-            starts.append(p)
-        elif query in p_lower:
-            contains.append(p)
-        if len(starts) >= limit:
-            break
+        tokens = p_lower.split()
 
-    results = (starts + contains)[:limit]
+        matched = False
+        prefix_score = 0
+        if p_lower == query:
+            matched = True
+            prefix_score = 100
+        elif any(token.startswith(query) for token in tokens):
+            matched = True
+            prefix_score = 80
+        elif p_lower.startswith(query):
+            matched = True
+            prefix_score = 70
+        elif all(any(token.startswith(qt) or qt in token for token in tokens) for qt in q_tokens):
+            matched = True
+            prefix_score = 50
+        elif query in p_lower:
+            matched = True
+            prefix_score = 30
+
+        if matched:
+            elo = state["elo"].get(p, 1500)
+            rank = last_ranks.get(p)
+            rank_score = (1000 - rank) if (rank is not None and not np.isnan(rank) and rank > 0) else 0
+
+            # Bonus pour joueurs en activité récente
+            days_ago = last_d - last_play_dates.get(p, 0)
+            recency_score = 50 if days_ago <= 1095 else (20 if days_ago <= 2555 else 0)
+
+            total_score = prefix_score * 10 + rank_score + (elo / 10) + recency_score
+            scored_players.append((p, total_score, elo, rank))
+
+    scored_players.sort(key=lambda x: x[1], reverse=True)
+
     output = []
-    for name in results:
-        elo_val = state["elo"].get(name, 1500)
-        rank_val = state.get("last_rank", {}).get(name)
+    for name, score, elo_val, rank_val in scored_players[:limit]:
         hand_val = state.get("last_hand", {}).get(name, "R")
         output.append({
             "name": name,

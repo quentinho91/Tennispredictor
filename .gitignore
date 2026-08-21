@@ -24,6 +24,7 @@ data/processed/*.db
 !data/processed/calibrator_wta.pkl
 !data/processed/best_params_atp.json
 !data/processed/best_params_wta.json
+!data/processed/tournaments.json
 
 # OS
 .DS_Store

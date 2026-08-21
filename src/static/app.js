@@ -17,8 +17,9 @@ const predictBtn = document.getElementById('btn-predict');
 const resultsSection = document.getElementById('results-section');
 
 // Surface & Context Elements
-const surfaceSelect = document.getElementById('surface-select');
 const tournamentInput = document.getElementById('tournament-input');
+const tournamentDropdown = document.getElementById('tournament-dropdown');
+const surfaceSelect = document.getElementById('surface-select');
 const levelSelect = document.getElementById('level-select');
 const roundSelect = document.getElementById('round-select');
 const bestOfSelect = document.getElementById('best-of-select');
@@ -29,8 +30,9 @@ const odds2Input = document.getElementById('odds2-input');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   setupCircuitSwitcher();
-  setupAutocomplete(p1Input, p1Dropdown, (name) => { selectedP1 = name; });
-  setupAutocomplete(p2Input, p2Dropdown, (name) => { selectedP2 = name; });
+  setupPlayerAutocomplete(p1Input, p1Dropdown, (name) => { selectedP1 = name; });
+  setupPlayerAutocomplete(p2Input, p2Dropdown, (name) => { selectedP2 = name; });
+  setupTournamentAutocomplete(tournamentInput, tournamentDropdown);
   setupSwap();
   setupFormSubmit();
 });
@@ -43,11 +45,21 @@ function setupCircuitSwitcher() {
       btn.classList.add('active');
       currentCircuit = btn.dataset.circuit;
       
+      // Update best-of default (Grand Slam is best-of-5 for ATP, best-of-3 for WTA)
+      if (levelSelect.value === 'G') {
+        bestOfSelect.value = currentCircuit === 'atp' ? '5' : '3';
+        triggerHighlight(bestOfSelect);
+      } else {
+        bestOfSelect.value = '3';
+      }
+
       // Clear inputs on circuit switch
       p1Input.value = '';
       p2Input.value = '';
       selectedP1 = '';
       selectedP2 = '';
+      p1Dropdown.style.display = 'none';
+      p2Dropdown.style.display = 'none';
       resultsSection.style.display = 'none';
     });
   });
@@ -70,27 +82,63 @@ function setupSwap() {
   });
 }
 
-// Autocomplete Setup
-function setupAutocomplete(input, dropdown, onSelect) {
+// --------------------------------------------------------------------------
+// Autocomplete : JOUEURS
+// --------------------------------------------------------------------------
+function setupPlayerAutocomplete(input, dropdown, onSelect) {
   let debounceTimer = null;
+  let selectedIndex = -1;
 
-  input.addEventListener('input', () => {
+  const fetchAndRender = (q) => {
     clearTimeout(debounceTimer);
-    const q = input.value.trim();
-    if (q.length < 1) {
+    if (!q || q.length < 1) {
       dropdown.style.display = 'none';
       return;
     }
 
     debounceTimer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/players?circuit=${currentCircuit}&q=${encodeURIComponent(q)}&limit=8`);
+        const res = await fetch(`/api/players?circuit=${currentCircuit}&q=${encodeURIComponent(q)}&limit=10`);
         const players = await res.json();
-        renderDropdown(dropdown, players, input, onSelect);
+        renderPlayerDropdown(dropdown, players, input, onSelect);
       } catch (err) {
         console.error('Error fetching players:', err);
       }
-    }, 250);
+    }, 150);
+  };
+
+  input.addEventListener('input', () => {
+    selectedIndex = -1;
+    fetchAndRender(input.value.trim());
+  });
+
+  input.addEventListener('focus', () => {
+    if (input.value.trim().length >= 1) {
+      fetchAndRender(input.value.trim());
+    }
+  });
+
+  // Keyboard navigation
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    if (!items.length || dropdown.style.display === 'none') return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex + 1) % items.length;
+      updateActiveItem(items, selectedIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+      updateActiveItem(items, selectedIndex);
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && items[selectedIndex]) {
+        e.preventDefault();
+        items[selectedIndex].click();
+      }
+    } else if (e.key === 'Escape') {
+      dropdown.style.display = 'none';
+    }
   });
 
   // Close dropdown on click outside
@@ -101,22 +149,29 @@ function setupAutocomplete(input, dropdown, onSelect) {
   });
 }
 
-function renderDropdown(dropdown, players, input, onSelect) {
+function renderPlayerDropdown(dropdown, players, input, onSelect) {
   dropdown.innerHTML = '';
   if (!players || players.length === 0) {
     dropdown.style.display = 'none';
     return;
   }
 
-  players.forEach(p => {
+  players.forEach((p, idx) => {
     const item = document.createElement('div');
     item.className = 'autocomplete-item';
-    
+    item.dataset.index = idx;
+
     const rankStr = p.rank ? `#${p.rank}` : '';
+    const isTop10 = p.rank && p.rank <= 10;
+    const handLabel = p.hand === 'L' ? 'Gaucher' : 'Droitier';
+
     item.innerHTML = `
-      <span class="ac-name">${p.name}</span>
+      <div class="ac-main-col">
+        <span class="ac-name">${escapeHtml(p.name)}</span>
+        <span class="ac-sub">${handLabel}</span>
+      </div>
       <div class="ac-meta">
-        ${rankStr ? `<span class="ac-rank">${rankStr}</span>` : ''}
+        ${rankStr ? `<span class="ac-rank ${isTop10 ? 'top10' : ''}">${rankStr}</span>` : ''}
         <span class="ac-elo">Elo ${p.elo}</span>
       </div>
     `;
@@ -133,7 +188,207 @@ function renderDropdown(dropdown, players, input, onSelect) {
   dropdown.style.display = 'block';
 }
 
+// --------------------------------------------------------------------------
+// Autocomplete & Auto-Détection : TOURNOIS
+// --------------------------------------------------------------------------
+function setupTournamentAutocomplete(input, dropdown) {
+  let debounceTimer = null;
+  let selectedIndex = -1;
+
+  const fetchAndRender = (q) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/tournaments?q=${encodeURIComponent(q)}&limit=10`);
+        const tourneys = await res.json();
+        renderTournamentDropdown(dropdown, tourneys, input);
+      } catch (err) {
+        console.error('Error fetching tournaments:', err);
+      }
+    }, 150);
+  };
+
+  input.addEventListener('input', () => {
+    selectedIndex = -1;
+    fetchAndRender(input.value.trim());
+  });
+
+  input.addEventListener('focus', () => {
+    fetchAndRender(input.value.trim());
+  });
+
+  // Blur : auto-détection sur le texte saisi si l'utilisateur n'a pas cliqué
+  input.addEventListener('change', async () => {
+    const q = input.value.trim();
+    if (q) {
+      try {
+        const res = await fetch(`/api/tournaments?q=${encodeURIComponent(q)}&limit=1`);
+        const tourneys = await res.json();
+        if (tourneys && tourneys.length > 0) {
+          applyTournamentMetadata(tourneys[0], false);
+        }
+      } catch (err) {
+        console.error('Error auto-detecting tournament on change:', err);
+      }
+    }
+  });
+
+  // Keyboard navigation
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    if (!items.length || dropdown.style.display === 'none') return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex + 1) % items.length;
+      updateActiveItem(items, selectedIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+      updateActiveItem(items, selectedIndex);
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && items[selectedIndex]) {
+        e.preventDefault();
+        items[selectedIndex].click();
+      }
+    } else if (e.key === 'Escape') {
+      dropdown.style.display = 'none';
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+}
+
+function renderTournamentDropdown(dropdown, tourneys, input) {
+  dropdown.innerHTML = '';
+  if (!tourneys || tourneys.length === 0) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  tourneys.forEach((t, idx) => {
+    const item = document.createElement('div');
+    item.className = 'autocomplete-item';
+    item.dataset.index = idx;
+
+    const surfKey = (t.surface || 'Hard').toLowerCase();
+    const surfLabels = {
+      hard: '🟦 Dur',
+      clay: '🧱 Terre Battue',
+      grass: '🌿 Gazon',
+      carpet: '🟫 Moquette'
+    };
+    const surfText = surfLabels[surfKey] || t.surface;
+
+    const levelLabels = {
+      G: 'Grand Chelem',
+      M: 'Masters 1000',
+      F: 'Finals',
+      A: 'ATP/WTA 500-250',
+      C: 'Challenger/125'
+    };
+    const levelText = levelLabels[t.level] || 'Tournoi';
+    const indoorText = t.indoor === 1 ? ' • Indoor' : '';
+
+    item.innerHTML = `
+      <div class="ac-main-col">
+        <span class="ac-name">${escapeHtml(t.name)}</span>
+        <span class="ac-sub">${levelText}${indoorText}</span>
+      </div>
+      <div class="ac-meta">
+        <span class="ac-badge ${surfKey}">${surfText}</span>
+      </div>
+    `;
+
+    item.addEventListener('click', () => {
+      input.value = t.name;
+      applyTournamentMetadata(t, true);
+      dropdown.style.display = 'none';
+    });
+
+    dropdown.appendChild(item);
+  });
+
+  dropdown.style.display = 'block';
+}
+
+// Appliquer automatiquement la surface, catégorie, indoor et format
+function applyTournamentMetadata(t, overwriteInputName = false) {
+  if (overwriteInputName && t.name) {
+    tournamentInput.value = t.name;
+  }
+
+  // 1. Surface
+  if (t.surface) {
+    const surfVal = capitalizeFirst(t.surface);
+    if (['Hard', 'Clay', 'Grass', 'Carpet'].includes(surfVal)) {
+      surfaceSelect.value = surfVal;
+      triggerHighlight(surfaceSelect);
+    }
+  }
+
+  // 2. Niveau / Catégorie
+  if (t.level) {
+    levelSelect.value = t.level;
+    triggerHighlight(levelSelect);
+  }
+
+  // 3. Indoor / Outdoor
+  if (t.indoor !== undefined) {
+    indoorSelect.value = String(t.indoor);
+    triggerHighlight(indoorSelect);
+  }
+
+  // 4. Format (Best of 5 sets en Grand Chelem ATP, sinon 3)
+  if (t.level === 'G') {
+    bestOfSelect.value = currentCircuit === 'atp' ? '5' : '3';
+  } else {
+    bestOfSelect.value = '3';
+  }
+  triggerHighlight(bestOfSelect);
+}
+
+// Animation visuelle de détection automatique
+function triggerHighlight(element) {
+  element.classList.remove('auto-detected');
+  // Trigger DOM reflow to replay animation
+  void element.offsetWidth;
+  element.classList.add('auto-detected');
+}
+
+function updateActiveItem(items, activeIndex) {
+  items.forEach((item, i) => {
+    if (i === activeIndex) {
+      item.classList.add('selected');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+}
+
+function capitalizeFirst(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// --------------------------------------------------------------------------
 // Form Submission & Prediction
+// --------------------------------------------------------------------------
 function setupFormSubmit() {
   predictBtn.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -192,7 +447,9 @@ function setupFormSubmit() {
   });
 }
 
+// --------------------------------------------------------------------------
 // Render Results
+// --------------------------------------------------------------------------
 function renderResults(data) {
   resultsSection.style.display = 'block';
 
