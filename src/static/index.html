@@ -26,15 +26,23 @@
         <span class="brand-badge">XGBoost Pure</span>
       </div>
 
-      <!-- Circuit Switcher -->
-      <div class="circuit-switcher">
-        <button class="circuit-btn active" data-circuit="atp">
-          <span>🏆</span> ATP (Hommes)
-        </button>
-        <button class="circuit-btn" data-circuit="wta">
-          <span>👑</span> WTA (Femmes)
+      <!-- Header Actions: Circuit Switcher + Update Data Button -->
+      <div class="header-controls">
+        <div class="circuit-switcher">
+          <button class="circuit-btn active" data-circuit="atp">
+            <span>🏆</span> ATP (Hommes)
+          </button>
+          <button class="circuit-btn" data-circuit="wta">
+            <span>👑</span> WTA (Femmes)
+          </button>
+        </div>
+
+        <button type="button" id="btn-update-data" class="update-data-btn" title="Télécharger les derniers matchs et actualiser les statistiques">
+          <span class="update-icon">🔄</span> Actualiser les données
         </button>
       </div>
+
+      <div id="update-status-msg" class="update-status-msg"></div>
     </header>
 
     <!-- Main Match Form Card -->
@@ -122,9 +130,9 @@
         </div>
       </div>
 
-      <!-- Bookmaker Odds -->
+      <!-- Main Market Odds (Match Winner) -->
       <div style="margin-top: 16px;">
-        <label class="input-label">💰 Cotes du Bookmaker (Optionnel - pour calcul Value Bet)</label>
+        <label class="input-label">💰 Cotes Vainqueur Match (Optionnel)</label>
         <div class="odds-grid">
           <div class="odds-input-wrap">
             <input type="number" step="0.01" id="odds1-input" class="text-input odds-input" placeholder="Cote J1 (ex: 1.85)">
@@ -135,9 +143,88 @@
         </div>
       </div>
 
+      <!-- Secondary Markets Accordion (Over/Under, Handicap, Set 1, Sets) -->
+      <div class="secondary-markets-accordion">
+        <button type="button" id="toggle-sec-markets" class="toggle-markets-btn">
+          <span>⚡ Cotes Secondaires & Spéciales (Over/Under, Handicap, Set 1...)</span>
+          <span id="sec-toggle-icon" class="toggle-arrow">▼</span>
+        </button>
+
+        <div id="sec-markets-content" class="sec-markets-content" style="display: none;">
+          <!-- Over / Under Games -->
+          <div class="sec-market-box">
+            <div class="sec-market-title">🎾 Total de Jeux (Over / Under)</div>
+            <div class="sec-market-grid-3">
+              <div>
+                <label class="input-label-sm">Ligne de Cut</label>
+                <input type="number" step="0.5" id="total-line-input" class="text-input-sm" placeholder="Auto (ex: 22.5)">
+              </div>
+              <div>
+                <label class="input-label-sm">Cote Over</label>
+                <input type="number" step="0.01" id="odds-over-input" class="text-input-sm" placeholder="ex: 1.90">
+              </div>
+              <div>
+                <label class="input-label-sm">Cote Under</label>
+                <input type="number" step="0.01" id="odds-under-input" class="text-input-sm" placeholder="ex: 1.90">
+              </div>
+            </div>
+          </div>
+
+          <!-- Handicap Games -->
+          <div class="sec-market-box">
+            <div class="sec-market-title">⚡ Handicap de Jeux</div>
+            <div class="sec-market-grid-3">
+              <div>
+                <label class="input-label-sm">Ligne J1 (ex: -3.5)</label>
+                <input type="number" step="0.5" id="handicap-line-input" class="text-input-sm" placeholder="Auto (ex: -3.5)">
+              </div>
+              <div>
+                <label class="input-label-sm">Cote J1 Handicap</label>
+                <input type="number" step="0.01" id="odds-h1-input" class="text-input-sm" placeholder="ex: 1.85">
+              </div>
+              <div>
+                <label class="input-label-sm">Cote J2 Handicap</label>
+                <input type="number" step="0.01" id="odds-h2-input" class="text-input-sm" placeholder="ex: 1.95">
+              </div>
+            </div>
+          </div>
+
+          <!-- Set 1 & Number of Sets -->
+          <div class="sec-market-row">
+            <div class="sec-market-box half">
+              <div class="sec-market-title">🥇 Vainqueur Set 1</div>
+              <div class="sec-market-grid-2">
+                <div>
+                  <label class="input-label-sm">Cote J1 Set 1</label>
+                  <input type="number" step="0.01" id="odds-set1-p1" class="text-input-sm" placeholder="ex: 1.70">
+                </div>
+                <div>
+                  <label class="input-label-sm">Cote J2 Set 1</label>
+                  <input type="number" step="0.01" id="odds-set1-p2" class="text-input-sm" placeholder="ex: 2.10">
+                </div>
+              </div>
+            </div>
+
+            <div class="sec-market-box half">
+              <div class="sec-market-title">⏳ Nombre de Sets</div>
+              <div class="sec-market-grid-2">
+                <div>
+                  <label class="input-label-sm">3 Sets (Over 2.5)</label>
+                  <input type="number" step="0.01" id="odds-sets-over" class="text-input-sm" placeholder="ex: 2.30">
+                </div>
+                <div>
+                  <label class="input-label-sm">2 Sets (Sec)</label>
+                  <input type="number" step="0.01" id="odds-sets-under" class="text-input-sm" placeholder="ex: 1.60">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Action Button -->
       <button type="button" id="btn-predict" class="btn-predict">
-        🔮 Prédire le Match
+        🔮 Prédire le Match & Scanner les Value Bets
       </button>
     </main>
 
@@ -169,11 +256,31 @@
           <div id="bar-p2" class="dual-bar-p2" style="width: 50%;"></div>
         </div>
 
-        <!-- Value Bet Card -->
+        <!-- Multi-Market Value Bets Summary Box -->
         <div id="valuebet-container" class="valuebet-card no-vb" style="display: none;"></div>
       </div>
 
-      <!-- Comparative Ratings & Markov Stats -->
+      <!-- Multi-Market Pricing Grid -->
+      <div class="card">
+        <div class="card-title">
+          <span>🎯</span> Analyse de Tous les Marchés (Probabilités Réelles & Cotes Justes)
+        </div>
+        <div id="markets-grid" class="markets-grid">
+          <!-- Dynamic Market Cards -->
+        </div>
+      </div>
+
+      <!-- Set Scores Matrix -->
+      <div class="card">
+        <div class="card-title">
+          <span>🔢</span> Matrice des Scores Exacts en Sets (Markov)
+        </div>
+        <div id="scores-matrix" class="scores-matrix-grid">
+          <!-- Dynamic Exact Scores Cards -->
+        </div>
+      </div>
+
+      <!-- Comparative Ratings & Stats -->
       <div class="card">
         <div class="card-title">
           <span>📊</span> Comparaison Approfondie & Modèle Markov

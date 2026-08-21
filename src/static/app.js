@@ -7,6 +7,7 @@ let selectedP1 = '';
 let selectedP2 = '';
 
 // DOM Elements
+// DOM Elements
 const circuitBtns = document.querySelectorAll('.circuit-btn');
 const p1Input = document.getElementById('p1-input');
 const p2Input = document.getElementById('p2-input');
@@ -27,6 +28,25 @@ const indoorSelect = document.getElementById('indoor-select');
 const odds1Input = document.getElementById('odds1-input');
 const odds2Input = document.getElementById('odds2-input');
 
+// Secondary Markets Elements
+const toggleSecMarketsBtn = document.getElementById('toggle-sec-markets');
+const secMarketsContent = document.getElementById('sec-markets-content');
+const secToggleIcon = document.getElementById('sec-toggle-icon');
+const totalLineInput = document.getElementById('total-line-input');
+const oddsOverInput = document.getElementById('odds-over-input');
+const oddsUnderInput = document.getElementById('odds-under-input');
+const handicapLineInput = document.getElementById('handicap-line-input');
+const oddsH1Input = document.getElementById('odds-h1-input');
+const oddsH2Input = document.getElementById('odds-h2-input');
+const oddsSet1P1Input = document.getElementById('odds-set1-p1');
+const oddsSet1P2Input = document.getElementById('odds-set1-p2');
+const oddsSetsOverInput = document.getElementById('odds-sets-over');
+const oddsSetsUnderInput = document.getElementById('odds-sets-under');
+
+// Update Data Elements
+const btnUpdateData = document.getElementById('btn-update-data');
+const updateStatusMsg = document.getElementById('update-status-msg');
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   setupCircuitSwitcher();
@@ -34,8 +54,57 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPlayerAutocomplete(p2Input, p2Dropdown, (name) => { selectedP2 = name; });
   setupTournamentAutocomplete(tournamentInput, tournamentDropdown);
   setupSwap();
+  setupSecondaryMarketsToggle();
+  setupUpdateData();
   setupFormSubmit();
 });
+
+// Secondary Markets Toggle
+function setupSecondaryMarketsToggle() {
+  if (!toggleSecMarketsBtn || !secMarketsContent) return;
+  toggleSecMarketsBtn.addEventListener('click', () => {
+    const isHidden = secMarketsContent.style.display === 'none';
+    secMarketsContent.style.display = isHidden ? 'flex' : 'none';
+    if (secToggleIcon) {
+      secToggleIcon.classList.toggle('open', isHidden);
+    }
+  });
+}
+
+// Data Update (Sync recent matches & tournaments)
+function setupUpdateData() {
+  if (!btnUpdateData) return;
+  btnUpdateData.addEventListener('click', async () => {
+    btnUpdateData.classList.add('loading');
+    btnUpdateData.disabled = true;
+    updateStatusMsg.textContent = '⏳ Téléchargement et synchronisation des matchs récents...';
+    updateStatusMsg.style.color = '#38bdf8';
+
+    try {
+      const res = await fetch('/api/update-data', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        updateStatusMsg.textContent = `✅ ${data.message} (${data.timestamp})`;
+        updateStatusMsg.style.color = '#34d399';
+      } else {
+        updateStatusMsg.textContent = `⚠️ ${data.message}`;
+        updateStatusMsg.style.color = '#f87171';
+      }
+    } catch (err) {
+      updateStatusMsg.textContent = `❌ Erreur de connexion: ${err.message}`;
+      updateStatusMsg.style.color = '#f87171';
+    } finally {
+      btnUpdateData.classList.remove('loading');
+      btnUpdateData.disabled = false;
+      setTimeout(() => {
+        // Clear status after 8 seconds
+        if (updateStatusMsg.textContent.startsWith('✅')) {
+          updateStatusMsg.textContent = '';
+        }
+      }, 8000);
+    }
+  });
+}
 
 // Circuit Switching (ATP / WTA)
 function setupCircuitSwitcher() {
@@ -389,6 +458,9 @@ function escapeHtml(str) {
 // --------------------------------------------------------------------------
 // Form Submission & Prediction
 // --------------------------------------------------------------------------
+// --------------------------------------------------------------------------
+// Form Submission & Prediction
+// --------------------------------------------------------------------------
 function setupFormSubmit() {
   predictBtn.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -407,7 +479,7 @@ function setupFormSubmit() {
     }
 
     predictBtn.disabled = true;
-    predictBtn.innerHTML = '⏳ Calcul des prédictions XGBoost...';
+    predictBtn.innerHTML = '⏳ Calcul des prédictions & scan des marchés...';
 
     const payload = {
       circuit: currentCircuit,
@@ -421,6 +493,16 @@ function setupFormSubmit() {
       indoor: parseInt(indoorSelect.value, 10),
       odds1: odds1Input.value ? parseFloat(odds1Input.value) : null,
       odds2: odds2Input.value ? parseFloat(odds2Input.value) : null,
+      total_line: totalLineInput && totalLineInput.value ? parseFloat(totalLineInput.value) : null,
+      odds_over: oddsOverInput && oddsOverInput.value ? parseFloat(oddsOverInput.value) : null,
+      odds_under: oddsUnderInput && oddsUnderInput.value ? parseFloat(oddsUnderInput.value) : null,
+      handicap_line: handicapLineInput && handicapLineInput.value ? parseFloat(handicapLineInput.value) : null,
+      odds_h1: oddsH1Input && oddsH1Input.value ? parseFloat(oddsH1Input.value) : null,
+      odds_h2: oddsH2Input && oddsH2Input.value ? parseFloat(oddsH2Input.value) : null,
+      odds_set1_p1: oddsSet1P1Input && oddsSet1P1Input.value ? parseFloat(oddsSet1P1Input.value) : null,
+      odds_set1_p2: oddsSet1P2Input && oddsSet1P2Input.value ? parseFloat(oddsSet1P2Input.value) : null,
+      odds_sets_over25: oddsSetsOverInput && oddsSetsOverInput.value ? parseFloat(oddsSetsOverInput.value) : null,
+      odds_sets_under25: oddsSetsUnderInput && oddsSetsUnderInput.value ? parseFloat(oddsSetsUnderInput.value) : null,
     };
 
     try {
@@ -442,7 +524,7 @@ function setupFormSubmit() {
       alert(`Erreur: ${err.message}`);
     } finally {
       predictBtn.disabled = false;
-      predictBtn.innerHTML = '🔮 Prédire le Match';
+      predictBtn.innerHTML = '🔮 Prédire le Match & Scanner les Value Bets';
     }
   });
 }
@@ -482,56 +564,185 @@ function renderResults(data) {
   const altStr = ctx.altitude > 0 ? ` • Alt: ${ctx.altitude}m` : '';
   ctxTag.textContent = `${ctx.tournament} • ${ctx.surface}${cpiStr}${altStr} • ${ctx.round} • Best-of ${ctx.best_of}`;
 
-  // Value Bet Box
+  // ------------------------------------------------------------------------
+  // Value Bets Across All Markets
+  // ------------------------------------------------------------------------
   const vbContainer = document.getElementById('valuebet-container');
-  const vb = data.value_bet;
+  const allVBs = data.all_value_bets || [];
 
-  if (vb && vb.has_odds) {
+  if (allVBs.length > 0) {
     vbContainer.style.display = 'block';
-    let cardClass = 'no-vb';
-    let badgeClass = 'badge-no-vb';
-    let badgeText = '❌ AUCUN VALUE BET';
-    let descText = 'Les cotes proposées sont trop basses par rapport aux probabilités réelles du modèle.';
+    vbContainer.className = 'valuebet-card is-vb';
 
-    if (vb.is_value_bet) {
-      cardClass = 'is-vb';
-      badgeClass = 'badge-vb';
-      badgeText = `🎯 VALUE BET CONFIRMÉ SUR ${vb.recommended_player.toUpperCase()}`;
-      descText = `Mise recommandée : ${vb.kelly_pct}% de la bankroll (Quarter-Kelly) pour maximiser la croissance du capital à long terme.`;
-    } else if (vb.decision_badge === 'LOW_EV') {
-      cardClass = 'is-low-ev';
-      badgeClass = 'badge-low-ev';
-      badgeText = `⚠️ EV TROP FAIBLE (+${vb.ev_pct}%)`;
-      descText = `Bien qu'il y ait un avantage sur le marché, la marge du bookmaker absorbe le gain net. Cote requise : ${vb.min_odds_required}+`;
-    }
+    let vbsHtml = `
+      <div class="vb-header">
+        <span class="vb-badge badge-vb">🎯 ${allVBs.length} VALUE BET${allVBs.length > 1 ? 'S DÉTECTÉS' : ' DÉTECTÉ'}</span>
+      </div>
+      <div class="vb-summary-list">
+    `;
 
-    vbContainer.className = `valuebet-card ${cardClass}`;
+    allVBs.forEach(vb => {
+      vbsHtml += `
+        <div class="vb-summary-item">
+          <div class="vb-sum-left">
+            <span class="vb-sum-market">${escapeHtml(vb.market)}</span>
+            <span class="vb-sum-title">${escapeHtml(vb.selection)}</span>
+            <span style="font-size: 11.5px; color: var(--text-dim);">Proba: ${vb.prob}% • Cote juste: ${vb.fair_odds.toFixed(2)}</span>
+          </div>
+          <div class="vb-sum-right">
+            <div>
+              <div style="font-size: 16px; font-weight: 800; color: #34d399;">@ ${vb.offered_odds.toFixed(2)}</div>
+              <div style="font-size: 11px; color: #fbbf24; font-weight: 700;">+${vb.ev_pct}% EV</div>
+            </div>
+            <div class="vb-sum-badge">Mise: ${vb.kelly_pct}%</div>
+          </div>
+        </div>
+      `;
+    });
+
+    vbsHtml += `</div>`;
+    vbContainer.innerHTML = vbsHtml;
+  } else if (odds1Input.value || (totalLineInput && totalLineInput.value) || (oddsH1Input && oddsH1Input.value)) {
+    vbContainer.style.display = 'block';
+    vbContainer.className = 'valuebet-card no-vb';
     vbContainer.innerHTML = `
       <div class="vb-header">
-        <span class="vb-badge ${badgeClass}">${badgeText}</span>
+        <span class="vb-badge badge-no-vb">❌ AUCUN VALUE BET DÉTECTÉ</span>
       </div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">${descText}</p>
-      <div class="vb-grid">
-        <div class="vb-metric">
-          <div class="vbm-label">Espérance de Gain (EV)</div>
-          <div class="vbm-val ${vb.ev_pct >= 3 ? 'green' : (vb.ev_pct > 0 ? 'amber' : '')}">${vb.ev_pct > 0 ? '+' : ''}${vb.ev_pct}%</div>
-        </div>
-        <div class="vb-metric">
-          <div class="vbm-label">Avantage Marché (Edge)</div>
-          <div class="vbm-val ${vb.edge_pct >= 3 ? 'green' : (vb.edge_pct > 0 ? 'amber' : '')}">${vb.edge_pct > 0 ? '+' : ''}${vb.edge_pct}%</div>
-        </div>
-        <div class="vb-metric">
-          <div class="vbm-label">Cote Offerte vs Min</div>
-          <div class="vbm-val">${vb.offered_odds ? vb.offered_odds.toFixed(2) : '-'} <span style="font-size:12px; color:var(--text-dim);">/ ${vb.min_odds_required ? vb.min_odds_required.toFixed(2) : '-'}</span></div>
-        </div>
-        <div class="vb-metric">
-          <div class="vbm-label">Mise Kelly Conseillée</div>
-          <div class="vbm-val green">${vb.kelly_pct}%</div>
-        </div>
-      </div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+        Les cotes bookmakers renseignées sont inférieures ou égales aux probabilités réelles calculées par l'IA.
+      </p>
     `;
   } else {
     vbContainer.style.display = 'none';
+  }
+
+  // ------------------------------------------------------------------------
+  // Multi-Market Analysis Grid
+  // ------------------------------------------------------------------------
+  const mkts = data.markets;
+  const marketsGrid = document.getElementById('markets-grid');
+  if (marketsGrid && mkts) {
+    const tg = mkts.total_games;
+    const hg = mkts.handicap_games;
+    const s1 = mkts.set1_winner;
+    const ns = mkts.number_of_sets;
+
+    marketsGrid.innerHTML = `
+      <!-- Total Games Card -->
+      <div class="market-card">
+        <div class="market-card-title">
+          <span>🎾 Total de Jeux</span>
+          <span class="market-meta-badge">Ligne: ${tg.line} (Exp: ${tg.expected})</span>
+        </div>
+        <div class="market-row-item ${tg.vb_over && tg.vb_over.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">Over ${tg.line}</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${tg.proba_over}%</span>
+            <span class="mri-fair">Cote: ${tg.fair_odds_over.toFixed(2)}</span>
+            ${tg.vb_over && tg.vb_over.is_value_bet ? `<span class="mri-vb-pill vb">VB +${tg.vb_over.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+        <div class="market-row-item ${tg.vb_under && tg.vb_under.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">Under ${tg.line}</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${tg.proba_under}%</span>
+            <span class="mri-fair">Cote: ${tg.fair_odds_under.toFixed(2)}</span>
+            ${tg.vb_under && tg.vb_under.is_value_bet ? `<span class="mri-vb-pill vb">VB +${tg.vb_under.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <!-- Handicap Games Card -->
+      <div class="market-card">
+        <div class="market-card-title">
+          <span>⚡ Handicap de Jeux</span>
+          <span class="market-meta-badge">Diff prévu: ${hg.expected_diff > 0 ? '+' : ''}${hg.expected_diff}</span>
+        </div>
+        <div class="market-row-item ${hg.vb_h1 && hg.vb_h1.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">${escapeHtml(hg.label_h1)}</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${hg.proba_h1}%</span>
+            <span class="mri-fair">Cote: ${hg.fair_odds_h1.toFixed(2)}</span>
+            ${hg.vb_h1 && hg.vb_h1.is_value_bet ? `<span class="mri-vb-pill vb">VB +${hg.vb_h1.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+        <div class="market-row-item ${hg.vb_h2 && hg.vb_h2.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">${escapeHtml(hg.label_h2)}</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${hg.proba_h2}%</span>
+            <span class="mri-fair">Cote: ${hg.fair_odds_h2.toFixed(2)}</span>
+            ${hg.vb_h2 && hg.vb_h2.is_value_bet ? `<span class="mri-vb-pill vb">VB +${hg.vb_h2.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <!-- Set 1 Winner Card -->
+      <div class="market-card">
+        <div class="market-card-title">
+          <span>🥇 Vainqueur 1er Set</span>
+          <span class="market-meta-badge">1er Set</span>
+        </div>
+        <div class="market-row-item ${s1.vb_p1 && s1.vb_p1.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">${escapeHtml(data.p1)}</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${s1.proba_p1}%</span>
+            <span class="mri-fair">Cote: ${s1.fair_odds_p1.toFixed(2)}</span>
+            ${s1.vb_p1 && s1.vb_p1.is_value_bet ? `<span class="mri-vb-pill vb">VB +${s1.vb_p1.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+        <div class="market-row-item ${s1.vb_p2 && s1.vb_p2.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">${escapeHtml(data.p2)}</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${s1.proba_p2}%</span>
+            <span class="mri-fair">Cote: ${s1.fair_odds_p2.toFixed(2)}</span>
+            ${s1.vb_p2 && s1.vb_p2.is_value_bet ? `<span class="mri-vb-pill vb">VB +${s1.vb_p2.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <!-- Number of Sets Card -->
+      <div class="market-card">
+        <div class="market-card-title">
+          <span>⏳ Nombre de Sets</span>
+          <span class="market-meta-badge">Total Sets</span>
+        </div>
+        <div class="market-row-item ${ns.vb_over && ns.vb_over.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">${escapeHtml(ns.label_over)}</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${ns.proba_over}%</span>
+            <span class="mri-fair">Cote: ${ns.fair_odds_over.toFixed(2)}</span>
+            ${ns.vb_over && ns.vb_over.is_value_bet ? `<span class="mri-vb-pill vb">VB +${ns.vb_over.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+        <div class="market-row-item ${ns.vb_under && ns.vb_under.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">${escapeHtml(ns.label_under)}</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${ns.proba_under}%</span>
+            <span class="mri-fair">Cote: ${ns.fair_odds_under.toFixed(2)}</span>
+            ${ns.vb_under && ns.vb_under.is_value_bet ? `<span class="mri-vb-pill vb">VB +${ns.vb_under.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ------------------------------------------------------------------------
+  // Exact Scores Matrix
+  // ------------------------------------------------------------------------
+  const scoresMatrix = document.getElementById('scores-matrix');
+  if (scoresMatrix && mkts && mkts.exact_scores) {
+    let scoresHtml = '';
+    for (const [score, item] of Object.entries(mkts.exact_scores)) {
+      scoresHtml += `
+        <div class="score-card">
+          <div class="score-title">${escapeHtml(score)}</div>
+          <div class="score-proba">${item.proba}%</div>
+          <div class="score-fair">Cote : ${item.fair_odds.toFixed(2)}</div>
+        </div>
+      `;
+    }
+    scoresMatrix.innerHTML = scoresHtml;
   }
 
   // Detailed Stats Table

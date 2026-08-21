@@ -222,6 +222,9 @@ def search_players(circuit: str = "atp", q: str = Query("", min_length=1), limit
     ]
 
 
+from markov_tennis import price_total_games, price_game_handicap
+
+
 # Modèles de données Pydantic
 class PredictionRequest(BaseModel):
     circuit: str = "atp"
@@ -234,8 +237,78 @@ class PredictionRequest(BaseModel):
     best_of: int = 3
     indoor: int = 0
     date: Optional[str] = None
+    # Marché 1 : Vainqueur
     odds1: Optional[float] = None
     odds2: Optional[float] = None
+    # Marché 2 : Over / Under Jeux
+    total_line: Optional[float] = None
+    odds_over: Optional[float] = None
+    odds_under: Optional[float] = None
+    # Marché 3 : Handicap de Jeux
+    handicap_line: Optional[float] = None
+    odds_h1: Optional[float] = None
+    odds_h2: Optional[float] = None
+    # Marché 4 : Vainqueur Set 1
+    odds_set1_p1: Optional[float] = None
+    odds_set1_p2: Optional[float] = None
+    # Marché 5 : Nombre de Sets
+    odds_sets_over25: Optional[float] = None
+    odds_sets_under25: Optional[float] = None
+
+
+def evaluate_market_value(prob: float, odds: Optional[float], market_name: str, selection: str) -> Optional[Dict[str, Any]]:
+    """Évalue un Value Bet sur n'importe quel marché (Vainqueur, Over/Under, Handicap, Set, etc.)."""
+    if not odds or odds <= 1.0 or prob <= 0.0 or prob >= 1.0:
+        return None
+    fair_odds = round(1.0 / prob, 2)
+    ev = (prob * odds) - 1.0
+    implied_prob = 1.0 / odds
+    edge = prob - implied_prob
+    is_vb = (edge >= 0.025 and ev >= 0.025)
+
+    b = odds - 1.0
+    kelly_full = (prob * odds - 1.0) / b if b > 0 else 0.0
+    kelly_quarter = max(0.0, min(kelly_full * 0.25, 0.05))
+
+    return {
+        "market": market_name,
+        "selection": selection,
+        "prob": round(prob * 100, 1),
+        "fair_odds": fair_odds,
+        "offered_odds": odds,
+        "ev_pct": round(ev * 100, 1),
+        "edge_pct": round(edge * 100, 1),
+        "kelly_pct": round(kelly_quarter * 100, 1),
+        "is_value_bet": is_vb,
+        "badge": "VALUE_BET" if is_vb else ("LOW_EV" if (edge > 0 or ev > 0) else "NO_VALUE")
+    }
+
+
+@app.post("/api/update-data")
+def update_data():
+    """Lance la synchronisation des données de matchs récents et tournois en direct."""
+    import subprocess
+    try:
+        cmd = [sys.executable, str(BASE_DIR / "src" / "00_download_data.py")]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+
+        # Réinitialisation des caches pour prise en compte immédiate
+        CACHE.clear()
+        PLAYERS_CACHE.clear()
+
+        now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
+        return {
+            "success": True,
+            "message": "Données et statistiques actualisées avec succès !",
+            "timestamp": now_str,
+            "output": result.stdout[:200] if result.stdout else ""
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Erreur lors de la synchronisation : {str(e)}",
+            "timestamp": datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
+        }
 
 
 @app.post("/api/predict")
@@ -283,64 +356,68 @@ def predict_match(req: PredictionRequest):
     t_cpi_val = feat.get("tourney_cpi", 8.5)
     t_alt_val = feat.get("tourney_altitude", 0)
 
-    vb_data = {"has_odds": False}
-    if req.odds1 and req.odds2 and req.odds1 > 1.0 and req.odds2 > 1.0:
-        pm1, pm2 = remove_overround(req.odds1, req.odds2)
-        ev1 = p_p1 * req.odds1 - 1.0
-        ev2 = p_p2 * req.odds2 - 1.0
-        edge1 = p_p1 - pm1
-        edge2 = p_p2 - pm2
-        threshold = 0.03
+    # --------------------------------------------------------------------------
+    # MARCHÉS ALTERNATIFS & VALUE BETS
+    # --------------------------------------------------------------------------
+    detected_value_bets = []
 
-        is_vb1 = (edge1 >= threshold and ev1 >= threshold)
-        is_vb2 = (edge2 >= threshold and ev2 >= threshold)
+    # 1. Marché Vainqueur du Match
+    vb_p1 = evaluate_market_value(p_p1, req.odds1, "Vainqueur Match", p1)
+    vb_p2 = evaluate_market_value(p_p2, req.odds2, "Vainqueur Match", p2)
+    if vb_p1 and vb_p1["is_value_bet"]: detected_value_bets.append(vb_p1)
+    if vb_p2 and vb_p2["is_value_bet"]: detected_value_bets.append(vb_p2)
 
-        statut1 = "[VALUE BET]" if is_vb1 else ("[EV TROP FAIBLE]" if edge1 > 0 else "[PAS DE VALUE]")
-        statut2 = "[VALUE BET]" if is_vb2 else ("[EV TROP FAIBLE]" if edge2 > 0 else "[PAS DE VALUE]")
+    # 2. Marché Vainqueur Set 1
+    p_set1_p1 = float(m_r.get("set_proba_a", p_p1))
+    p_set1_p2 = float(m_r.get("set_proba_b", p_p2))
+    vb_set1_p1 = evaluate_market_value(p_set1_p1, req.odds_set1_p1, "Vainqueur Set 1", p1)
+    vb_set1_p2 = evaluate_market_value(p_set1_p2, req.odds_set1_p2, "Vainqueur Set 1", p2)
+    if vb_set1_p1 and vb_set1_p1["is_value_bet"]: detected_value_bets.append(vb_set1_p1)
+    if vb_set1_p2 and vb_set1_p2["is_value_bet"]: detected_value_bets.append(vb_set1_p2)
 
-        best_p = p1 if ev1 > ev2 else p2
-        best_o = req.odds1 if ev1 > ev2 else req.odds2
-        best_prob = p_p1 if ev1 > ev2 else p_p2
-        best_ev = max(ev1, ev2)
-        best_edge = max(edge1, edge2)
+    # 3. Marché Over / Under Jeux
+    exp_total_games = float(m_r.get("expected_total_games", 22.5))
+    default_total_line = round(exp_total_games) - 0.5 if round(exp_total_games) - 0.5 > 15 else 22.5
+    total_line = req.total_line if (req.total_line and req.total_line > 10) else default_total_line
+    p_over, p_under = price_total_games(exp_total_games, total_line)
 
-        b = best_o - 1.0
-        kelly_full = (best_prob * best_o - 1.0) / b if b > 0 else 0.0
-        kelly_quarter = max(0.0, min(kelly_full * 0.25, 0.05))
+    vb_over = evaluate_market_value(p_over, req.odds_over, f"Total Jeux ({total_line})", f"Over {total_line} Jeux")
+    vb_under = evaluate_market_value(p_under, req.odds_under, f"Total Jeux ({total_line})", f"Under {total_line} Jeux")
+    if vb_over and vb_over["is_value_bet"]: detected_value_bets.append(vb_over)
+    if vb_under and vb_under["is_value_bet"]: detected_value_bets.append(vb_under)
 
-        vb_data = {
-            "has_odds": True,
-            "is_value_bet": bool(is_vb1 or is_vb2),
-            "recommended_player": best_p if (is_vb1 or is_vb2) else None,
-            "offered_odds": best_o if (is_vb1 or is_vb2) else None,
-            "min_odds_required": round(1.0 / best_prob, 2),
-            "ev_pct": round(best_ev * 100, 1),
-            "edge_pct": round(best_edge * 100, 1),
-            "kelly_pct": round(kelly_quarter * 100, 1) if (is_vb1 or is_vb2) else 0.0,
-            "decision_badge": "VALUE_BET" if (is_vb1 or is_vb2) else ("LOW_EV" if (best_edge > 0 or best_ev > 0) else "NO_VALUE"),
-            "details": [
-                {
-                    "player": p1,
-                    "odds": req.odds1,
-                    "min_odds": round(1.0 / p_p1, 2) if p_p1 > 0 else 999.0,
-                    "proba": round(p_p1 * 100, 1),
-                    "market_proba": round(pm1 * 100, 1),
-                    "edge": round(edge1 * 100, 1),
-                    "ev": round(ev1 * 100, 1),
-                    "status": statut1,
-                },
-                {
-                    "player": p2,
-                    "odds": req.odds2,
-                    "min_odds": round(1.0 / p_p2, 2) if p_p2 > 0 else 999.0,
-                    "proba": round(p_p2 * 100, 1),
-                    "market_proba": round(pm2 * 100, 1),
-                    "edge": round(edge2 * 100, 1),
-                    "ev": round(ev2 * 100, 1),
-                    "status": statut2,
-                }
-            ]
-        }
+    # 4. Marché Handicap de Jeux
+    exp_game_diff = float(m_r.get("expected_game_diff", 0.0))
+    default_h_line = round(exp_game_diff) - 0.5
+    h_line = req.handicap_line if req.handicap_line is not None else default_h_line
+    p_h1, p_h2 = price_game_handicap(exp_game_diff, h_line)
+
+    h1_sign = f"{h_line:+.1f}"
+    h2_sign = f"{-h_line:+.1f}"
+    vb_h1 = evaluate_market_value(p_h1, req.odds_h1, f"Handicap Jeux ({h1_sign})", f"{p1} ({h1_sign})")
+    vb_h2 = evaluate_market_value(p_h2, req.odds_h2, f"Handicap Jeux ({h2_sign})", f"{p2} ({h2_sign})")
+    if vb_h1 and vb_h1["is_value_bet"]: detected_value_bets.append(vb_h1)
+    if vb_h2 and vb_h2["is_value_bet"]: detected_value_bets.append(vb_h2)
+
+    # 5. Marché Nombre de Sets (Over / Under 2.5 sets en Best of 3)
+    set_scores_dict = m_r.get("set_scores", {})
+    if req.best_of == 3:
+        p_sets_3 = float(set_scores_dict.get("2-1", 0.25) + set_scores_dict.get("1-2", 0.25))
+        p_sets_2 = float(set_scores_dict.get("2-0", 0.25) + set_scores_dict.get("0-2", 0.25))
+        vb_sets_over = evaluate_market_value(p_sets_3, req.odds_sets_over25, "Nombre de Sets", "Plus de 2.5 Sets (3 Sets)")
+        vb_sets_under = evaluate_market_value(p_sets_2, req.odds_sets_under25, "Nombre de Sets", "Moins de 2.5 Sets (2-0 sec)")
+    else:
+        # En Grand Chelem (Best of 5) : 3 sets vs 4-5 sets
+        p_sets_2 = float(set_scores_dict.get("3-0", 0.2) + set_scores_dict.get("0-3", 0.2))
+        p_sets_3 = 1.0 - p_sets_2
+        vb_sets_over = evaluate_market_value(p_sets_3, req.odds_sets_over25, "Nombre de Sets", "Plus de 3.5 Sets")
+        vb_sets_under = evaluate_market_value(p_sets_2, req.odds_sets_under25, "Nombre de Sets", "3 Sets (3-0 sec)")
+
+    if vb_sets_over and vb_sets_over["is_value_bet"]: detected_value_bets.append(vb_sets_over)
+    if vb_sets_under and vb_sets_under["is_value_bet"]: detected_value_bets.append(vb_sets_under)
+
+    # Trier les value bets par espérance de gain (EV) décroissante
+    detected_value_bets.sort(key=lambda x: x["ev_pct"], reverse=True)
 
     h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
 
@@ -352,6 +429,47 @@ def predict_match(req: PredictionRequest):
         "proba_p2": round(p_p2, 4),
         "fair_odds_p1": round(1.0 / p_p1, 2) if p_p1 > 0 else 999.0,
         "fair_odds_p2": round(1.0 / p_p2, 2) if p_p2 > 0 else 999.0,
+        "markets": {
+            "winner": {
+                "p1": p1, "proba_p1": round(p_p1 * 100, 1), "fair_odds_p1": round(1.0 / p_p1, 2),
+                "p2": p2, "proba_p2": round(p_p2 * 100, 1), "fair_odds_p2": round(1.0 / p_p2, 2),
+                "vb_p1": vb_p1, "vb_p2": vb_p2
+            },
+            "set1_winner": {
+                "proba_p1": round(p_set1_p1 * 100, 1), "fair_odds_p1": round(1.0 / p_set1_p1, 2),
+                "proba_p2": round(p_set1_p2 * 100, 1), "fair_odds_p2": round(1.0 / p_set1_p2, 2),
+                "vb_p1": vb_set1_p1, "vb_p2": vb_set1_p2
+            },
+            "total_games": {
+                "expected": round(exp_total_games, 1),
+                "line": total_line,
+                "proba_over": round(p_over * 100, 1), "fair_odds_over": round(1.0 / p_over, 2),
+                "proba_under": round(p_under * 100, 1), "fair_odds_under": round(1.0 / p_under, 2),
+                "vb_over": vb_over, "vb_under": vb_under
+            },
+            "handicap_games": {
+                "expected_diff": round(exp_game_diff, 1),
+                "line": h_line,
+                "label_h1": f"{p1} ({h1_sign})", "proba_h1": round(p_h1 * 100, 1), "fair_odds_h1": round(1.0 / p_h1, 2),
+                "label_h2": f"{p2} ({h2_sign})", "proba_h2": round(p_h2 * 100, 1), "fair_odds_h2": round(1.0 / p_h2, 2),
+                "vb_h1": vb_h1, "vb_h2": vb_h2
+            },
+            "number_of_sets": {
+                "label_over": "3 Sets" if req.best_of == 3 else "4 ou 5 Sets",
+                "proba_over": round(p_sets_3 * 100, 1), "fair_odds_over": round(1.0 / p_sets_3, 2),
+                "label_under": "2 Sets (Sec)" if req.best_of == 3 else "3 Sets (Sec)",
+                "proba_under": round(p_sets_2 * 100, 1), "fair_odds_under": round(1.0 / p_sets_2, 2),
+                "vb_over": vb_sets_over, "vb_under": vb_sets_under
+            },
+            "exact_scores": {
+                score: {
+                    "proba": round(prob * 100, 1),
+                    "fair_odds": round(1.0 / prob, 2) if prob > 0 else 999.0
+                }
+                for score, prob in set_scores_dict.items()
+            }
+        },
+        "all_value_bets": detected_value_bets,
         "elo": {
             "global_p1": round(state["elo"].get(p1, 1500)),
             "global_p2": round(state["elo"].get(p2, 1500)),
@@ -374,7 +492,8 @@ def predict_match(req: PredictionRequest):
             "serve_point_p2": round(feat.get("_pb_m", 0.64) * 100, 1),
             "hold_proba_p1": round(m_r.get("hold_proba_a", 0.80) * 100, 1),
             "hold_proba_p2": round(m_r.get("hold_proba_b", 0.80) * 100, 1),
-            "expected_total_games": round(m_r.get("expected_total_games", 22.5), 1),
+            "expected_total_games": round(exp_total_games, 1),
+            "expected_game_diff": round(exp_game_diff, 1),
         },
         "context": {
             "tournament": req.tournament,
@@ -385,8 +504,7 @@ def predict_match(req: PredictionRequest):
             "indoor": bool(req.indoor),
             "cpi": round(t_cpi_val, 1) if t_cpi_val else None,
             "altitude": int(t_alt_val) if t_alt_val else 0,
-        },
-        "value_bet": vb_data,
+        }
     }
 
 
