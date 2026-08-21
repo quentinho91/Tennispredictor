@@ -382,6 +382,75 @@ def predict_match(req: PredictionRequest):
     t_alt_val = feat.get("tourney_altitude", 0)
 
     # --------------------------------------------------------------------------
+    # INDICATEUR DE CONFIANCE
+    # Basé sur 4 signaux indépendants :
+    #  1. Ecart Elo (écart élevé = prédiction plus fiable)
+    #  2. Volume H2H (matchs directs connus = contexte riche)
+    #  3. Qualité des données joueur (matchs récents disponibles)
+    #  4. Accord XGBoost vs Markov (les deux modèles convergent-ils ?)
+    # --------------------------------------------------------------------------
+    def compute_confidence(p_xgb, feat, state, p1, p2):
+        scores = {}
+
+        # --- 1. Ecart Elo ---
+        elo1 = state["elo"].get(p1, 1500)
+        elo2 = state["elo"].get(p2, 1500)
+        elo_gap = abs(elo1 - elo2)
+        # 0-50 pts = très incertain, 50-150 = moyen, 150-300 = bon, 300+ = fort
+        if elo_gap >= 300:
+            scores["elo"] = 1.0
+        elif elo_gap >= 150:
+            scores["elo"] = 0.7 + (elo_gap - 150) / 500
+        elif elo_gap >= 50:
+            scores["elo"] = 0.3 + (elo_gap - 50) / 333
+        else:
+            scores["elo"] = elo_gap / 166.7
+
+        # --- 2. Volume H2H ---
+        h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
+        h_total = h12[0] + h12[1]
+        scores["h2h"] = min(h_total / 8.0, 1.0)  # 8+ matchs H2H = confiance max
+
+        # --- 3. Volume de données joueur (matchs récents) ---
+        rr = state.get("recent_results", {})
+        rr1_len = len(rr.get(p1, []))
+        rr2_len = len(rr.get(p2, []))
+        # Pénalise si l'un des joueurs a très peu de données
+        p1_known = min(rr1_len / 20.0, 1.0)
+        p2_known = min(rr2_len / 20.0, 1.0)
+        scores["data_quality"] = (p1_known + p2_known) / 2.0
+
+        # --- 4. Accord XGBoost ↔ Markov ---
+        p_markov = float(m_r.get("proba_a", 0.5))
+        agreement = 1.0 - min(abs(p_xgb - p_markov) / 0.20, 1.0)  # ±20% = max désaccord
+        scores["model_agreement"] = agreement
+
+        # --- Score pondéré global ---
+        weights = {"elo": 0.35, "h2h": 0.10, "data_quality": 0.30, "model_agreement": 0.25}
+        global_score = sum(weights[k] * v for k, v in scores.items())
+        global_score = float(np.clip(global_score, 0.0, 1.0))
+
+        # --- Label ---
+        if global_score >= 0.72:
+            label = "Haute confiance"
+            level = "high"
+        elif global_score >= 0.45:
+            label = "Confiance modérée"
+            level = "medium"
+        else:
+            label = "Incertitude élevée"
+            level = "low"
+
+        return {
+            "score": round(global_score * 100, 1),
+            "label": label,
+            "level": level,
+            "details": {k: round(v * 100, 1) for k, v in scores.items()}
+        }
+
+    confidence = compute_confidence(p_p1, feat, state, p1, p2)
+
+    # --------------------------------------------------------------------------
     # MARCHÉS ALTERNATIFS & VALUE BETS SÉLECTIFS (FILTRAGE ANTI-FAUX POSITIFS)
     # --------------------------------------------------------------------------
     detected_value_bets = []
@@ -568,7 +637,8 @@ def predict_match(req: PredictionRequest):
             "indoor": bool(req.indoor),
             "cpi": round(t_cpi_val, 1) if t_cpi_val else None,
             "altitude": int(t_alt_val) if t_alt_val else 0,
-        }
+        },
+        "confidence": confidence,
     }
 
 

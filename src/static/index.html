@@ -265,6 +265,12 @@
           </div>
         </div>
 
+        <!-- Confidence Badge -->
+        <div id="confidence-badge-wrap" style="text-align:center; margin: 10px 0 4px;">
+          <span id="confidence-badge" class="confidence-badge confidence-medium">⏳ Confiance modérée</span>
+          <div id="confidence-details" class="confidence-details"></div>
+        </div>
+
         <!-- Dual Progress Bar -->
         <div class="dual-bar-container">
           <div id="bar-p1" class="dual-bar-p1" style="width: 50%;"></div>
@@ -315,9 +321,20 @@
       </div>
     </section>
 
+    <!-- Prediction History Section -->
+    <section id="history-section" class="card history-card" style="display:none;">
+      <div class="card-title">
+        <span>📋</span> Historique des Prédictions
+        <button id="btn-clear-history" class="btn-clear-hist" title="Effacer l'historique">🗑️ Effacer</button>
+      </div>
+      <p class="history-hint">Cliquez sur ✅/❌ après chaque match pour suivre votre ROI</p>
+      <div id="history-roi-bar" class="history-roi-bar" style="display:none;"></div>
+      <div id="history-list" class="history-list"></div>
+    </section>
+
     <!-- Footer -->
     <footer class="app-footer">
-      Tennis Predictor AI • XGBoost Calibré & Chaînes de Markov • Optimisé 2026
+      Tennis Predictor AI • XGBoost Calibré &amp; Chaînes de Markov • Optimisé 2026
     </footer>
   </div>
 

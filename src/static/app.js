@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDynamicLabels();
   setupUpdateData();
   setupFormSubmit();
+  setupHistory();
 });
 
 // Dynamic Labels for Handicap and Set 1
@@ -535,6 +536,7 @@ function setupFormSubmit() {
 
       const data = await res.json();
       renderResults(data);
+      savePredictionToHistory(data, payload);
       resultsSection.scrollIntoView({ behavior: 'smooth' });
     } catch (err) {
       alert(`Erreur: ${err.message}`);
@@ -579,6 +581,27 @@ function renderResults(data) {
 
   barP1.style.width = `${p1Pct}%`;
   barP2.style.width = `${p2Pct}%`;
+
+  // ------------------------------------------------------------------------
+  // Confidence Badge & Indicators
+  // ------------------------------------------------------------------------
+  const conf = data.confidence;
+  const confBadge = document.getElementById('confidence-badge');
+  const confDetails = document.getElementById('confidence-details');
+  if (conf && confBadge) {
+    confBadge.className = `confidence-badge confidence-${conf.level}`;
+    const icon = conf.level === 'high' ? '🛡️' : (conf.level === 'medium' ? '⚖️' : '⚠️');
+    confBadge.textContent = `${icon} ${conf.label} (${conf.score}%)`;
+
+    if (confDetails && conf.details) {
+      confDetails.innerHTML = `
+        <span class="confidence-detail-item" title="Écart Elo">⚔️ Elo: ${conf.details.elo}%</span>
+        <span class="confidence-detail-item" title="Historique H2H">🤝 H2H: ${conf.details.h2h}%</span>
+        <span class="confidence-detail-item" title="Données joueurs disponibles">📊 Données: ${conf.details.data_quality}%</span>
+        <span class="confidence-detail-item" title="Accord XGBoost / Markov">🎯 Accord: ${conf.details.model_agreement}%</span>
+      `;
+    }
+  }
 
   const ctx = data.context;
   const tName = ctx.tournament && ctx.tournament !== 'Tournament' && ctx.tournament !== 'Tournoi' ? ctx.tournament : 'Match';
@@ -822,3 +845,216 @@ function renderResults(data) {
     <tr><td>Total Jeux Prévu</td><td colspan="2" style="text-align:center; color:#f59e0b;">${data.markov.expected_total_games} jeux</td></tr>
   `;
 }
+
+// ==========================================================================
+// PREDICTION HISTORY & ROI TRACKING (LOCALSTORAGE)
+// ==========================================================================
+const HISTORY_STORAGE_KEY = 'tennis_pred_history_v1';
+const MAX_HISTORY_ITEMS = 10;
+
+function getHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveHistory(list) {
+  try {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error('Erreur localStorage', e);
+  }
+}
+
+function savePredictionToHistory(data, payload) {
+  const history = getHistory();
+
+  // Déterminer le pick principal (Value Bet prioritaire, sinon Favori du match)
+  let mainPick = '';
+  let pickOdds = null;
+  let pickType = 'fav';
+
+  const vbs = data.all_value_bets || [];
+  if (vbs.length > 0) {
+    const topVb = vbs[0];
+    mainPick = `🎯 VB: ${topVb.selection}`;
+    pickOdds = topVb.offered_odds;
+    pickType = 'vb';
+  } else {
+    const isP1Fav = data.proba_p1 >= data.proba_p2;
+    const favName = isP1Fav ? data.p1 : data.p2;
+    const favProba = isP1Fav ? (data.proba_p1 * 100).toFixed(1) : (data.proba_p2 * 100).toFixed(1);
+    mainPick = `⭐ Vainqueur: ${favName} (${favProba}%)`;
+    pickOdds = isP1Fav ? payload.odds1 : payload.odds2;
+    if (!pickOdds) {
+      pickOdds = isP1Fav ? data.fair_odds_p1 : data.fair_odds_p2;
+    }
+  }
+
+  const now = new Date();
+  const timeStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  const item = {
+    id: Date.now().toString(),
+    timestamp: timeStr,
+    circuit: data.circuit,
+    p1: data.p1,
+    p2: data.p2,
+    proba_p1: (data.proba_p1 * 100).toFixed(1),
+    proba_p2: (data.proba_p2 * 100).toFixed(1),
+    tournament: data.context.tournament && data.context.tournament !== 'Tournament' ? data.context.tournament : 'Tournoi',
+    surface: data.context.surface,
+    mainPick: mainPick,
+    pickOdds: pickOdds ? parseFloat(pickOdds) : null,
+    pickType: pickType,
+    hasVb: vbs.length > 0,
+    vbCount: vbs.length,
+    result: 'pending', // 'pending' | 'won' | 'lost'
+  };
+
+  // Éviter les doublons consécutifs identiques
+  if (history.length > 0 && history[0].p1 === item.p1 && history[0].p2 === item.p2 && history[0].tournament === item.tournament) {
+    history[0] = item;
+  } else {
+    history.unshift(item);
+  }
+
+  if (history.length > MAX_HISTORY_ITEMS) {
+    history.length = MAX_HISTORY_ITEMS;
+  }
+
+  saveHistory(history);
+  renderHistory();
+}
+
+function updateHistoryResult(id, newResult) {
+  const history = getHistory();
+  const item = history.find(h => h.id === id);
+  if (item) {
+    item.result = item.result === newResult ? 'pending' : newResult;
+    saveHistory(history);
+    renderHistory();
+  }
+}
+window.updateHistoryResult = updateHistoryResult;
+
+function clearHistory() {
+  if (confirm('Voulez-vous vraiment effacer les 10 dernières prédictions ?')) {
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
+    renderHistory();
+  }
+}
+
+function renderHistory() {
+  const historyCard = document.getElementById('history-section');
+  const historyList = document.getElementById('history-list');
+  const roiBar = document.getElementById('history-roi-bar');
+  if (!historyCard || !historyList) return;
+
+  const history = getHistory();
+  if (history.length === 0) {
+    historyCard.style.display = 'none';
+    return;
+  }
+
+  historyCard.style.display = 'block';
+
+  // Calcul du ROI global (Mise fixe = 1 unité par prédiction résolue)
+  let totalResolved = 0;
+  let totalWon = 0;
+  let totalLost = 0;
+  let netProfitUnits = 0.0;
+
+  history.forEach(item => {
+    if (item.result === 'won') {
+      totalResolved++;
+      totalWon++;
+      const odds = item.pickOdds || 1.85;
+      netProfitUnits += (odds - 1.0);
+    } else if (item.result === 'lost') {
+      totalResolved++;
+      totalLost++;
+      netProfitUnits -= 1.0;
+    }
+  });
+
+  if (totalResolved > 0 && roiBar) {
+    const winrate = ((totalWon / totalResolved) * 100).toFixed(1);
+    const roiPct = ((netProfitUnits / totalResolved) * 100).toFixed(1);
+    const profitClass = netProfitUnits > 0 ? 'green' : (netProfitUnits < 0 ? 'red' : 'neutral');
+    const profitSign = netProfitUnits > 0 ? '+' : '';
+
+    roiBar.style.display = 'flex';
+    roiBar.innerHTML = `
+      <div class="roi-stat">
+        <span class="roi-stat-label">Paris Résolus</span>
+        <span class="roi-stat-value neutral">${totalResolved}/${history.length}</span>
+      </div>
+      <div class="roi-stat">
+        <span class="roi-stat-label">Taux Réussite</span>
+        <span class="roi-stat-value ${parseFloat(winrate) >= 55 ? 'green' : 'neutral'}">${winrate}% (${totalWon}V - ${totalLost}D)</span>
+      </div>
+      <div class="roi-stat">
+        <span class="roi-stat-label">Bénéfice Net (1u/pari)</span>
+        <span class="roi-stat-value ${profitClass}">${profitSign}${netProfitUnits.toFixed(2)} u</span>
+      </div>
+      <div class="roi-stat">
+        <span class="roi-stat-label">ROI Réel</span>
+        <span class="roi-stat-value ${profitClass}">${profitSign}${roiPct}%</span>
+      </div>
+    `;
+  } else if (roiBar) {
+    roiBar.style.display = 'none';
+  }
+
+  let html = '';
+  history.forEach(item => {
+    const isWon = item.result === 'won';
+    const isLost = item.result === 'lost';
+    const statusClass = isWon ? 'hist-won' : (isLost ? 'hist-lost' : '');
+
+    let resultBadge = '';
+    if (isWon) {
+      const odds = item.pickOdds || 1.85;
+      const gain = (odds - 1.0).toFixed(2);
+      resultBadge = `<span class="hist-roi-pill pos">+${gain} u (Gagné)</span>`;
+    } else if (isLost) {
+      resultBadge = `<span class="hist-roi-pill neg">-1.00 u (Perdu)</span>`;
+    } else {
+      resultBadge = `<span class="hist-result-label pending">En attente</span>`;
+    }
+
+    const oddsDisplay = item.pickOdds ? ` @ ${item.pickOdds.toFixed(2)}` : '';
+
+    html += `
+      <div class="history-item ${statusClass}">
+        <div class="hist-main">
+          <div class="hist-matchup">${escapeHtml(item.p1)} <span style="font-weight:400; color:var(--text-dim);">(${item.proba_p1}%)</span> vs ${escapeHtml(item.p2)} <span style="font-weight:400; color:var(--text-dim);">(${item.proba_p2}%)</span></div>
+          <div class="hist-meta">🏆 ${escapeHtml(item.tournament)} • ${escapeHtml(item.surface)} • ${item.timestamp}</div>
+          <div class="hist-pick">${escapeHtml(item.mainPick)}<b style="color:#34d399;">${oddsDisplay}</b></div>
+        </div>
+        <div class="hist-actions">
+          ${resultBadge}
+          <div class="hist-outcome-btns">
+            <button class="hist-btn win-btn ${isWon ? 'active' : ''}" title="Marquer Gagné" onclick="updateHistoryResult('${item.id}', 'won')">✅</button>
+            <button class="hist-btn loss-btn ${isLost ? 'active' : ''}" title="Marquer Perdu" onclick="updateHistoryResult('${item.id}', 'lost')">❌</button>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  historyList.innerHTML = html;
+}
+
+function setupHistory() {
+  const clearBtn = document.getElementById('btn-clear-history');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearHistory);
+  }
+  renderHistory();
+}
+
