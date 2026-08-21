@@ -25,6 +25,8 @@ data/processed/*.db
 !data/processed/best_params_atp.json
 !data/processed/best_params_wta.json
 !data/processed/tournaments.json
+!data/processed/players_atp.json
+!data/processed/players_wta.json
 
 # OS
 .DS_Store

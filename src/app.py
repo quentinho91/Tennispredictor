@@ -37,14 +37,21 @@ ROUNDS = pm.ROUNDS
 
 app = FastAPI(title="Tennis Match Predictor AI", version="2.0.0")
 
-# Cache des ressources en mémoire (chargement à la demande pour rester sous la limite de 512 Mo de RAM)
+# Cache en mémoire : conserve uniquement LE circuit actif pour rester < 350 Mo de RAM
 CACHE: Dict[str, Any] = {}
+PLAYERS_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 
 
 def get_cached_resources(circuit: str):
     c = circuit.lower()
     if c not in CACHE:
         import gc
+        # Libérer l'autre circuit s'il était chargé pour éviter tout pic de RAM
+        other_c = "wta" if c == "atp" else "atp"
+        if other_c in CACHE:
+            del CACHE[other_c]
+            gc.collect()
+
         state, model, feature_cols = load_resources(c)
         CACHE[c] = {
             "state": state,
@@ -56,45 +63,51 @@ def get_cached_resources(circuit: str):
     return CACHE[c]
 
 
-# Démarrage rapide et léger
+# Démarrage rapide et léger (aucun modèle lourd préchargé)
 @app.on_event("startup")
 def startup_event():
     print("🎾 Serveur Tennis Match Predictor prêt !")
-    print("  • Chargement des modèles à la demande pour une empreinte RAM minimale.")
 
 
-# Modèles de données Pydantic
-class PredictionRequest(BaseModel):
-    circuit: str = "atp"
-    p1: str
-    p2: str
-    surface: str = "Hard"
-    tournament: str = "Tournament"
-    level: str = "M"
-    round: str = "QF"
-    best_of: int = 3
-    indoor: int = 0
-    date: Optional[str] = None
-    odds1: Optional[float] = None
-    odds2: Optional[float] = None
+def get_circuit_players(circuit: str) -> List[Dict[str, Any]]:
+    c = circuit.lower()
+    if c not in PLAYERS_CACHE:
+        p_file = BASE_DIR / "data" / "processed" / f"players_{c}.json"
+        if p_file.exists():
+            import json
+            with open(p_file, "r", encoding="utf-8") as f:
+                PLAYERS_CACHE[c] = json.load(f)
+        else:
+            # Fallback
+            res = get_cached_resources(c)
+            state = res["state"]
+            PLAYERS_CACHE[c] = [
+                {
+                    "name": p,
+                    "elo": round(state["elo"].get(p, 1500)),
+                    "rank": int(state.get("last_rank", {}).get(p)) if state.get("last_rank", {}).get(p) else None,
+                    "hand": state.get("last_hand", {}).get(p, "R"),
+                    "days_ago": 0
+                }
+                for p in res["players"]
+            ]
+    return PLAYERS_CACHE[c]
 
 
 @app.get("/api/status")
 def get_status():
-    res_atp = get_cached_resources("atp")
-    res_wta = get_cached_resources("wta")
+    """Endpoint de santé rapide et ultra-léger (ne charge pas les modèles ML)."""
+    players_atp = get_circuit_players("atp")
+    players_wta = get_circuit_players("wta")
     return {
+        "status": "online",
         "atp": {
-            "players_count": len(res_atp["players"]),
-            "features_count": len(res_atp["feature_cols"]),
-            "last_day": res_atp["state"].get("last_day", 0),
-            "date_min": str(res_atp["state"].get("date_min", "2000-01-01")),
+            "players_count": len(players_atp),
+            "circuit": "ATP Tour"
         },
         "wta": {
-            "players_count": len(res_wta["players"]),
-            "features_count": len(res_wta["feature_cols"]),
-            "last_day": res_wta["state"].get("last_day", 0),
-            "date_min": str(res_wta["state"].get("date_min", "2000-01-01")),
+            "players_count": len(players_wta),
+            "circuit": "WTA Tour"
         }
     }
 
@@ -145,7 +158,6 @@ def search_tournaments(q: str = Query("", min_length=0), limit: int = 12):
             score = 30
 
         if matched:
-            # Bonus de visibilité pour les tournois majeurs
             lvl = t.get("level", "A")
             level_boost = 35 if lvl == "G" else (20 if lvl == "M" else (10 if lvl == "F" else 0))
             scored.append((t, score + level_boost))
@@ -156,22 +168,18 @@ def search_tournaments(q: str = Query("", min_length=0), limit: int = 12):
 
 @app.get("/api/players")
 def search_players(circuit: str = "atp", q: str = Query("", min_length=1), limit: int = 10):
-    """Recherche intelligente de joueurs avec tri par pertinence, classement et Elo."""
-    res = get_cached_resources(circuit)
-    players = res["players"]
-    state = res["state"]
+    """Recherche intelligente et ultra-rapide de joueurs avec tri par pertinence, classement et Elo."""
+    player_list = get_circuit_players(circuit)
     query = q.lower().strip()
     if not query:
         return []
 
     q_tokens = query.split()
-    last_ranks = state.get("last_rank", {})
-    last_play_dates = state.get("last_play_date", {})
-    last_d = state.get("last_day", 0)
-
     scored_players = []
-    for p in players:
-        p_lower = p.lower()
+
+    for p in player_list:
+        p_name = p["name"]
+        p_lower = p_name.lower()
         tokens = p_lower.split()
 
         matched = False
@@ -193,29 +201,41 @@ def search_players(circuit: str = "atp", q: str = Query("", min_length=1), limit
             prefix_score = 30
 
         if matched:
-            elo = state["elo"].get(p, 1500)
-            rank = last_ranks.get(p)
-            rank_score = (1000 - rank) if (rank is not None and not np.isnan(rank) and rank > 0) else 0
-
-            # Bonus pour joueurs en activité récente
-            days_ago = last_d - last_play_dates.get(p, 0)
+            elo = p["elo"]
+            rank = p.get("rank")
+            rank_score = (1000 - rank) if (rank is not None and rank > 0) else 0
+            days_ago = p.get("days_ago", 9999)
             recency_score = 50 if days_ago <= 1095 else (20 if days_ago <= 2555 else 0)
 
             total_score = prefix_score * 10 + rank_score + (elo / 10) + recency_score
-            scored_players.append((p, total_score, elo, rank))
+            scored_players.append((p, total_score))
 
     scored_players.sort(key=lambda x: x[1], reverse=True)
+    return [
+        {
+            "name": p["name"],
+            "elo": p["elo"],
+            "rank": p.get("rank"),
+            "hand": p.get("hand", "R")
+        }
+        for p, score in scored_players[:limit]
+    ]
 
-    output = []
-    for name, score, elo_val, rank_val in scored_players[:limit]:
-        hand_val = state.get("last_hand", {}).get(name, "R")
-        output.append({
-            "name": name,
-            "elo": round(elo_val),
-            "rank": int(rank_val) if (rank_val is not None and not np.isnan(rank_val)) else None,
-            "hand": hand_val,
-        })
-    return output
+
+# Modèles de données Pydantic
+class PredictionRequest(BaseModel):
+    circuit: str = "atp"
+    p1: str
+    p2: str
+    surface: str = "Hard"
+    tournament: str = "Tournament"
+    level: str = "M"
+    round: str = "QF"
+    best_of: int = 3
+    indoor: int = 0
+    date: Optional[str] = None
+    odds1: Optional[float] = None
+    odds2: Optional[float] = None
 
 
 @app.post("/api/predict")
