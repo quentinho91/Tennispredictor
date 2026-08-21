@@ -671,7 +671,86 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     # Point prob estimation & Markov match simulation
     pa_m, pb_m = estimate_point_probabilities(ses1, res2, ses2, res1, surface=surf, circuit=state.get("circuit", "atp"))
     bo_i = int(best_of) if best_of in (3, 5) else 3
-    m_res = p_match(pa_m, pb_m, best_of=bo_i)
+
+    # -----------------------------------------------------------------------
+    # FRESHNESS BOOST : Ajustement de forme récente sur les probas Markov
+    # -----------------------------------------------------------------------
+    # Concept : Les Elo et stats sont figés à l'entraînement. Si un joueur
+    # est en grande forme ou revient de blessure, on ajuste pa_m / pb_m
+    # en se basant sur ses 5 derniers matchs (résultats + dominance de jeux).
+    #
+    # Méthode :
+    # 1. Form Score = moyenne pondérée des résultats W/L sur les 5 derniers matchs
+    #    (poids décroissants : match le + récent = poids 5, le + vieux = poids 1)
+    # 2. Game Dominance EMA = ratio de jeux gagnés sur les 5 derniers matchs
+    # 3. Freshness Delta = combinaison des deux, normalisée à ±MAX_BOOST
+    # 4. Appliqué sur pa_m et pb_m : pa_boosted = sigmoid(logit(pa_m) + delta)
+    # Borne max : ±0.025 (soit ≈ ±2.5% de point win prob, ≈ ±4-5% de proba match)
+
+    def _form_delta(recent_results_list, gd_hist, last_surf, surf, n=5, max_boost=0.022):
+        """Calcule un delta de forme à appliquer sur la proba de point de service."""
+        if not recent_results_list:
+            return 0.0
+
+        # -- Résultats W/L pondérés (5 derniers matchs, poids décroissants) --
+        results = recent_results_list[-n:]
+        n_avail = len(results)
+        weights = list(range(1, n_avail + 1))  # [1, 2, 3, 4, 5]
+        total_w = sum(weights)
+        wr_score = sum(w * (1.0 if r[1] else 0.0) for w, r in zip(weights, results)) / total_w
+        # wr_score ∈ [0, 1] ; neutre = 0.5
+        form_raw = (wr_score - 0.5) * 2.0  # ∈ [-1, 1]
+
+        # -- Dominance de jeux EMA (5 derniers matchs) --
+        gd = gd_hist[-n:] if gd_hist else []
+        if gd:
+            gd_weights = list(range(1, len(gd) + 1))
+            gd_total_w = sum(gd_weights)
+            gd_score = sum(w * v for w, v in zip(gd_weights, gd)) / gd_total_w
+            # gd_score ∈ [0, 1] ; neutre = ~0.55 (les gagnants font naturellement +55%)
+            gd_raw = (gd_score - 0.55) * 2.0  # ∈ [-1, 1] centré sur le neutre réel
+        else:
+            gd_raw = 0.0
+
+        # -- Bonus sur-surface : si le joueur est en forme ET joue sa surface préférée --
+        surf_bonus = 0.0
+        if last_surf and last_surf == surf:
+            surf_bonus = 0.15 * form_raw  # amplification de 15% si continuité de surface
+
+        # -- Combinaison pondérée --
+        combined = 0.55 * form_raw + 0.35 * gd_raw + 0.10 * surf_bonus
+
+        # -- Borne symétrique --
+        return float(np.clip(combined * max_boost, -max_boost, max_boost))
+
+    gd_hist_p1 = state.get("game_dominance_hist", {}).get(p1, [])
+    gd_hist_p2 = state.get("game_dominance_hist", {}).get(p2, [])
+    last_surf_p1 = state.get("last_surface", {}).get(p1)
+    last_surf_p2 = state.get("last_surface", {}).get(p2)
+
+    delta_p1 = _form_delta(rr1, gd_hist_p1, last_surf_p1, surf)
+    delta_p2 = _form_delta(rr2, gd_hist_p2, last_surf_p2, surf)
+
+    # Application via logit (préserve la cohérence probabiliste)
+    def _apply_delta(p, delta):
+        p = float(np.clip(p, 1e-4, 1 - 1e-4))
+        logit = np.log(p / (1.0 - p))
+        # Multiplicateur calibré pour produire ≈ ±2-3% de proba match max
+        return float(np.clip(1.0 / (1.0 + np.exp(-(logit + delta * 2.2))), 1e-4, 1 - 1e-4))
+
+    pa_boosted = _apply_delta(pa_m, delta_p1)
+    pb_boosted = _apply_delta(pb_m, delta_p2)
+
+    # Si les deux joueurs ont la même forme, les deltas s'annulent → neutre
+    m_res = p_match(pa_boosted, pb_boosted, best_of=bo_i)
+
+    # Sauvegarde des deltas pour affichage
+    feat["_form_delta_p1"]  = round(delta_p1 * 100, 2)
+    feat["_form_delta_p2"]  = round(delta_p2 * 100, 2)
+    feat["_pa_m_raw"]       = pa_m
+    feat["_pb_m_raw"]       = pb_m
+    feat["_pa_m_boosted"]   = pa_boosted
+    feat["_pb_m_boosted"]   = pb_boosted
 
     feat["markov_p_win"]          = m_res["proba_a"]
     feat["markov_hold_diff"]      = m_res["hold_proba_a"] - m_res["hold_proba_b"]
@@ -679,8 +758,8 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
 
     # Markov analytics pour l'affichage
     feat["_markov_res"]           = m_res
-    feat["_pa_m"]                 = pa_m
-    feat["_pb_m"]                 = pb_m
+    feat["_pa_m"]                 = pa_boosted
+    feat["_pb_m"]                 = pb_boosted
     feat["_p1_serve_elo_surf"]    = ses1
     feat["_p2_serve_elo_surf"]    = ses2
     feat["_p1_return_elo_surf"]   = res1
@@ -694,6 +773,7 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["best_of"]       = best_of
 
     return feat
+
 
 
 def build_row(feat, feature_cols):

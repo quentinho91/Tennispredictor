@@ -794,6 +794,14 @@ function renderResults(data) {
 
   // Detailed Stats Table
   const statsBody = document.getElementById('stats-table-body');
+
+  // Form delta indicators
+  const fd1 = data.markov.form_delta_p1 || 0;
+  const fd2 = data.markov.form_delta_p2 || 0;
+  const formIcon = (d) => d > 0.4 ? '🔥' : (d < -0.4 ? '🧊' : '➖');
+  const formColor = (d) => d > 0.4 ? '#34d399' : (d < -0.4 ? '#60a5fa' : 'var(--text-muted)');
+  const formStr = (d) => (d > 0 ? '+' : '') + d.toFixed(2) + '%';
+
   statsBody.innerHTML = `
     <tr><td>Elo Global (avec Decay)</td><td>${data.elo.global_p1}</td><td>${data.elo.global_p2}</td></tr>
     <tr><td>Elo ${ctx.surface}</td><td>${data.elo.surface_p1}</td><td>${data.elo.surface_p2}</td></tr>
@@ -801,7 +809,16 @@ function renderResults(data) {
     <tr><td>Return Elo</td><td>${data.elo.return_p1}</td><td>${data.elo.return_p2}</td></tr>
     <tr><td>H2H Historique</td><td>${data.h2h.wins_p1}</td><td>${data.h2h.wins_p2}</td></tr>
     <tr><td>P(Hold Service - Markov)</td><td>${data.markov.hold_proba_p1}%</td><td>${data.markov.hold_proba_p2}%</td></tr>
-    <tr><td>P(Point Service - Markov)</td><td>${data.markov.serve_point_p1}%</td><td>${data.markov.serve_point_p2}%</td></tr>
+    <tr>
+      <td>P(Point Service) <span style="font-size:10px; color:var(--text-dim);">brut → ajusté</span></td>
+      <td>${data.markov.serve_point_raw_p1}% → <b>${data.markov.serve_point_p1}%</b></td>
+      <td>${data.markov.serve_point_raw_p2}% → <b>${data.markov.serve_point_p2}%</b></td>
+    </tr>
+    <tr>
+      <td>🔥 Freshness (5 derniers matchs)</td>
+      <td style="color:${formColor(fd1)}; font-weight:700;">${formIcon(fd1)} ${formStr(fd1)}</td>
+      <td style="color:${formColor(fd2)}; font-weight:700;">${formIcon(fd2)} ${formStr(fd2)}</td>
+    </tr>
     <tr><td>Total Jeux Prévu</td><td colspan="2" style="text-align:center; color:#f59e0b;">${data.markov.expected_total_games} jeux</td></tr>
   `;
 }

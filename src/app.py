@@ -552,7 +552,13 @@ def predict_match(req: PredictionRequest):
             "hold_proba_p2": round(m_r.get("hold_proba_b", 0.80) * 100, 1),
             "expected_total_games": round(exp_total_games, 1),
             "expected_game_diff": round(exp_game_diff, 1),
+            # Freshness Boost: impact de la forme récente sur les probas Markov
+            "form_delta_p1": feat.get("_form_delta_p1", 0.0),
+            "form_delta_p2": feat.get("_form_delta_p2", 0.0),
+            "serve_point_raw_p1": round(feat.get("_pa_m_raw", feat.get("_pa_m", 0.64)) * 100, 1),
+            "serve_point_raw_p2": round(feat.get("_pb_m_raw", feat.get("_pb_m", 0.64)) * 100, 1),
         },
+
         "context": {
             "tournament": req.tournament,
             "surface": surf,
