@@ -37,13 +37,14 @@ ROUNDS = pm.ROUNDS
 
 app = FastAPI(title="Tennis Match Predictor AI", version="2.0.0")
 
-# Cache des ressources en mémoire
+# Cache des ressources en mémoire (chargement à la demande pour rester sous la limite de 512 Mo de RAM)
 CACHE: Dict[str, Any] = {}
 
 
 def get_cached_resources(circuit: str):
     c = circuit.lower()
     if c not in CACHE:
+        import gc
         state, model, feature_cols = load_resources(c)
         CACHE[c] = {
             "state": state,
@@ -51,23 +52,15 @@ def get_cached_resources(circuit: str):
             "feature_cols": feature_cols,
             "players": sorted(state["elo"].keys()),
         }
+        gc.collect()
     return CACHE[c]
 
 
-# Préchargement au démarrage
+# Démarrage rapide et léger
 @app.on_event("startup")
 def startup_event():
-    print("Préchargement des modèles ATP & WTA...")
-    try:
-        get_cached_resources("atp")
-        print("  • Modèle ATP chargé avec succès.")
-    except Exception as e:
-        print(f"  • Erreur ATP: {e}")
-    try:
-        get_cached_resources("wta")
-        print("  • Modèle WTA chargé avec succès.")
-    except Exception as e:
-        print(f"  • Erreur WTA: {e}")
+    print("🎾 Serveur Tennis Match Predictor prêt !")
+    print("  • Chargement des modèles à la demande pour une empreinte RAM minimale.")
 
 
 # Modèles de données Pydantic
