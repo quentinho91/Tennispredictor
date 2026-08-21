@@ -22,6 +22,7 @@ from sklearn.metrics import log_loss, brier_score_loss, accuracy_score, roc_auc_
 from sklearn.isotonic import IsotonicRegression
 from sklearn.model_selection import KFold
 from sklearn.linear_model import LogisticRegression
+from scipy.optimize import minimize_scalar
 from pathlib import Path
 import json
 import joblib
@@ -297,11 +298,29 @@ if __name__ == "__main__":
     p_bucket_final = np.clip(p_bucket_final, 0.001, 0.999)
     metrics_bucket_calib = evaluate(y_test, p_bucket_final, "XGBoost + Calibration par bucket")
 
+    # 3. Temperature Scaling (optimisation de T sur le set de calibration)
+    p_calib_arr = np.array(p_calib_raw)
+    y_calib_arr_np = np.array(y_calib_arr)
+
+    def nll_temperature(T):
+        p_c = np.clip(p_calib_arr, 1e-6, 1 - 1e-6)
+        logits = np.log(p_c / (1.0 - p_c)) / T
+        p_t = 1.0 / (1.0 + np.exp(-logits))
+        return log_loss(y_calib_arr_np, p_t)
+
+    res_temp = minimize_scalar(nll_temperature, bounds=(0.5, 3.0), method="bounded")
+    T_opt = res_temp.x
+    p_temp_raw_test = np.clip(p_raw, 1e-6, 1 - 1e-6)
+    logits_test = np.log(p_temp_raw_test / (1.0 - p_temp_raw_test)) / T_opt
+    p_temp_final = np.clip(1.0 / (1.0 + np.exp(-logits_test)), 0.001, 0.999)
+    metrics_temp = evaluate(y_test, p_temp_final, f"XGBoost + Temperature Scaling (T={T_opt:.3f})")
+
     # Sélection de la meilleure calibration
     options = {
         "brut": (p_raw, metrics_raw["log_loss"]),
         "global": (p_global_calib, metrics_global_calib["log_loss"]),
         "bucket": (p_bucket_final, metrics_bucket_calib["log_loss"]),
+        "temperature": (p_temp_final, metrics_temp["log_loss"]),
     }
     best_name = min(options, key=lambda k: options[k][1])
     p_final = options[best_name][0]
@@ -324,7 +343,9 @@ if __name__ == "__main__":
     print(f"\nModèle XGBoost sauvegardé dans {model_path}")
 
     calib_path = PROCESSED_DIR / f"calibrator_{args.circuit}.pkl"
-    if best_name == "bucket":
+    if best_name == "temperature":
+        joblib.dump({"type": "temperature_scaling", "temperature": float(T_opt)}, calib_path)
+    elif best_name == "bucket":
         joblib.dump({"type": "bucket", "calibrators": bucket_calibrators,
                      "bucket_edges": bucket_edges, "fallback": calibrator_global}, calib_path)
     elif best_name == "global":

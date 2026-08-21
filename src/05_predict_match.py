@@ -222,10 +222,23 @@ def display_value_bet_analysis(p1, p2, p_p1, p_p2, odds1, odds2, edge_threshold=
 # --------------------------------------------------------------------------
 
 class CalibratedPredictor:
-    """Encapsule le modèle XGBoost avec calibration isotonique (globale ou bucket)."""
+    """
+    Encapsule le modèle XGBoost avec calibration.
+    Supporte 3 types :
+      - temperature_scaling : T < 1 resserre les probas extrêmes (sur-confiance), T > 1 les écarte
+      - bucket              : calibration isotonique par tranche de probabilité
+      - global (isotonic)   : calibration isotonique globale
+    """
     def __init__(self, model, calibrator=None):
         self.model = model
         self.calibrator = calibrator
+
+    def _temperature_scale(self, p_raw, T):
+        """Applique la mise à l'échelle par température sur les probabilités brutes."""
+        # Clamp pour éviter log(0)
+        p_raw = np.clip(p_raw, 1e-6, 1 - 1e-6)
+        logits = np.log(p_raw / (1.0 - p_raw)) / T
+        return np.clip(1.0 / (1.0 + np.exp(-logits)), 0.001, 0.999)
 
     def predict_proba(self, X):
         p_raw = self.model.predict_proba(X)
@@ -233,23 +246,46 @@ class CalibratedPredictor:
             return p_raw
 
         p1_raw = p_raw[:, 1]
-        if isinstance(self.calibrator, dict) and self.calibrator.get("type") == "bucket":
-            cals = self.calibrator.get("calibrators", {})
-            fallback = self.calibrator.get("fallback")
-            p1_calib = np.copy(p1_raw)
-            for (lo, hi), cal in cals.items():
-                mask = (p1_raw >= lo) & (p1_raw < hi)
-                if cal is not None and np.any(mask):
-                    p1_calib[mask] = cal.predict(p1_raw[mask])
-                elif fallback is not None and np.any(mask):
-                    p1_calib[mask] = fallback.predict(p1_raw[mask])
-            p1_calib = np.clip(p1_calib, 0.001, 0.999)
+
+        if isinstance(self.calibrator, dict):
+            cal_type = self.calibrator.get("type", "")
+
+            if cal_type == "temperature_scaling":
+                T = self.calibrator.get("temperature", 1.0)
+                p1_calib = self._temperature_scale(p1_raw, T)
+
+            elif cal_type == "bucket":
+                cals = self.calibrator.get("calibrators", {})
+                fallback = self.calibrator.get("fallback")
+                p1_calib = np.copy(p1_raw)
+                for (lo, hi), cal in cals.items():
+                    mask = (p1_raw >= lo) & (p1_raw < hi)
+                    if cal is not None and np.any(mask):
+                        p1_calib[mask] = cal.predict(p1_raw[mask])
+                    elif fallback is not None and np.any(mask):
+                        p1_calib[mask] = fallback.predict(p1_raw[mask])
+                p1_calib = np.clip(p1_calib, 0.001, 0.999)
+            else:
+                p1_calib = p1_raw
         else:
+            # Isotonic Regression (legacy)
             p1_calib = self.calibrator.predict(p1_raw)
             p1_calib = np.clip(p1_calib, 0.001, 0.999)
 
         p0_calib = 1.0 - p1_calib
         return np.column_stack((p0_calib, p1_calib))
+
+    @property
+    def calibrator_name(self):
+        if self.calibrator is None:
+            return "Non"
+        if isinstance(self.calibrator, dict):
+            t = self.calibrator.get("type", "unknown")
+            if t == "temperature_scaling":
+                T = self.calibrator.get("temperature", 1.0)
+                return f"TemperatureScaling (T={T:.3f})"
+            return t.capitalize()
+        return type(self.calibrator).__name__
 
 
 def load_resources(circuit="atp"):
@@ -278,7 +314,7 @@ def load_resources(circuit="atp"):
         calibrator = joblib.load(calib_path)
 
     calibrated_model = CalibratedPredictor(xgb_model, calibrator)
-    print(f"OK ({len(state['elo'])} joueurs, {len(feature_cols)} features, Calibrator={'Oui' if calibrator else 'Non'})")
+    print(f"OK ({len(state['elo'])} joueurs, {len(feature_cols)} features, Calibrator={calibrated_model.calibrator_name})")
     return state, calibrated_model, feature_cols
 
 
