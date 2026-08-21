@@ -38,10 +38,16 @@ const oddsUnderInput = document.getElementById('odds-under-input');
 const handicapLineInput = document.getElementById('handicap-line-input');
 const oddsH1Input = document.getElementById('odds-h1-input');
 const oddsH2Input = document.getElementById('odds-h2-input');
+const labelOddsH1 = document.getElementById('label-odds-h1');
+const labelOddsH2 = document.getElementById('label-odds-h2');
 const oddsSet1P1Input = document.getElementById('odds-set1-p1');
 const oddsSet1P2Input = document.getElementById('odds-set1-p2');
+const labelOddsSet1P1 = document.getElementById('label-odds-set1-p1');
+const labelOddsSet1P2 = document.getElementById('label-odds-set1-p2');
 const oddsSetsOverInput = document.getElementById('odds-sets-over');
 const oddsSetsUnderInput = document.getElementById('odds-sets-under');
+const oddsTbYesInput = document.getElementById('odds-tb-yes');
+const oddsTbNoInput = document.getElementById('odds-tb-no');
 
 // Update Data Elements
 const btnUpdateData = document.getElementById('btn-update-data');
@@ -50,14 +56,38 @@ const updateStatusMsg = document.getElementById('update-status-msg');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   setupCircuitSwitcher();
-  setupPlayerAutocomplete(p1Input, p1Dropdown, (name) => { selectedP1 = name; });
-  setupPlayerAutocomplete(p2Input, p2Dropdown, (name) => { selectedP2 = name; });
+  setupPlayerAutocomplete(p1Input, p1Dropdown, (name) => { selectedP1 = name; updateDynamicLabels(); });
+  setupPlayerAutocomplete(p2Input, p2Dropdown, (name) => { selectedP2 = name; updateDynamicLabels(); });
   setupTournamentAutocomplete(tournamentInput, tournamentDropdown);
   setupSwap();
   setupSecondaryMarketsToggle();
+  setupDynamicLabels();
   setupUpdateData();
   setupFormSubmit();
 });
+
+// Dynamic Labels for Handicap and Set 1
+function updateDynamicLabels() {
+  const p1Name = p1Input.value.trim() || 'J1';
+  const p2Name = p2Input.value.trim() || 'J2';
+  const p1Short = p1Name.split(' ').pop();
+  const p2Short = p2Name.split(' ').pop();
+  const hVal = (handicapLineInput && handicapLineInput.value) ? parseFloat(handicapLineInput.value) : 1.5;
+  const hFormatted = isNaN(hVal) ? '1.5' : Math.abs(hVal).toFixed(1);
+
+  if (labelOddsH1) labelOddsH1.textContent = `Cote ${p1Short} (-${hFormatted})`;
+  if (labelOddsH2) labelOddsH2.textContent = `Cote ${p2Short} (+${hFormatted})`;
+  if (labelOddsSet1P1) labelOddsSet1P1.textContent = `Cote ${p1Short} Set 1`;
+  if (labelOddsSet1P2) labelOddsSet1P2.textContent = `Cote ${p2Short} Set 1`;
+}
+
+function setupDynamicLabels() {
+  p1Input.addEventListener('input', updateDynamicLabels);
+  p2Input.addEventListener('input', updateDynamicLabels);
+  if (handicapLineInput) {
+    handicapLineInput.addEventListener('input', updateDynamicLabels);
+  }
+}
 
 // Secondary Markets Toggle
 function setupSecondaryMarketsToggle() {
@@ -503,6 +533,8 @@ function setupFormSubmit() {
       odds_set1_p2: oddsSet1P2Input && oddsSet1P2Input.value ? parseFloat(oddsSet1P2Input.value) : null,
       odds_sets_over25: oddsSetsOverInput && oddsSetsOverInput.value ? parseFloat(oddsSetsOverInput.value) : null,
       odds_sets_under25: oddsSetsUnderInput && oddsSetsUnderInput.value ? parseFloat(oddsSetsUnderInput.value) : null,
+      odds_tb_yes: oddsTbYesInput && oddsTbYesInput.value ? parseFloat(oddsTbYesInput.value) : null,
+      odds_tb_no: oddsTbNoInput && oddsTbNoInput.value ? parseFloat(oddsTbNoInput.value) : null,
     };
 
     try {
@@ -602,7 +634,7 @@ function renderResults(data) {
 
     vbsHtml += `</div>`;
     vbContainer.innerHTML = vbsHtml;
-  } else if (odds1Input.value || (totalLineInput && totalLineInput.value) || (oddsH1Input && oddsH1Input.value)) {
+  } else if (odds1Input.value || (totalLineInput && totalLineInput.value) || (oddsH1Input && oddsH1Input.value) || (oddsTbYesInput && oddsTbYesInput.value)) {
     vbContainer.style.display = 'block';
     vbContainer.className = 'valuebet-card no-vb';
     vbContainer.innerHTML = `
@@ -625,6 +657,7 @@ function renderResults(data) {
   if (marketsGrid && mkts) {
     const tg = mkts.total_games;
     const hg = mkts.handicap_games;
+    const tb = mkts.tiebreak;
     const s1 = mkts.set1_winner;
     const ns = mkts.number_of_sets;
 
@@ -653,11 +686,11 @@ function renderResults(data) {
         </div>
       </div>
 
-      <!-- Handicap Games Card -->
+      <!-- Handicap Games Card (J1 -X.5 vs J2 +X.5) -->
       <div class="market-card">
         <div class="market-card-title">
           <span>⚡ Handicap de Jeux</span>
-          <span class="market-meta-badge">Diff prévu: ${hg.expected_diff > 0 ? '+' : ''}${hg.expected_diff}</span>
+          <span class="market-meta-badge">Diff: ${hg.expected_diff > 0 ? '+' : ''}${hg.expected_diff}</span>
         </div>
         <div class="market-row-item ${hg.vb_h1 && hg.vb_h1.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">${escapeHtml(hg.label_h1)}</span>
@@ -673,6 +706,30 @@ function renderResults(data) {
             <span class="mri-prob">${hg.proba_h2}%</span>
             <span class="mri-fair">Cote: ${hg.fair_odds_h2.toFixed(2)}</span>
             ${hg.vb_h2 && hg.vb_h2.is_value_bet ? `<span class="mri-vb-pill vb">VB +${hg.vb_h2.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <!-- Tie-Break in Match (+0.5 TB) Card -->
+      <div class="market-card">
+        <div class="market-card-title">
+          <span>🎾 Au moins 1 Tie-Break (+0.5 TB)</span>
+          <span class="market-meta-badge">P(Set): ${tb.proba_per_set}%</span>
+        </div>
+        <div class="market-row-item ${tb.vb_yes && tb.vb_yes.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">OUI (+0.5 TB)</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${tb.proba_yes}%</span>
+            <span class="mri-fair">Cote: ${tb.fair_odds_yes.toFixed(2)}</span>
+            ${tb.vb_yes && tb.vb_yes.is_value_bet ? `<span class="mri-vb-pill vb">VB +${tb.vb_yes.ev_pct}%</span>` : ''}
+          </div>
+        </div>
+        <div class="market-row-item ${tb.vb_no && tb.vb_no.is_value_bet ? 'highlight-vb' : ''}">
+          <span class="mri-name">NON (0 TB)</span>
+          <div class="mri-stats">
+            <span class="mri-prob">${tb.proba_no}%</span>
+            <span class="mri-fair">Cote: ${tb.fair_odds_no.toFixed(2)}</span>
+            ${tb.vb_no && tb.vb_no.is_value_bet ? `<span class="mri-vb-pill vb">VB +${tb.vb_no.ev_pct}%</span>` : ''}
           </div>
         </div>
       </div>

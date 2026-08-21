@@ -254,6 +254,9 @@ class PredictionRequest(BaseModel):
     # Marché 5 : Nombre de Sets
     odds_sets_over25: Optional[float] = None
     odds_sets_under25: Optional[float] = None
+    # Marché 6 : Tie-Break dans le match (+0.5 TB)
+    odds_tb_yes: Optional[float] = None
+    odds_tb_no: Optional[float] = None
 
 
 def evaluate_market_value(prob: float, odds: Optional[float], market_name: str, selection: str) -> Optional[Dict[str, Any]]:
@@ -386,16 +389,19 @@ def predict_match(req: PredictionRequest):
     if vb_over and vb_over["is_value_bet"]: detected_value_bets.append(vb_over)
     if vb_under and vb_under["is_value_bet"]: detected_value_bets.append(vb_under)
 
-    # 4. Marché Handicap de Jeux
+    # 4. Marché Handicap de Jeux (Format bookmaker : J1 -X.5 vs J2 +X.5)
     exp_game_diff = float(m_r.get("expected_game_diff", 0.0))
-    default_h_line = round(exp_game_diff) - 0.5
-    h_line = req.handicap_line if req.handicap_line is not None else default_h_line
-    p_h1, p_h2 = price_game_handicap(exp_game_diff, h_line)
+    raw_h = req.handicap_line if (req.handicap_line is not None and req.handicap_line != 0) else (round(abs(exp_game_diff)) + 0.5 if round(abs(exp_game_diff)) > 0 else 1.5)
+    h_val = abs(raw_h)
 
-    h1_sign = f"{h_line:+.1f}"
-    h2_sign = f"{-h_line:+.1f}"
-    vb_h1 = evaluate_market_value(p_h1, req.odds_h1, f"Handicap Jeux ({h1_sign})", f"{p1} ({h1_sign})")
-    vb_h2 = evaluate_market_value(p_h2, req.odds_h2, f"Handicap Jeux ({h2_sign})", f"{p2} ({h2_sign})")
+    # Si exp_game_diff > 0, J1 est favori -> J1 (-h_val) et J2 (+h_val)
+    # P(J1 gagne de plus de h_val jeux) = price_game_handicap(exp_diff, h_val)[0]
+    p_h1, p_h2 = price_game_handicap(exp_game_diff, h_val)
+
+    label_h1 = f"{p1} (-{h_val:.1f})"
+    label_h2 = f"{p2} (+{h_val:.1f})"
+    vb_h1 = evaluate_market_value(p_h1, req.odds_h1, f"Handicap ({h_val:.1f})", label_h1)
+    vb_h2 = evaluate_market_value(p_h2, req.odds_h2, f"Handicap ({h_val:.1f})", label_h2)
     if vb_h1 and vb_h1["is_value_bet"]: detected_value_bets.append(vb_h1)
     if vb_h2 and vb_h2["is_value_bet"]: detected_value_bets.append(vb_h2)
 
@@ -415,6 +421,32 @@ def predict_match(req: PredictionRequest):
 
     if vb_sets_over and vb_sets_over["is_value_bet"]: detected_value_bets.append(vb_sets_over)
     if vb_sets_under and vb_sets_under["is_value_bet"]: detected_value_bets.append(vb_sets_under)
+
+    # 6. Marché Tie-Break dans le match (+0.5 Tie-Break / OUI-NON)
+    set_dist = m_r.get("set_game_distribution", {})
+    p_tb_set = float(set_dist.get("7-6", 0.0) + set_dist.get("6-7", 0.0))
+    if p_tb_set <= 0:
+        h_a = m_r.get("hold_proba_a", 0.8)
+        h_b = m_r.get("hold_proba_b", 0.8)
+        p_tb_set = float(np.clip(((h_a * h_b) ** 5.5) * 0.6, 0.08, 0.45))
+
+    if req.best_of == 3:
+        p2_sets = float(set_scores_dict.get("2-0", 0.25) + set_scores_dict.get("0-2", 0.25))
+        p3_sets = float(set_scores_dict.get("2-1", 0.25) + set_scores_dict.get("1-2", 0.25))
+        p_no_tb = p2_sets * ((1.0 - p_tb_set) ** 2) + p3_sets * ((1.0 - p_tb_set) ** 3)
+    else:
+        p3_sets = float(set_scores_dict.get("3-0", 0.15) + set_scores_dict.get("0-3", 0.15))
+        p4_sets = float(set_scores_dict.get("3-1", 0.20) + set_scores_dict.get("1-3", 0.20))
+        p5_sets = float(set_scores_dict.get("3-2", 0.15) + set_scores_dict.get("2-3", 0.15))
+        p_no_tb = p3_sets * ((1.0 - p_tb_set) ** 3) + p4_sets * ((1.0 - p_tb_set) ** 4) + p5_sets * ((1.0 - p_tb_set) ** 5)
+
+    p_tb_yes = float(np.clip(1.0 - p_no_tb, 0.03, 0.97))
+    p_tb_no = 1.0 - p_tb_yes
+
+    vb_tb_yes = evaluate_market_value(p_tb_yes, req.odds_tb_yes, "Tie-Break (+0.5 TB)", "Au moins 1 Tie-Break (+0.5 TB - OUI)")
+    vb_tb_no = evaluate_market_value(p_tb_no, req.odds_tb_no, "Tie-Break (0 TB)", "Aucun Tie-Break (0 TB - NON)")
+    if vb_tb_yes and vb_tb_yes["is_value_bet"]: detected_value_bets.append(vb_tb_yes)
+    if vb_tb_no and vb_tb_no["is_value_bet"]: detected_value_bets.append(vb_tb_no)
 
     # Trier les value bets par espérance de gain (EV) décroissante
     detected_value_bets.sort(key=lambda x: x["ev_pct"], reverse=True)
@@ -449,10 +481,16 @@ def predict_match(req: PredictionRequest):
             },
             "handicap_games": {
                 "expected_diff": round(exp_game_diff, 1),
-                "line": h_line,
-                "label_h1": f"{p1} ({h1_sign})", "proba_h1": round(p_h1 * 100, 1), "fair_odds_h1": round(1.0 / p_h1, 2),
-                "label_h2": f"{p2} ({h2_sign})", "proba_h2": round(p_h2 * 100, 1), "fair_odds_h2": round(1.0 / p_h2, 2),
+                "line": h_val,
+                "label_h1": label_h1, "proba_h1": round(p_h1 * 100, 1), "fair_odds_h1": round(1.0 / p_h1, 2),
+                "label_h2": label_h2, "proba_h2": round(p_h2 * 100, 1), "fair_odds_h2": round(1.0 / p_h2, 2),
                 "vb_h1": vb_h1, "vb_h2": vb_h2
+            },
+            "tiebreak": {
+                "proba_yes": round(p_tb_yes * 100, 1), "fair_odds_yes": round(1.0 / p_tb_yes, 2),
+                "proba_no": round(p_tb_no * 100, 1), "fair_odds_no": round(1.0 / p_tb_no, 2),
+                "proba_per_set": round(p_tb_set * 100, 1),
+                "vb_yes": vb_tb_yes, "vb_no": vb_tb_no
             },
             "number_of_sets": {
                 "label_over": "3 Sets" if req.best_of == 3 else "4 ou 5 Sets",

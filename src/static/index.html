@@ -170,52 +170,67 @@
             </div>
           </div>
 
-          <!-- Handicap Games -->
+          <!-- Handicap Games (Format Bookmaker : J1 -1.5 / J2 +1.5) -->
           <div class="sec-market-box">
-            <div class="sec-market-title">⚡ Handicap de Jeux</div>
+            <div class="sec-market-title">⚡ Handicap de Jeux (Ex: J1 -1.5 / J2 +1.5)</div>
             <div class="sec-market-grid-3">
               <div>
-                <label class="input-label-sm">Ligne J1 (ex: -3.5)</label>
-                <input type="number" step="0.5" id="handicap-line-input" class="text-input-sm" placeholder="Auto (ex: -3.5)">
+                <label class="input-label-sm">Écart (ex: 1.5 ou 2.5)</label>
+                <input type="number" step="1" min="0.5" id="handicap-line-input" class="text-input-sm" placeholder="1.5">
               </div>
               <div>
-                <label class="input-label-sm">Cote J1 Handicap</label>
+                <label id="label-odds-h1" class="input-label-sm">Cote J1 (-1.5)</label>
                 <input type="number" step="0.01" id="odds-h1-input" class="text-input-sm" placeholder="ex: 1.85">
               </div>
               <div>
-                <label class="input-label-sm">Cote J2 Handicap</label>
+                <label id="label-odds-h2" class="input-label-sm">Cote J2 (+1.5)</label>
                 <input type="number" step="0.01" id="odds-h2-input" class="text-input-sm" placeholder="ex: 1.95">
               </div>
             </div>
           </div>
 
-          <!-- Set 1 & Number of Sets -->
+          <!-- Tie-Break (+0.5 TB) & Set 1 -->
           <div class="sec-market-row">
             <div class="sec-market-box half">
-              <div class="sec-market-title">🥇 Vainqueur Set 1</div>
+              <div class="sec-market-title">🎾 Tie-Break dans le match (+0.5 TB)</div>
               <div class="sec-market-grid-2">
                 <div>
-                  <label class="input-label-sm">Cote J1 Set 1</label>
-                  <input type="number" step="0.01" id="odds-set1-p1" class="text-input-sm" placeholder="ex: 1.70">
+                  <label class="input-label-sm">OUI (+0.5 TB)</label>
+                  <input type="number" step="0.01" id="odds-tb-yes" class="text-input-sm" placeholder="ex: 1.80">
                 </div>
                 <div>
-                  <label class="input-label-sm">Cote J2 Set 1</label>
-                  <input type="number" step="0.01" id="odds-set1-p2" class="text-input-sm" placeholder="ex: 2.10">
+                  <label class="input-label-sm">NON (0 TB)</label>
+                  <input type="number" step="0.01" id="odds-tb-no" class="text-input-sm" placeholder="ex: 1.95">
                 </div>
               </div>
             </div>
 
             <div class="sec-market-box half">
-              <div class="sec-market-title">⏳ Nombre de Sets</div>
+              <div class="sec-market-title">🥇 Vainqueur Set 1</div>
               <div class="sec-market-grid-2">
                 <div>
-                  <label class="input-label-sm">3 Sets (Over 2.5)</label>
-                  <input type="number" step="0.01" id="odds-sets-over" class="text-input-sm" placeholder="ex: 2.30">
+                  <label id="label-odds-set1-p1" class="input-label-sm">Cote J1 Set 1</label>
+                  <input type="number" step="0.01" id="odds-set1-p1" class="text-input-sm" placeholder="ex: 1.70">
                 </div>
                 <div>
-                  <label class="input-label-sm">2 Sets (Sec)</label>
-                  <input type="number" step="0.01" id="odds-sets-under" class="text-input-sm" placeholder="ex: 1.60">
+                  <label id="label-odds-set1-p2" class="input-label-sm">Cote J2 Set 1</label>
+                  <input type="number" step="0.01" id="odds-set1-p2" class="text-input-sm" placeholder="ex: 2.10">
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Number of Sets -->
+          <div class="sec-market-box">
+            <div class="sec-market-title">⏳ Nombre de Sets (Over / Under)</div>
+            <div class="sec-market-grid-2">
+              <div>
+                <label class="input-label-sm">Match en 3 Sets (Over 2.5)</label>
+                <input type="number" step="0.01" id="odds-sets-over" class="text-input-sm" placeholder="ex: 2.30">
+              </div>
+              <div>
+                <label class="input-label-sm">Victoire en 2 Sets Secs</label>
+                <input type="number" step="0.01" id="odds-sets-under" class="text-input-sm" placeholder="ex: 1.60">
               </div>
             </div>
           </div>
