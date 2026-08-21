@@ -316,22 +316,6 @@ function setupTournamentAutocomplete(input, dropdown) {
     fetchAndRender(input.value.trim());
   });
 
-  // Blur : auto-détection sur le texte saisi si l'utilisateur n'a pas cliqué
-  input.addEventListener('change', async () => {
-    const q = input.value.trim();
-    if (q) {
-      try {
-        const res = await fetch(`/api/tournaments?q=${encodeURIComponent(q)}&limit=1`);
-        const tourneys = await res.json();
-        if (tourneys && tourneys.length > 0) {
-          applyTournamentMetadata(tourneys[0], false);
-        }
-      } catch (err) {
-        console.error('Error auto-detecting tournament on change:', err);
-      }
-    }
-  });
-
   // Keyboard navigation
   input.addEventListener('keydown', (e) => {
     const items = dropdown.querySelectorAll('.autocomplete-item');
@@ -567,6 +551,11 @@ function setupFormSubmit() {
 function renderResults(data) {
   resultsSection.style.display = 'block';
 
+  // Trigger re-analysis animation
+  resultsSection.classList.remove('re-analyzing');
+  void resultsSection.offsetWidth;
+  resultsSection.classList.add('re-analyzing');
+
   // Players & Probabilities
   const p1NameEl = document.getElementById('res-p1-name');
   const p2NameEl = document.getElementById('res-p2-name');
@@ -592,9 +581,10 @@ function renderResults(data) {
   barP2.style.width = `${p2Pct}%`;
 
   const ctx = data.context;
-  const cpiStr = ctx.cpi ? ` • Ace Rate: ${ctx.cpi}%` : '';
+  const tName = ctx.tournament && ctx.tournament !== 'Tournament' && ctx.tournament !== 'Tournoi' ? ctx.tournament : 'Match';
+  const cpiStr = ctx.cpi ? ` • Speed: ${ctx.cpi}%` : '';
   const altStr = ctx.altitude > 0 ? ` • Alt: ${ctx.altitude}m` : '';
-  ctxTag.textContent = `${ctx.tournament} • ${ctx.surface}${cpiStr}${altStr} • ${ctx.round} • Best-of ${ctx.best_of}`;
+  ctxTag.textContent = `${tName} • ${ctx.surface}${cpiStr}${altStr} • ${ctx.round} • Best-of ${ctx.best_of}`;
 
   // ------------------------------------------------------------------------
   // Value Bets Across All Markets
