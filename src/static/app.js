@@ -824,12 +824,13 @@ function renderFormTimeline(containerId, matches, playerName) {
     const isRet = m.retirement;
     let dotClass = isWin ? 'win' : 'loss';
     let label = isWin ? 'V' : 'D';
-    if (isRet) {
+    if (isRet && !isWin) {
       dotClass = 'ret';
       label = 'AB';
     }
 
     const statusText = isWin ? '✅ Victoire' : (isRet ? '⚠️ Abandon' : '❌ Défaite');
+    const statusColor = isWin ? '#34d399' : (isRet ? '#fbbf24' : '#f87171');
     const tournText = m.tournament ? `${escapeHtml(m.tournament)}` : 'Tournoi';
     const surfText = m.surface ? ` • ${escapeHtml(m.surface)}` : '';
     const oppText = m.opponent ? `vs ${escapeHtml(m.opponent)}` : '';
@@ -839,7 +840,7 @@ function renderFormTimeline(containerId, matches, playerName) {
       <div class="form-dot ${dotClass}">
         ${label}
         <div class="dot-tooltip">
-          <div style="font-weight:700; color:${isWin ? '#34d399' : '#f87171'};">${statusText}</div>
+          <div style="font-weight:700; color:${statusColor};">${statusText}</div>
           <div style="color:var(--text-dim); font-size:10px;">🏆 ${tournText}${surfText}</div>
           <div style="font-size:11px; margin: 1px 0;">${oppText}</div>
           <div style="font-size:10px; color:#fbbf24; font-weight:600;">${scoreText}</div>

@@ -647,7 +647,7 @@ def predict_match(req: PredictionRequest):
             "p1": [
                 {
                     "win": bool(r[1]),
-                    "retirement": bool(r[2]) if len(r) > 2 else False,
+                    "retirement": bool("RET" in str(r[13]).upper() or "W/O" in str(r[13]).upper()) if len(r) > 13 and r[13] is not None else False,
                     "surface": str(r[3]) if len(r) > 3 and r[3] is not None else "",
                     "opponent": str(r[11]) if len(r) > 11 and r[11] is not None else "Adversaire",
                     "tournament": str(r[12]) if len(r) > 12 and r[12] is not None else "Tournoi",
@@ -658,7 +658,7 @@ def predict_match(req: PredictionRequest):
             "p2": [
                 {
                     "win": bool(r[1]),
-                    "retirement": bool(r[2]) if len(r) > 2 else False,
+                    "retirement": bool("RET" in str(r[13]).upper() or "W/O" in str(r[13]).upper()) if len(r) > 13 and r[13] is not None else False,
                     "surface": str(r[3]) if len(r) > 3 and r[3] is not None else "",
                     "opponent": str(r[11]) if len(r) > 11 and r[11] is not None else "Adversaire",
                     "tournament": str(r[12]) if len(r) > 12 and r[12] is not None else "Tournoi",
