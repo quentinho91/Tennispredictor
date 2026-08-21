@@ -1,17 +1,15 @@
 """
-05_predict_match.py  —  Probabilite de victoire pour un match a venir.
+05_predict_match.py — Prédiction de probabilité de victoire pour un match de tennis à venir.
 
 USAGE :
-    python 05_predict_match.py
+    python src/05_predict_match.py
+    python src/05_predict_match.py --circuit wta
 
-PREREQUIS :
-    1. python 02_feature_engineering.py   -> data/processed/player_state.pkl
-    2. python 03_train_model.py           -> data/processed/xgb_model.json
-                                            data/processed/feature_cols.pkl
-
-Le script demande interactivement les infos du match et retourne :
-    - Probabilite p_model pour chaque joueur
-    - Si tu entres les cotes du bookmaker : edge calcule + recommandation
+PRÉREQUIS :
+    1. python src/02_feature_engineering.py --circuit atp  -> data/processed/player_state_atp.pkl
+    2. python src/03_train_model.py --circuit atp          -> data/processed/xgb_model_atp.json
+                                                              data/processed/calibrator_atp.pkl
+                                                              data/processed/feature_cols_atp.pkl
 """
 
 import os
@@ -23,35 +21,46 @@ import pandas as pd
 import xgboost as xgb
 import joblib
 from pathlib import Path
-from difflib import get_close_matches
+from difflib import get_close_matches, SequenceMatcher
 import datetime
-import requests
-from rapidfuzz import process, fuzz
+import importlib.util
+
+# Ajouter le répertoire 'src' au sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from markov_tennis import (
+    p_game,
+    p_set,
+    p_match,
+    estimate_point_probabilities,
+    price_game_handicap,
+    price_total_games
+)
 
 # --------------------------------------------------------------------------
 # Chemins
 # --------------------------------------------------------------------------
-BASE_DIR    = Path(__file__).resolve().parent.parent
-PROC_DIR    = BASE_DIR / "data" / "processed"
+BASE_DIR = Path(__file__).resolve().parent.parent
+PROC_DIR = BASE_DIR / "data" / "processed"
+
 
 def get_paths(circuit="atp"):
     return (
         PROC_DIR / f"player_state_{circuit}.pkl",
         PROC_DIR / f"xgb_model_{circuit}.json",
-        PROC_DIR / f"feature_cols_{circuit}.pkl"
+        PROC_DIR / f"feature_cols_{circuit}.pkl",
+        PROC_DIR / f"calibrator_{circuit}.pkl"
     )
+
 
 # --------------------------------------------------------------------------
 # Import des helpers de 02_feature_engineering.py via importlib
-# (le nom commence par un chiffre, on ne peut pas faire "import 02_...")
 # --------------------------------------------------------------------------
-import importlib.util
 _fe_path = Path(__file__).parent / "02_feature_engineering.py"
 _spec    = importlib.util.spec_from_file_location("fe", _fe_path)
 fe       = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fe)
 
-# Raccourcis vers les helpers
 _wr_n          = fe._winrate_n
 _wr_days       = fe._winrate_days
 _cnt_recent    = fe._count_recent_tuples
@@ -79,28 +88,20 @@ ELO_INIT       = fe.ELO_INIT
 
 
 # --------------------------------------------------------------------------
-# Utilitaires
+# Utilitaires & Recherche Floue
 # --------------------------------------------------------------------------
 
 def fuzzy_find(name, known, n=5, cutoff=0.6):
-    """Recherche floue d'un nom de joueur dans la liste connue.
-
-    Priorité :
-    1. Correspondance exacte sur le nom complet
-    2. Correspondance exacte sur une partie du nom (prénom ou nom de famille)
-    3. Correspondance par préfixe sur une partie du nom
-    4. Sous-chaîne dans une partie du nom
-    5. Correspondance floue (difflib) sur les candidats filtrés
-    """
+    """Recherche floue rapide et efficace dans la liste des joueurs connus."""
     name_low = name.lower().strip()
     tokens = name_low.split()
 
-    # 1. Correspondance exacte nom complet
+    # 1. Correspondance exacte
     exact = [k for k in known if k.lower() == name_low]
     if exact:
         return exact
 
-    # 2 & 3 & 4. Classement par score de correspondance sur les parties du nom
+    # 2. Correspondance par partie du nom / préfixe
     scored = []
     for k in known:
         parts = k.lower().split()
@@ -109,38 +110,30 @@ def fuzzy_find(name, known, n=5, cutoff=0.6):
             if len(t) < 2:
                 continue
             for part in parts:
-                if part == t:            # correspondance exacte sur une partie
+                if part == t:
                     score = max(score, 4)
-                elif part.startswith(t): # préfixe exact
+                elif part.startswith(t):
                     score = max(score, 3)
-                elif t in part:          # sous-chaîne
+                elif t in part:
                     score = max(score, 2)
         if score > 0:
             scored.append((score, k))
 
     if scored:
-        # Trier par score décroissant, puis alphabétique
         scored.sort(key=lambda x: (-x[0], x[1]))
         top_candidates = [k for _, k in scored[:max(n * 4, 20)]]
 
-        # Appliquer difflib sur les meilleurs candidats pour affiner
-        from difflib import SequenceMatcher
         def _ratio(k):
             parts = k.lower().split()
             return max(SequenceMatcher(None, name_low, part).ratio() for part in parts)
 
         top_candidates_scored = [(k, _ratio(k)) for k in top_candidates]
         top_candidates_scored.sort(key=lambda x: -x[1])
-
-        # Filtrer : garder seulement les candidats avec un ratio décent
-        # (au moins 50% du meilleur ratio ou ratio >= 0.4)
         best_ratio = top_candidates_scored[0][1] if top_candidates_scored else 0
         threshold = max(0.35, best_ratio * 0.5)
         filtered = [k for k, r in top_candidates_scored if r >= threshold]
-
         return filtered[:n] if filtered else [k for k, _ in top_candidates_scored[:n]]
 
-    # 5. Fallback : difflib global
     return get_close_matches(name, known, n=n, cutoff=cutoff)
 
 
@@ -165,130 +158,128 @@ def remove_overround(odds1, odds2):
     return (1 / odds1) / total, (1 / odds2) / total
 
 
-# --------------------------------------------------------------------------
-# Chargement des ressources
-# --------------------------------------------------------------------------
+def display_value_bet_analysis(p1, p2, p_p1, p_p2, odds1, odds2, edge_threshold=0.03):
+    """Affiche une analyse détaillée de rentabilité et value bet avec seuils et gestion Kelly."""
+    if not (odds1 and odds2 and odds1 > 1.0 and odds2 > 1.0):
+        return
 
-class EnsemblePredictor:
-    def __init__(self, models):
-        self.models = models
+    pm1, pm2 = remove_overround(odds1, odds2)
+    ev1 = p_p1 * odds1 - 1.0
+    ev2 = p_p2 * odds2 - 1.0
+    edge1 = p_p1 - pm1
+    edge2 = p_p2 - pm2
+
+    cote_seuil1 = 1.0 / p_p1 if p_p1 > 0 else 999.0
+    cote_seuil2 = 1.0 / p_p2 if p_p2 > 0 else 999.0
+
+    print("\n" + "=" * 75)
+    print("  ANALYSE VALUE BET & RENTABILITE")
+    print("=" * 75)
+    print(f"  {'Joueur':<24} {'Cote':>6} {'Cote Min':>9} {'P(Modele)':>10} {'P(Marche)':>10} {'Edge':>8} {'EV':>8}")
+    print("  " + "-" * 88)
+    
+    is_vb1 = (edge1 >= edge_threshold and ev1 >= edge_threshold)
+    is_vb2 = (edge2 >= edge_threshold and ev2 >= edge_threshold)
+
+    statut1 = "[VALUE BET]" if is_vb1 else ("[EV TROP FAIBLE]" if edge1 > 0 else "[PAS DE VALUE]")
+    statut2 = "[VALUE BET]" if is_vb2 else ("[EV TROP FAIBLE]" if edge2 > 0 else "[PAS DE VALUE]")
+
+    print(f"  {p1:<24} {odds1:>6.2f} {cote_seuil1:>9.2f} {p_p1:>10.1%} {pm1:>10.1%} {edge1:>+7.1%} {ev1:>+7.1%}  {statut1}")
+    print(f"  {p2:<24} {odds2:>6.2f} {cote_seuil2:>9.2f} {p_p2:>10.1%} {pm2:>10.1%} {edge2:>+7.1%} {ev2:>+7.1%}  {statut2}")
+    print("  " + "-" * 88)
+
+    if is_vb1 or is_vb2:
+        bet_p = p1 if ev1 > ev2 else p2
+        bet_o = odds1 if ev1 > ev2 else odds2
+        bet_prob = p_p1 if ev1 > ev2 else p_p2
+        bet_ev = ev1 if ev1 > ev2 else ev2
+        bet_edge = edge1 if ev1 > ev2 else edge2
         
-    def predict_proba(self, X):
-        preds = []
-        for model in self.models:
-            preds.append(model.predict_proba(X))
-        return np.mean(preds, axis=0)
+        b = bet_o - 1.0
+        kelly_full = (bet_prob * bet_o - 1.0) / b if b > 0 else 0.0
+        kelly_quarter = max(0.0, min(kelly_full * 0.25, 0.05)) # borné à 5% max de bankroll
+
+        print(f"\n  >>> DECISION : *** VALUE BET DETECTE SUR {bet_p.upper()} ***")
+        print(f"      - Cote offerte : {bet_o:.2f} (Cote minimale requise pour rentabilite : {1.0/bet_prob:.2f})")
+        print(f"      - Esperance mathematique nette (EV) : {bet_ev:+.1%}")
+        print(f"      - Avantage net sur le marche (Edge) : {bet_edge:+.1%}")
+        print(f"      - Mise recommandee (Quarter-Kelly) : {kelly_quarter*100:.1f}% de votre bankroll")
+    elif max(edge1, edge2) > 0 or max(ev1, ev2) > 0:
+        best_p = p1 if ev1 > ev2 else p2
+        best_ev = max(ev1, ev2)
+        best_edge = max(edge1, edge2)
+        best_prob = p_p1 if ev1 > ev2 else p_p2
+        min_cote = (1.0 + edge_threshold) / best_prob
+        print(f"\n  >>> DECISION : [PAS DE VALUE BET] (Rendement net EV = {best_ev:+.1%} sur {best_p} insuffisant, seuil requis = +{edge_threshold*100:.0f}%)")
+        print(f"      - Explication : Bien qu'il y ait un avantage de {best_edge:+.1%} sur le marche, la marge du bookmaker absorbe le gain net.")
+        print(f"      - Conseil : Ne pas parier. Attendre une cote d'au moins {min_cote:.2f} sur {best_p}.")
+    else:
+        print(f"\n  >>> DECISION : [AUCUN VALUE BET] Les cotes proposees sont trop basses par rapport aux probabilites reelles.")
+
+
+# --------------------------------------------------------------------------
+# Modèle XGBoost Calibré
+# --------------------------------------------------------------------------
 
 class CalibratedPredictor:
+    """Encapsule le modèle XGBoost avec calibration isotonique (globale ou bucket)."""
     def __init__(self, model, calibrator=None):
         self.model = model
         self.calibrator = calibrator
-    
+
     def predict_proba(self, X):
         p_raw = self.model.predict_proba(X)
-        if self.calibrator is not None:
-            p1_raw = p_raw[:, 1]
+        if self.calibrator is None:
+            return p_raw
+
+        p1_raw = p_raw[:, 1]
+        if isinstance(self.calibrator, dict) and self.calibrator.get("type") == "bucket":
+            cals = self.calibrator.get("calibrators", {})
+            fallback = self.calibrator.get("fallback")
+            p1_calib = np.copy(p1_raw)
+            for (lo, hi), cal in cals.items():
+                mask = (p1_raw >= lo) & (p1_raw < hi)
+                if cal is not None and np.any(mask):
+                    p1_calib[mask] = cal.predict(p1_raw[mask])
+                elif fallback is not None and np.any(mask):
+                    p1_calib[mask] = fallback.predict(p1_raw[mask])
+            p1_calib = np.clip(p1_calib, 0.001, 0.999)
+        else:
             p1_calib = self.calibrator.predict(p1_raw)
-            p0_calib = 1.0 - p1_calib
-            return np.column_stack((p0_calib, p1_calib))
-        return p_raw
+            p1_calib = np.clip(p1_calib, 0.001, 0.999)
+
+        p0_calib = 1.0 - p1_calib
+        return np.column_stack((p0_calib, p1_calib))
 
 
 def load_resources(circuit="atp"):
-    STATE_PATH, MODEL_PATH, FCOLS_PATH = get_paths(circuit)
-    for path in (STATE_PATH, MODEL_PATH, FCOLS_PATH):
+    state_path, model_path, fcols_path, calib_path = get_paths(circuit)
+    for path in (state_path, model_path, fcols_path):
         if not path.exists():
             msg = f"[ERREUR] Fichier manquant : {path}\n"
             if "player_state" in str(path):
-                msg += f"  -> Lance d'abord : python 02_feature_engineering.py --circuit {circuit}"
+                msg += f"  -> Lance d'abord : python src/02_feature_engineering.py --circuit {circuit}"
             elif "xgb_model" in str(path):
-                msg += f"  -> Lance d'abord : python 03_train_model.py --circuit {circuit}"
+                msg += f"  -> Lance d'abord : python src/03_train_model.py --circuit {circuit}"
             raise FileNotFoundError(msg)
 
-    print(f"Chargement des modeles et de l'etat des joueurs ({circuit.upper()})...", end=" ", flush=True)
-    with open(STATE_PATH, "rb") as f:
+    print(f"Chargement du modèle XGBoost et de l'état des joueurs ({circuit.upper()})...", end=" ", flush=True)
+    with open(state_path, "rb") as f:
         state = pickle.load(f)
-        
+    state["circuit"] = circuit
+
     xgb_model = xgb.XGBClassifier()
-    xgb_model.load_model(str(MODEL_PATH))
-    models = [xgb_model]
-    
-    lgb_path = PROC_DIR / f"lgb_model_{circuit}.txt"
-    # Désactiver LightGBM et CatBoost sur Render pour éviter tout OOM
-    if lgb_path.exists() and not os.environ.get("RENDER"):
-        import lightgbm as lgbm
-        lgb_model = lgbm.Booster(model_file=str(lgb_path))
-        class LGBMWrapper:
-            def __init__(self, booster):
-                self.booster = booster
-            def predict_proba(self, X):
-                p1 = self.booster.predict(X)
-                return np.column_stack((1.0 - p1, p1))
-        models.append(LGBMWrapper(lgb_model))
-        
-    cat_path = PROC_DIR / f"cat_model_{circuit}.cbm"
-    # Désactiver CatBoost sur Render pour éviter le Out-Of-Memory (OOM) sur le Free Tier (512MB)
-    if cat_path.exists() and not os.environ.get("RENDER"):
-        from catboost import CatBoostClassifier
-        cat_model = CatBoostClassifier()
-        cat_model.load_model(str(cat_path))
-        models.append(cat_model)
-        
-    ensemble_model = EnsemblePredictor(models)
-    feature_cols = joblib.load(FCOLS_PATH)
-    
-    calibrator_path = PROC_DIR / f"calibrator_{circuit}.pkl"
+    xgb_model.load_model(str(model_path))
+
+    feature_cols = joblib.load(fcols_path)
+
     calibrator = None
-    if calibrator_path.exists():
-        calibrator = joblib.load(calibrator_path)
-        
-    calibrated_model = CalibratedPredictor(ensemble_model, calibrator)
-    
-    print(f"OK  ({len(state['elo'])} joueurs, {len(feature_cols)} features, {len(models)} modeles, Calibrator={'Oui' if calibrator else 'Non'})")
+    if calib_path.exists():
+        calibrator = joblib.load(calib_path)
+
+    calibrated_model = CalibratedPredictor(xgb_model, calibrator)
+    print(f"OK ({len(state['elo'])} joueurs, {len(feature_cols)} features, Calibrator={'Oui' if calibrator else 'Non'})")
     return state, calibrated_model, feature_cols
-
-
-def _get_exact_rest_hours(player_name, last_play_day_offset, date_min, match_date, default_days):
-    """
-    Scrape l'heure exacte du dernier match de player_name joué le jour `last_play_day_offset`.
-    """
-    if default_days > 60:
-        return default_days * 24.0, 0.0
-
-    target_date = date_min + pd.Timedelta(days=last_play_day_offset)
-    url = f"https://api.sofascore.com/api/v1/sport/tennis/scheduled-events/{target_date.strftime('%Y-%m-%d')}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Accept": "*/*",
-        "Origin": "https://www.sofascore.com",
-        "Referer": "https://www.sofascore.com/"
-    }
-    
-    try:
-        resp = requests.get(url, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            events_dict = {}
-            for ev in data.get('events', []):
-                p1_n = ev.get('homeTeam', {}).get('name')
-                p2_n = ev.get('awayTeam', {}).get('name')
-                ts = ev.get('startTimestamp')
-                if p1_n and ts: events_dict[p1_n] = ts
-                if p2_n and ts: events_dict[p2_n] = ts
-                    
-            if events_dict:
-                best_match, score, _ = process.extractOne(player_name, list(events_dict.keys()), scorer=fuzz.token_sort_ratio)
-                if score >= 80:
-                    ts = events_dict[best_match]
-                    match_dt = datetime.datetime.fromtimestamp(ts)
-                    # On estime le match à prédire à 14h00
-                    pred_dt = match_date + pd.Timedelta(hours=14)
-                    hours_diff = (pred_dt - match_dt).total_seconds() / 3600.0
-                    return max(0.0, hours_diff), (1.0 if match_dt.hour >= 20 else 0.0)
-    except Exception:
-        pass
-        
-    return default_days * 24.0, 0.0
 
 
 # --------------------------------------------------------------------------
@@ -340,11 +331,12 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     tourney_champions = state.get("tourney_champions", {})
     tourney_countries = state.get("tourney_countries", {})
     player_ioc_dict = state.get("player_ioc_dict", {})
-    
+
     def get_cpi(t_name, t_year, t_surf):
         if t_name in tourney_cpi_yearly:
             hist = [tourney_cpi_yearly[t_name][y] for y in range(t_year-3, t_year) if y in tourney_cpi_yearly[t_name]]
-            if hist: return sum(hist) / len(hist)
+            if hist:
+                return sum(hist) / len(hist)
         if t_surf == 'Hard': return 8.5
         elif t_surf == 'Clay': return 5.5
         elif t_surf == 'Grass': return 10.5
@@ -358,7 +350,7 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     def get_altitude(t_name):
         alt_map = {'Gstaad': 1050, 'Kitzbuhel': 762, 'Bogota': 2640, 'Quito': 2850, 'Madrid': 667, 'Denver': 1609}
         return alt_map.get(t_name, 0)
-        
+
     def get_tourney_country(t_name):
         return tourney_countries.get(t_name, "UNKNOWN")
 
@@ -369,7 +361,6 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     r2   = rank2   if rank2   is not None else state["last_rank"].get(p2, np.nan)
     pts1 = points1 if points1 is not None else state["last_points"].get(p1, np.nan)
     pts2 = points2 if points2 is not None else state["last_points"].get(p2, np.nan)
-    has_rank = (r1 == r1 and r2 == r2)
 
     ht1  = state["last_ht"].get(p1, np.nan)
     ht2  = state["last_ht"].get(p2, np.nan)
@@ -388,13 +379,17 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
 
     feat = {}
 
-    # Elo
-    e1  = elo.get(p1, ELO_INIT)
-    e2  = elo.get(p2, ELO_INIT)
-    es1 = elo_surf.get(surf, {}).get(p1, ELO_INIT)
-    es2 = elo_surf.get(surf, {}).get(p2, ELO_INIT)
-    esw1 = elo_surf_w.get(surf, {}).get(p1, ELO_INIT)
-    esw2 = elo_surf_w.get(surf, {}).get(p2, ELO_INIT)
+    get_decayed_elo = getattr(fe, "get_decayed_elo", lambda b, d, ld: b)
+    last_p1 = last_pd.get(p1)
+    last_p2 = last_pd.get(p2)
+
+    # Elo (avec dépréciation d'inactivité)
+    e1  = get_decayed_elo(elo.get(p1, ELO_INIT), day, last_p1)
+    e2  = get_decayed_elo(elo.get(p2, ELO_INIT), day, last_p2)
+    es1 = get_decayed_elo(elo_surf.get(surf, {}).get(p1, ELO_INIT), day, last_p1)
+    es2 = get_decayed_elo(elo_surf.get(surf, {}).get(p2, ELO_INIT), day, last_p2)
+    esw1 = get_decayed_elo(elo_surf_w.get(surf, {}).get(p1, ELO_INIT), day, last_p1)
+    esw2 = get_decayed_elo(elo_surf_w.get(surf, {}).get(p2, ELO_INIT), day, last_p2)
     feat["elo_diff"]           = e1 - e2
     feat["elo_surface_diff"]   = es1 - es2
     feat["elo_surface_w_diff"] = esw1 - esw2
@@ -442,14 +437,13 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     # Repos / fatigue
     rest1_days = (day - last_pd[p1]) if p1 in last_pd else 365
     rest2_days = (day - last_pd[p2]) if p2 in last_pd else 365
-    # Scraping en temps réel de la vraie fatigue
-    hours1, night1 = _get_exact_rest_hours(p1, last_pd.get(p1, -999), date_min, match_date, rest1_days) if p1 in last_pd else (365*24.0, 0.0)
-    hours2, night2 = _get_exact_rest_hours(p2, last_pd.get(p2, -999), date_min, match_date, rest2_days) if p2 in last_pd else (365*24.0, 0.0)
-    
+    hours1 = rest1_days * 24.0
+    hours2 = rest2_days * 24.0
+
     feat["hours_rest_diff"] = hours1 - hours2
     feat["short_rest_p1"] = 1.0 if hours1 < 20 else 0.0
     feat["short_rest_p2"] = 1.0 if hours2 < 20 else 0.0
-    feat["is_night_match"] = 1.0 if (night1 or night2) else 0.0
+    feat["is_night_match"] = 0.0
 
     feat["matches_this_tourney_diff"]    = matches_tourney1 - matches_tourney2
     feat["avg_minutes_recent_diff"]      = _avg_min(rr1, 5) - _avg_min(rr2, 5)
@@ -457,28 +451,52 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     cm1 = career_m.get(p1, 0)
     cm2 = career_m.get(p2, 0)
     cr1 = career_ret.get(p1, 0) / cm1 if cm1 > 0 else 0.0
-    
     cr2 = career_ret.get(p2, 0) / cm2 if cm2 > 0 else 0.0
     feat["career_retirement_rate_diff"]  = cr1 - cr2
-    
+
     t_cpi = get_cpi(tourney_name, match_date.year, surf)
-    
     feat["tourney_cpi"] = t_cpi
     feat["fast_court_winrate_diff"] = _speed_wr(fast_results, p1) - _speed_wr(fast_results, p2)
     feat["medium_court_winrate_diff"] = _speed_wr(medium_results, p1) - _speed_wr(medium_results, p2)
     feat["slow_court_winrate_diff"] = _speed_wr(slow_results, p1) - _speed_wr(slow_results, p2)
-    
+
     t_alt = get_altitude(tourney_name)
-    
     feat["tourney_altitude"] = t_alt
     feat["high_altitude_winrate_diff"] = _speed_wr(high_altitude_results, p1) - _speed_wr(high_altitude_results, p2)
-    
+
     t_country = get_tourney_country(tourney_name)
     p1_ioc = player_ioc_dict.get(p1, "UNKNOWN")
     p2_ioc = player_ioc_dict.get(p2, "UNKNOWN")
     p1_home = 1 if p1_ioc == t_country else 0
     p2_home = 1 if p2_ioc == t_country else 0
     feat["home_advantage_diff"] = p1_home - p2_home
+
+    # Travel & Schedule Strain
+    compute_strain = getattr(fe, "compute_travel_strain", None)
+    if compute_strain:
+        last_tc = state.get("last_tourney_country", {})
+        last_tid = state.get("last_tourney_id", {})
+        strain1, short_sc1 = compute_strain(p1, day, tourney_name, t_country, surf, last_tid, last_pd, last_tc, last_surf)
+        strain2, short_sc2 = compute_strain(p2, day, tourney_name, t_country, surf, last_tid, last_pd, last_tc, last_surf)
+        feat["travel_strain_diff"] = strain1 - strain2
+        feat["short_rest_surface_change_diff"] = short_sc1 - short_sc2
+    else:
+        feat["travel_strain_diff"] = 0.0
+        feat["short_rest_surface_change_diff"] = 0.0
+
+    # Game Dominance EMA
+    def _calc_ema(hist, n):
+        if not hist:
+            return 0.50
+        k = min(len(hist), n)
+        recent = hist[-k:]
+        alpha = 2.0 / (n + 1.0)
+        weights = [(1.0 - alpha)**(k - 1 - i) for i in range(k)]
+        return float(np.average(recent, weights=weights))
+
+    g_hist = state.get("game_dominance_hist", {})
+    feat["game_dominance_ema5_diff"] = _calc_ema(g_hist.get(p1, []), 5) - _calc_ema(g_hist.get(p2, []), 5)
+    feat["game_dominance_ema10_diff"] = _calc_ema(g_hist.get(p1, []), 10) - _calc_ema(g_hist.get(p2, []), 10)
 
     p1_h = state.get("last_hand", {}).get(p1, 'R')
     p2_h = state.get("last_hand", {}).get(p2, 'R')
@@ -490,12 +508,7 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     is_def2 = 1 if tourney_champions.get(tourney_name) == p2 else 0
     feat["is_defending_champion_diff"] = is_def1 - is_def2
 
-    # Stats service/retour
-
-
-
-
-
+    # Stats service / retour
     sh1 = srv_hist.get(p1, [])
     sh2 = srv_hist.get(p2, [])
     r5_1, r20_1 = _rolling_stats(sh1)
@@ -503,14 +516,12 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     for k_idx, k in enumerate(SERVE_KEYS):
         feat[f"{k}_20_diff"] = r20_1[k_idx] - r20_2[k_idx]
 
-    # --- Nouvelles features Archétypes ---
     sb1 = _surf_bias(rr1, day, surf)
     sb2 = _surf_bias(rr2, day, surf)
     feat["surface_bias_diff"] = sb1 - sb2
 
     arch1 = _get_arch(r20_1, sb1)
     arch2 = _get_arch(r20_2, sb2)
-    # Exporter les archétypes pour le JSON du site web
     feat["_p1_archetype"] = arch1
     feat["_p2_archetype"] = arch2
 
@@ -522,21 +533,21 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     serve_win2 = (r20_2[2] * r20_2[3] + (1 - r20_2[2]) * r20_2[4]) if len(r20_2) > 4 else np.nan
     return_won1 = r20_1[6] if len(r20_1) > 6 else np.nan
     return_won2 = r20_2[6] if len(r20_2) > 6 else np.nan
-    
+
     feat["serve_return_edge1"] = serve_win1 - return_won2 if (serve_win1 == serve_win1 and return_won2 == return_won2) else 0.0
     feat["serve_return_edge2"] = serve_win2 - return_won1 if (serve_win2 == serve_win2 and return_won1 == return_won1) else 0.0
 
     wins_vs = state.get("wins_vs_arch", {})
     matches_vs = state.get("matches_vs_arch", {})
-    
+
     p1_w_vs = wins_vs.get(p1, {}).get(arch2, 0)
     p1_m_vs = matches_vs.get(p1, {}).get(arch2, 0)
     wr_vs_arch1 = p1_w_vs / p1_m_vs if p1_m_vs > 0 else 0.5
-    
+
     p2_w_vs = wins_vs.get(p2, {}).get(arch1, 0)
     p2_m_vs = matches_vs.get(p2, {}).get(arch1, 0)
     wr_vs_arch2 = p2_w_vs / p2_m_vs if p2_m_vs > 0 else 0.5
-    
+
     feat["winrate_vs_arch_diff"] = wr_vs_arch1 - wr_vs_arch2
     feat["_p1_wr_vs_arch"] = wr_vs_arch1
     feat["_p2_wr_vs_arch"] = wr_vs_arch2
@@ -549,9 +560,6 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["hand_matchup"]     = f"{_h1}_{_h2}"
     feat["hand_missing_diff"] = int(hand1 not in ("R","L")) - int(hand2 not in ("R","L"))
     feat["experience_diff"]  = cm1 - cm2
-    fmd1 = first_md.get(p1)
-    fmd2 = first_md.get(p2)
-    ((day - fmd2) / 365.25 if fmd2 else 0.0)
 
     # Surface
     sc1 = sc_count.get(p1, {}).get(surf, 0)
@@ -577,10 +585,10 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["tiebreak_winrate_diff"]    = _tb_rate(rr1) - _tb_rate(rr2)
     feat["giant_killer_rate_diff"]   = _giant_killer(rr1) - _giant_killer(rr2)
 
-    # Nouvelles features
+    # Sets & tournoi
     feat["sets_7d_diff"]              = _sets_recent(rr1, day, 7)  - _sets_recent(rr2, day, 7)
     feat["sets_14d_diff"]             = _sets_recent(rr1, day, 14) - _sets_recent(rr2, day, 14)
-    feat["sets_tourney_diff"]         = sets_total1 - sets_total2
+    feat["sets_tourney_diff"]         = sets_won1 - sets_won2
     feat["tourney_game_winpct_diff"]  = (
         (games_won1 / games_total1 if games_total1 > 0 else 0.5)
         - (games_won2 / games_total2 if games_total2 > 0 else 0.5)
@@ -594,66 +602,66 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["early_round_winrate_diff"]  = (_wr_round(rr1, day, 730, late=False)
                                          - _wr_round(rr2, day, 730, late=False))
 
-    # Categoriel (pour one-hot)
+    # Features fatigue & momentum
+    feat["matches_last_3d_diff"]      = _cnt_recent(rr1, day, 3) - _cnt_recent(rr2, day, 3)
+    feat["matches_last_7d_diff"]      = _cnt_recent(rr1, day, 7) - _cnt_recent(rr2, day, 7)
+    feat["hours_played_last_14d_diff"]= (_avg_min(rr1, 10) * _cnt_recent(rr1, day, 14) - _avg_min(rr2, 10) * _cnt_recent(rr2, day, 14)) / 60.0
+    feat["form20_surface_diff"]       = _wr_surf(rr1, surf, 20) - _wr_surf(rr2, surf, 20)
+    feat["serve_momentum_diff"]       = 0.0
+    feat["return_momentum_diff"]      = 0.0
+    feat["elo_momentum_diff"]         = 0.0
+
+    # Serve & Return Elo + Markov Point-by-Point
+    serve_elo = state.get("serve_elo", {})
+    return_elo = state.get("return_elo", {})
+    serve_elo_surf = state.get("serve_elo_surface", {})
+    return_elo_surf = state.get("return_elo_surface", {})
+
+    # Serve & Return Elo (avec dépréciation d'inactivité)
+    se1  = get_decayed_elo(serve_elo.get(p1, ELO_INIT), day, last_p1)
+    se2  = get_decayed_elo(serve_elo.get(p2, ELO_INIT), day, last_p2)
+    re1  = get_decayed_elo(return_elo.get(p1, ELO_INIT), day, last_p1)
+    re2  = get_decayed_elo(return_elo.get(p2, ELO_INIT), day, last_p2)
+    ses1 = get_decayed_elo(serve_elo_surf.get(surf, {}).get(p1, se1), day, last_p1)
+    ses2 = get_decayed_elo(serve_elo_surf.get(surf, {}).get(p2, se2), day, last_p2)
+    res1 = get_decayed_elo(return_elo_surf.get(surf, {}).get(p1, re1), day, last_p1)
+    res2 = get_decayed_elo(return_elo_surf.get(surf, {}).get(p2, re2), day, last_p2)
+
+    feat["serve_elo_diff"]           = se1 - se2
+    feat["return_elo_diff"]          = re1 - re2
+    feat["serve_elo_surface_diff"]   = ses1 - ses2
+    feat["return_elo_surface_diff"]  = res1 - res2
+
+    # Point prob estimation & Markov match simulation
+    pa_m, pb_m = estimate_point_probabilities(ses1, res2, ses2, res1, surface=surf, circuit=state.get("circuit", "atp"))
+    bo_i = int(best_of) if best_of in (3, 5) else 3
+    m_res = p_match(pa_m, pb_m, best_of=bo_i)
+
+    feat["markov_p_win"]          = m_res["proba_a"]
+    feat["markov_hold_diff"]      = m_res["hold_proba_a"] - m_res["hold_proba_b"]
+    feat["markov_expected_games"] = m_res["expected_total_games"]
+
+    # Markov analytics pour l'affichage
+    feat["_markov_res"]           = m_res
+    feat["_pa_m"]                 = pa_m
+    feat["_pb_m"]                 = pb_m
+    feat["_p1_serve_elo_surf"]    = ses1
+    feat["_p2_serve_elo_surf"]    = ses2
+    feat["_p1_return_elo_surf"]   = res1
+    feat["_p2_return_elo_surf"]   = res2
+
+    # Catégoriel
     feat["surface"]       = surf
     feat["tourney_level"] = t_level
     feat["round"]         = round_
     feat["indoor"]        = indoor
     feat["best_of"]       = best_of
 
-    # === UI Detailed Stats (Ignorées par XGBoost grâce au préfixe _) ===
-    feat["_p1_elo_surf"] = int(elo_surf.get(surf, {}).get(p1, ELO_INIT))
-    feat["_p2_elo_surf"] = int(elo_surf.get(surf, {}).get(p2, ELO_INIT))
-    
-    feat["_p1_hand"] = state.get("last_hand", {}).get(p1, "Droitier")
-    feat["_p2_hand"] = state.get("last_hand", {}).get(p2, "Droitier")
-    
-    # Winrates vs Left/Right
-    w1_L = _speed_wr(vs_lefty_results, p1)
-    w2_L = _speed_wr(vs_lefty_results, p2)
-    # Approximation wr vs R
-    wr1_global = _wr_surf(rr1, "All", 20)
-    wr2_global = _wr_surf(rr2, "All", 20)
-    feat["_p1_wr_vs_L"] = w1_L
-    feat["_p2_wr_vs_L"] = w2_L
-    feat["_p1_wr_vs_R"] = wr1_global + (wr1_global - w1_L) * 0.15 # Approx
-    feat["_p2_wr_vs_R"] = wr2_global + (wr2_global - w2_L) * 0.15
-    
-    # Indices sur 100
-    # Service (r20[2]=first_in, r20[3]=first_won, r20[4]=second_won)
-    s1_pct = r20_1[2] * r20_1[3] + (1 - r20_1[2]) * r20_1[4]
-    s2_pct = r20_2[2] * r20_2[3] + (1 - r20_2[2]) * r20_2[4]
-    feat["_p1_service_idx"] = min(100, int(s1_pct * 100))
-    feat["_p2_service_idx"] = min(100, int(s2_pct * 100))
-    
-    # Retour (r20[6]=return_pts_won_pct) -> x 2 pour avoir une note sur ~100 (40% de retour = 80/100)
-    feat["_p1_return_idx"] = min(100, int(r20_1[6] * 200))
-    feat["_p2_return_idx"] = min(100, int(r20_2[6] * 200))
-    
-    # Clutch (bp_saved + bp_conv) / 2 * 150 pour l'échelle
-    feat["_p1_clutch_idx"] = min(100, int(((r20_1[5] + r20_1[7]) / 2.0) * 150))
-    feat["_p2_clutch_idx"] = min(100, int(((r20_2[5] + r20_2[7]) / 2.0) * 150))
-    
-    feat["_p1_global_idx"] = int((feat["_p1_service_idx"] + feat["_p1_return_idx"] + feat["_p1_clutch_idx"]) / 3)
-    feat["_p2_global_idx"] = int((feat["_p2_service_idx"] + feat["_p2_return_idx"] + feat["_p2_clutch_idx"]) / 3)
-    
-    # Fatigue (0 à 100)
-    feat["_p1_fatigue_idx"] = min(100, int((_sets_recent(rr1, day, 14) / 15.0) * 100))
-    feat["_p2_fatigue_idx"] = min(100, int((_sets_recent(rr2, day, 14) / 15.0) * 100))
-    feat["_p1_rest_days"] = min(30, int(hours1 / 24))
-    feat["_p2_rest_days"] = min(30, int(hours2 / 24))
-    
-    # Stats en tant que favori / outsider (approx via upset_rate et giant_killer_rate)
-    feat["_p1_wr_fav"] = min(100, int((wr1_global + _upset_n(rr1, 20)) * 100))
-    feat["_p2_wr_fav"] = min(100, int((wr2_global + _upset_n(rr2, 20)) * 100))
-    feat["_p1_wr_out"] = min(100, int(_giant_killer(rr1) * 100))
-    feat["_p2_wr_out"] = min(100, int(_giant_killer(rr2) * 100))
-
     return feat
 
 
 def build_row(feat, feature_cols):
-    """Construit un DataFrame 1-ligne avec le meme encodage que l'entrainement."""
+    """Construit un DataFrame 1-ligne avec le même encodage que l'entraînement."""
     df = pd.DataFrame([feat])
     cat_cols = ["surface", "tourney_level", "round", "hand_matchup", "indoor"]
     df = pd.get_dummies(df, columns=[c for c in cat_cols if c in df.columns])
@@ -661,118 +669,19 @@ def build_row(feat, feature_cols):
     for col in feature_cols:
         if col not in df.columns:
             if col.startswith(cat_prefixes):
-                df[col] = 0.0  # Colonnes One-Hot (catégories non rencontrées)
+                df[col] = 0.0
             else:
-                df[col] = np.nan  # Features numériques manquantes
+                df[col] = np.nan
     return df[feature_cols].astype(float)
 
 
-import math
-
-def calculate_confidence(p1_prob, p1, p2, match_date, tourney_name, t_level, state, fe, hours1=24.0, hours2=24.0):
-    """Calcule un indice de confiance global de 0 a 100 basé sur les signaux hors-terrain."""
-    # 1. Base Score (recalibré avec racine carrée pour une progression plus dynamique)
-    fav_prob = max(p1_prob, 1.0 - p1_prob)
-    # L'écart brut est entre 0.0 et 0.5. On le divise par 0.5 pour l'avoir entre 0 et 1.
-    gap = (fav_prob - 0.50) / 0.50
-    # Nouvelle formule : On part d'une base de 40 (car le modèle ML a déjà une fiabilité de base)
-    # et on ajoute le signal d'écart. Cela permet aux matchs "serrés" d'atteindre 55-60 de conf.
-    base_score = 40.0 + (math.sqrt(gap) * 60.0)
-    
-    multiplier = 1.0
-    flags = []
-    
-    current_day = int(state.get("last_day", 0))
-    
-    # 2. Inactivité
-    last_p1 = state.get("last_play_date", {}).get(p1)
-    last_p2 = state.get("last_play_date", {}).get(p2)
-    days1 = (current_day - int(last_p1)) if last_p1 is not None else 365
-    days2 = (current_day - int(last_p2)) if last_p2 is not None else 365
-    
-    if days1 > 45 or days2 > 45:
-        multiplier *= 0.7
-        flags.append("⚠️ Inactivité > 45j")
-        
-    # 3. Débutant
-    cm1 = state.get("career_matches", {}).get(p1, 0)
-    cm2 = state.get("career_matches", {}).get(p2, 0)
-    if cm1 < 20 or cm2 < 20:
-        multiplier *= 0.85
-        flags.append("⚠️ Débutant < 20 matchs")
-        
-    # 4. Épuisement
-    rr1 = state.get("recent_results", {}).get(p1, [])
-    rr2 = state.get("recent_results", {}).get(p2, [])
-    min1 = rr1[-1][8] if rr1 and len(rr1[-1]) > 8 else 0
-    min2 = rr2[-1][8] if rr2 and len(rr2[-1]) > 8 else 0
-    if (hours1 < 18 and min1 > 150) or (hours2 < 18 and min2 > 150):
-        multiplier *= 0.8
-        flags.append("⚠️ Épuisement extrême (<18h repos)")
-        
-    # 5. Volatilité
-    cons1 = fe._consistency(rr1, 20)
-    cons2 = fe._consistency(rr2, 20)
-    # L'écart-type d'une distribution de Bernoulli (victoire/défaite) est max à 0.5 (50% de winrate).
-    # La somme des deux est au maximum de 1.0. Un seuil de 0.35 pénalisait tout le monde.
-    # On met le seuil à 0.90 pour viser le top 80e percentile des joueurs les plus imprévisibles.
-    if (cons1 + cons2) > 0.90:
-        multiplier *= 0.85
-        flags.append("⚠️ Forte volatilité (Irréguliers)")
-        
-    # 6. Pre-GS Tanking
-    t_lower = (tourney_name or "").lower()
-    pre_gs_tourneys = ["winston-salem", "geneva", "lyon", "eastbourne", "mallorca", "adelaide", "auckland"]
-    if t_level == "D" and any(x in t_lower for x in pre_gs_tourneys):
-        rk1 = state.get("last_rank", {}).get(p1)
-        rk2 = state.get("last_rank", {}).get(p2)
-        if (rk1 and rk1 <= 30) or (rk2 and rk2 <= 30):
-            multiplier *= 0.75
-            flags.append("⚠️ Pre-GS Tanking potentiel")
-            
-    # 7. Bonus Motivation / Domicile
-    def get_country(t):
-        tl = t.lower()
-        if any(x in tl for x in ["us open", "miami", "cincinnati", "indian wells", "washington", "dallas", "delray"]): return "USA"
-        if any(x in tl for x in ["roland garros", "paris", "marseille", "montpellier", "lyon", "metz"]): return "FRA"
-        if any(x in tl for x in ["madrid", "barcelona", "mallorca"]): return "ESP"
-        if any(x in tl for x in ["australian open", "brisbane", "sydney"]): return "AUS"
-        if any(x in tl for x in ["wimbledon", "queen", "eastbourne"]): return "GBR"
-        if any(x in tl for x in ["rome", "turin", "naples"]): return "ITA"
-        if any(x in tl for x in ["munich", "halle", "hamburg", "stuttgart"]): return "GER"
-        return "UNKNOWN"
-        
-    t_country = get_country(t_lower)
-    ioc1 = state.get("player_ioc_dict", {}).get(p1, "UNKNOWN")
-    ioc2 = state.get("player_ioc_dict", {}).get(p2, "UNKNOWN")
-    def1 = state.get("tourney_champions", {}).get(tourney_name) == p1
-    def2 = state.get("tourney_champions", {}).get(tourney_name) == p2
-    
-    if ioc1 == t_country or ioc2 == t_country or def1 or def2:
-        multiplier *= 1.10
-        flags.append("✅ Bonus Domicile/Tenant du titre")
-        
-    final_score = min(100.0, base_score * multiplier)
-    
-    tier = "NO BET"
-    if final_score >= 75: tier = "HIGH STAKE"
-    elif final_score >= 55: tier = "MEDIUM STAKE"
-    elif final_score >= 35: tier = "LOW STAKE"
-    
-    return {
-        "confidence_index": round(final_score),
-        "bet_tier": tier,
-        "confidence_flags": flags
-    }
-
-
 # --------------------------------------------------------------------------
-# Interface interactive
+# Interface CLI interactive
 # --------------------------------------------------------------------------
 
 SURFACES = ["Hard", "Clay", "Grass", "Carpet"]
-LEVELS   = {"G": "Grand Slam", "M": "Masters 1000", "A": "ATP 500",
-            "D": "ATP 250", "C": "Challenger", "F": "Finals"}
+LEVELS   = {"G": "Grand Slam", "M": "Masters 1000", "A": "ATP 500 / WTA 500",
+            "D": "ATP 250 / WTA 250", "C": "Challenger / WTA 125", "F": "Finals"}
 ROUNDS   = ["Q", "R128", "R64", "R32", "R16", "QF", "SF", "F"]
 
 
@@ -783,17 +692,17 @@ def select_player(prompt, known_players):
             continue
         matches = fuzzy_find(name, known_players)
         if not matches:
-            print(f"  Aucun joueur trouve pour '{name}'.")
+            print(f"  Aucun joueur trouvé pour '{name}'.")
             continue
         if len(matches) == 1:
-            confirm = input(f"  -> '{matches[0]}' ? (entree=oui) ").strip().lower()
+            confirm = input(f"  -> '{matches[0]}' ? (entrée=oui) ").strip().lower()
             if confirm in ("", "o", "y", "oui", "yes"):
                 return matches[0]
             continue
-        print("  Joueurs trouves :")
+        print("  Joueurs trouvés :")
         for i, m in enumerate(matches, 1):
             print(f"    {i}. {m}")
-        choice = input("  Choix (numero) : ").strip()
+        choice = input("  Choix (numéro) : ").strip()
         try:
             idx = int(choice) - 1
             if 0 <= idx < len(matches):
@@ -804,169 +713,170 @@ def select_player(prompt, known_players):
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit to predict (atp or wta)")
+    parser = argparse.ArgumentParser(description="Prédiction de match de tennis avec XGBoost pur et Markov.")
+    parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit (atp ou wta)")
+    parser.add_argument("--p1", default=None, help="Nom du joueur 1 (ex: 'Djokovic N.')")
+    parser.add_argument("--p2", default=None, help="Nom du joueur 2 (ex: 'Alcaraz C.')")
+    parser.add_argument("--surface", default="Hard", help="Surface (Hard, Clay, Grass, Carpet)")
+    parser.add_argument("--tournament", default="Tournament", help="Nom du tournoi")
+    parser.add_argument("--level", default="M", choices=["G", "M", "A", "C", "F"], help="Niveau (G=Grand Chelem, M=Masters 1000, A=ATP 500/250, C=Challenger)")
+    parser.add_argument("--round", default="QF", help="Tour (F, SF, QF, R16, R32, R64, R128, etc.)")
+    parser.add_argument("--best-of", type=int, default=3, choices=[3, 5], help="Format (3 ou 5 sets)")
+    parser.add_argument("--indoor", type=int, default=0, choices=[0, 1], help="Indoor (0=non, 1=oui)")
+    parser.add_argument("--odds1", type=float, default=None, help="Cote joueur 1")
+    parser.add_argument("--odds2", type=float, default=None, help="Cote joueur 2")
     args = parser.parse_args()
-    
+
     state, model, feature_cols = load_resources(args.circuit)
     known_players = sorted(state["elo"].keys())
 
+    # Mode direct (CLI)
+    if args.p1 and args.p2:
+        def find_best_match(name):
+            exact = [p for p in known_players if p.lower() == name.lower()]
+            if exact: return exact[0]
+            contains = [p for p in known_players if name.lower() in p.lower()]
+            if contains: return contains[0]
+            return name
+
+        p1 = find_best_match(args.p1)
+        p2 = find_best_match(args.p2)
+        surf = args.surface.capitalize()
+        level = args.level
+        round_ = args.round.upper()
+        best_of = args.best_of
+        indoor = args.indoor
+
+        print("\n" + "=" * 60)
+        print(f"  PRÉDICTION DE MATCH TENNIS ({args.circuit.upper()})")
+        print("=" * 60)
+        print(f"  Affiche  : {p1} vs {p2}")
+        print(f"  Contexte : {args.tournament} | {surf} | {LEVELS.get(level, level)} | Tour: {round_} | Best-of {best_of} | Indoor: {'Oui' if indoor else 'Non'}")
+
+        feat = compute_features(
+            p1=p1, p2=p2, surf=surf, t_level=level, round_=round_,
+            best_of=best_of, indoor=indoor, tourney_name=args.tournament,
+            match_date=pd.Timestamp.today(), state=state,
+        )
+        row = build_row(feat, feature_cols)
+        p_raw = model.predict_proba(row)[0]
+        p_p1, p_p2 = float(p_raw[1]), float(p_raw[0])
+        m_r = feat.get("_markov_result", {})
+
+        print("\n" + "-" * 60)
+        print(f"  PROBABILITÉ DE VICTOIRE :")
+        print(f"    • {p1:<28} : {p_p1*100:>6.2f}%  (Cote juste : {1/p_p1:.2f})")
+        print(f"    • {p2:<28} : {p_p2*100:>6.2f}%  (Cote juste : {1/p_p2:.2f})")
+        print("-" * 60)
+
+        print(f"\n  --- Détails et Dynamique des Joueurs ---")
+        print(f"  Elo Global  : {p1} = {state['elo'].get(p1, 1500):.0f}  |  {p2} = {state['elo'].get(p2, 1500):.0f}")
+        print(f"  Elo {surf:<7}: {p1} = {state['elo_surface'].get(surf,{}).get(p1,1500):.0f}  |  {p2} = {state['elo_surface'].get(surf,{}).get(p2,1500):.0f}")
+        if m_r:
+            print(f"  Point Service    : {p1} = {feat.get('_pa_m', 0.64):.1%}  |  {p2} = {feat.get('_pb_m', 0.64):.1%}")
+            print(f"  Total Jeux Prévu : {m_r.get('expected_total_games', 22.5):.1f} jeux")
+        h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
+        print(f"  H2H Historique   : {p1} {h12[0]}-{h12[1]} {p2}")
+
+        if args.odds1 and args.odds2 and args.odds1 > 1 and args.odds2 > 1:
+            display_value_bet_analysis(p1, p2, p_p1, p_p2, args.odds1, args.odds2)
+        return
+
+    # Mode interactif
     print("\n" + "=" * 60)
-    print("  PREDICTION DE MATCH TENNIS")
+    print(f"  PRÉDICTION DE MATCH TENNIS (XGBOOST {args.circuit.upper()})")
     print("=" * 60)
     print(f"  {len(known_players)} joueurs connus")
-    print(f"  Dernier match enregistre : {state['date_min'].date()} + {state['last_day']} jours")
+    print(f"  Dernier match enregistré : {state['date_min'].date()} + {state['last_day']} jours")
     print("=" * 60)
 
     while True:
-        # Joueurs
         p1 = select_player("Joueur 1 (ex: Djokovic N.)", known_players)
         p2 = select_player("Joueur 2 (ex: Alcaraz C.)", known_players)
         if p1 == p2:
-            print("  Les deux joueurs doivent etre differents.")
+            print("  Les deux joueurs doivent être différents.")
             continue
 
-        # Surface
         print(f"\n  Surfaces : {', '.join(SURFACES)}")
         surf_in = ask("Surface", "Hard")
         surf = next((s for s in SURFACES if s.lower().startswith(surf_in.lower())), "Hard")
 
-        # Niveau
+        tourney_in = ask("Tournoi (ex: Cincinnati, US Open, Madrid, Rome, Roland Garros)", "Cincinnati")
+        tourney_name = tourney_in if tourney_in else "Tournament"
+
         print(f"\n  Niveaux : " + "  ".join(f"{k}={v}" for k, v in LEVELS.items()))
         level = ask("Niveau", "M").upper()
         if level not in LEVELS:
             level = "M"
 
-        # Tour
         print(f"\n  Tours : {', '.join(ROUNDS)}")
         round_ = ask("Tour", "QF").upper()
         if round_ not in ROUNDS:
             round_ = "QF"
 
-        # Best-of
         bo_in = ask("Best-of (3 ou 5)", "3")
         best_of = 5 if bo_in.strip() == "5" else 3
 
-        # Indoor
         ind_in = ask("Indoor ? (0=non, 1=oui)", "0")
         indoor = 1 if ind_in.strip() == "1" else 0
 
-        # Date
         date_str = ask("Date du match (AAAA-MM-JJ)", datetime.date.today().isoformat())
         try:
             match_date = pd.Timestamp(date_str)
         except Exception:
             match_date = pd.Timestamp.today()
 
-        # Classements optionnels
-        print("\n  [Optionnel] Classements actuels (entree = dernier connu)")
-        known_r1 = state["last_rank"].get(p1)
-        known_r2 = state["last_rank"].get(p2)
-        r1_in = ask_float(f"  Rank {p1}", known_r1)
-        r2_in = ask_float(f"  Rank {p2}", known_r2)
+        r1_in = state["last_rank"].get(p1)
+        r2_in = state["last_rank"].get(p2)
 
-        # Seeds
-        seed1_in = ask("  Seed joueur 1 (entree si non tete de serie)", "")
-        seed2_in = ask("  Seed joueur 2 (entree si non tete de serie)", "")
-        seed1 = int(seed1_in) if seed1_in.isdigit() else None
-        seed2 = int(seed2_in) if seed2_in.isdigit() else None
-
-        # Statut d'entree (wildcard / qualifie)
-        print("\n  [Optionnel] Statut d'entree (WC=wildcard, Q=qualifie, entree=aucun)")
-        entry1_in = ask(f"  Statut {p1}", "").upper().strip()
-        entry2_in = ask(f"  Statut {p2}", "").upper().strip()
-        entry1 = entry1_in if entry1_in in ("WC", "Q") else None
-        entry2 = entry2_in if entry2_in in ("WC", "Q") else None
-
-        # Stats intra-tournoi (pertinentes a partir des 8es de finale)
-        EARLY_ROUNDS = {"R128", "R64", "R32"}
-        mt1 = mt2 = 0
-        gw1 = gt1 = gw2 = gt2 = 0
-        sw1 = st1 = sw2 = st2 = 0
-        if round_ not in EARLY_ROUNDS:
-            print(f"\n  [Optionnel] Stats dans le tournoi en cours (entree=0/inconnu)")
-            print(f"  Exemple pour un quart de finale : {p1} a joue 3 matchs -> 3")
-            mt1_in = ask_float(f"  Matchs joues par {p1} dans ce tournoi", 0)
-            mt2_in = ask_float(f"  Matchs joues par {p2} dans ce tournoi", 0)
-            mt1 = int(mt1_in) if mt1_in is not None else 0
-            mt2 = int(mt2_in) if mt2_in is not None else 0
-            if mt1 > 0 or mt2 > 0:
-                print("  Jeux (ex: 'jeux gagnes / jeux total' — laisser vide si inconnu)")
-                gw1_in = ask_float(f"  Jeux gagnes {p1}", 0)
-                gt1_in = ask_float(f"  Jeux totaux {p1}", 0)
-                gw2_in = ask_float(f"  Jeux gagnes {p2}", 0)
-                gt2_in = ask_float(f"  Jeux totaux {p2}", 0)
-                gw1 = int(gw1_in) if gw1_in else 0
-                gt1 = int(gt1_in) if gt1_in else 0
-                gw2 = int(gw2_in) if gw2_in else 0
-                gt2 = int(gt2_in) if gt2_in else 0
-                print("  Sets (ex: 'sets gagnes / sets total')")
-                sw1_in = ask_float(f"  Sets gagnes {p1}", 0)
-                st1_in = ask_float(f"  Sets totaux {p1}", 0)
-                sw2_in = ask_float(f"  Sets gagnes {p2}", 0)
-                st2_in = ask_float(f"  Sets totaux {p2}", 0)
-                sw1 = int(sw1_in) if sw1_in else 0
-                st1 = int(st1_in) if st1_in else 0
-                sw2 = int(sw2_in) if sw2_in else 0
-                st2 = int(st2_in) if st2_in else 0
-
-        # Calcul
         feat = compute_features(
             p1=p1, p2=p2, surf=surf, t_level=level,
             round_=round_, best_of=best_of, indoor=indoor,
-            match_date=match_date, state=state,
-            rank1=r1_in, rank2=r2_in,
-            seed1=seed1, seed2=seed2,
-            entry1=entry1, entry2=entry2,
-            matches_tourney1=mt1, matches_tourney2=mt2,
-            games_won1=gw1, games_total1=gt1,
-            games_won2=gw2, games_total2=gt2,
-            sets_won1=sw1, sets_total1=st1,
-            sets_won2=sw2, sets_total2=st2,
+            tourney_name=tourney_name, match_date=match_date,
+            state=state, rank1=r1_in, rank2=r2_in,
         )
-        X   = build_row(feat, feature_cols)
+        X = build_row(feat, feature_cols)
         p_p1 = float(model.predict_proba(X)[0, 1])
         p_p2 = 1.0 - p_p1
 
-        # Affichage
-        print("\n" + "=" * 60)
-        print("  RESULTAT")
-        print("=" * 60)
-        print(f"  {p1:<35}  {p_p1:.1%}")
-        print(f"  {p2:<35}  {p_p2:.1%}")
-        print(f"\n  Elo : {p1} = {state['elo'].get(p1, 1500):.0f}  |  "
-              f"{p2} = {state['elo'].get(p2, 1500):.0f}")
-        print(f"  Elo {surf} : {p1} = {state['elo_surface'].get(surf,{}).get(p1,1500):.0f}  |  "
-              f"{p2} = {state['elo_surface'].get(surf,{}).get(p2,1500):.0f}")
-        h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
-        print(f"  H2H : {p1} {h12[0]}-{h12[1]} {p2}")
+        print("\n" + "=" * 65)
+        print(f"  RÉSULTAT DE PRÉDICTION ({args.circuit.upper()} - XGBOOST)")
+        print("=" * 65)
+        t_cpi_val = feat.get("tourney_cpi", 8.5)
+        t_alt_val = feat.get("tourney_altitude", 0)
+        cpi_str = f"Vitesse Ace Rate : {t_cpi_val:.1f}%" if t_cpi_val else "Vitesse Standard"
+        alt_str = f" | Altitude : {t_alt_val:.0f}m" if t_alt_val > 0 else ""
+        print(f"  Contexte : {tourney_name} | {surf} ({cpi_str}{alt_str}) | {LEVELS.get(level, level)}")
+        print("=" * 65)
+        m_r = feat.get("_markov_res", {})
+        p_markov1 = m_r.get("proba_a", 0.5)
+        p_markov2 = m_r.get("proba_b", 0.5)
+        print(f"  {p1:<30}  XGBoost: {p_p1:>6.1%}  |  Markov: {p_markov1:>6.1%}")
+        print(f"  {p2:<30}  XGBoost: {p_p2:>6.1%}  |  Markov: {p_markov2:>6.1%}")
 
-        # Cotes (optionnel)
-        print("\n  [Optionnel] Cotes du bookmaker (entree pour sauter)")
+        print(f"\n  --- Ratings Elo Décomposés ---")
+        print(f"  Elo Global  : {p1} = {state['elo'].get(p1, 1500):.0f}  |  {p2} = {state['elo'].get(p2, 1500):.0f}")
+        print(f"  Elo {surf:<7}: {p1} = {state['elo_surface'].get(surf,{}).get(p1,1500):.0f}  |  {p2} = {state['elo_surface'].get(surf,{}).get(p2,1500):.0f}")
+        print(f"  Serve Elo   : {p1} = {feat.get('_p1_serve_elo_surf', 1500):.0f}  |  {p2} = {feat.get('_p2_serve_elo_surf', 1500):.0f}")
+        print(f"  Return Elo  : {p1} = {feat.get('_p1_return_elo_surf', 1500):.0f}  |  {p2} = {feat.get('_p2_return_elo_surf', 1500):.0f}")
+
+        if m_r:
+            print(f"\n  --- Modèle Markovien Point-par-Point (Barnett & Clarke) ---")
+            print(f"  P(Point Service) : {p1} = {feat.get('_pa_m', 0.64):.1%}  |  {p2} = {feat.get('_pb_m', 0.64):.1%}")
+            print(f"  P(Hold Service)  : {p1} = {m_r.get('hold_proba_a', 0.8):.1%}  |  {p2} = {m_r.get('hold_proba_b', 0.8):.1%}")
+            print(f"  Total Jeux Prévu : {m_r.get('expected_total_games', 22.5):.1f} jeux")
+
+        h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
+        print(f"\n  H2H : {p1} {h12[0]}-{h12[1]} {p2}")
+
+        print("\n  [Optionnel] Cotes du bookmaker (entrée pour sauter)")
         odds1_in = ask_float(f"  Cote {p1}")
         odds2_in = ask_float(f"  Cote {p2}")
 
         if odds1_in and odds2_in and odds1_in > 1 and odds2_in > 1:
-            pm1, pm2 = remove_overround(odds1_in, odds2_in)
-            edge1 = p_p1 - pm1
-            edge2 = p_p2 - pm2
-            print("\n  --- Analyse value bet (seuil edge > 3%) ---")
-            print(f"  {'Joueur':<35}  {'p_modele':>8}  {'p_marche':>9}  {'Edge':>8}")
-            print(f"  {p1:<35}  {p_p1:>8.1%}  {pm1:>9.1%}  {edge1:>+8.1%}"
-                  + ("  <= VALUE BET!" if edge1 > 0.03 else ""))
-            print(f"  {p2:<35}  {p_p2:>8.1%}  {pm2:>9.1%}  {edge2:>+8.1%}"
-                  + ("  <= VALUE BET!" if edge2 > 0.03 else ""))
-            best_e = max(edge1, edge2)
-            if best_e > 0.03:
-                bet_p   = p1 if edge1 > edge2 else p2
-                bet_o   = odds1_in if edge1 > edge2 else odds2_in
-                bet_e   = best_e
-                print(f"\n  => PARIER SUR : {bet_p}  @ {bet_o:.2f}  (edge {bet_e:+.1%})")
-            else:
-                print("\n  => Pas de value bet (edge < 3%).")
+            display_value_bet_analysis(p1, p2, p_p1, p_p2, odds1_in, odds2_in)
 
-        # Continuer ?
-        again = input("\n  Nouveau match ? (entree=oui / n=non) ").strip().lower()
+        again = input("\n  Nouveau match ? (entrée=oui / n=non) ").strip().lower()
         if again in ("n", "non", "no", "q", "quit"):
             break
 

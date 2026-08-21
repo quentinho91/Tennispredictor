@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#080c16">
+  <title>Tennis Predictor AI • XGBoost & Value Bet</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-icon">🎾</span>
+        <h1 class="brand-title">TENNIS PREDICTOR</h1>
+        <span class="brand-badge">XGBoost Pure</span>
+      </div>
+
+      <!-- Circuit Switcher -->
+      <div class="circuit-switcher">
+        <button class="circuit-btn active" data-circuit="atp">
+          <span>🏆</span> ATP (Hommes)
+        </button>
+        <button class="circuit-btn" data-circuit="wta">
+          <span>👑</span> WTA (Femmes)
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Match Form Card -->
+    <main class="card">
+      <div class="card-title">
+        <span>⚔️</span> Affiche du Match
+      </div>
+
+      <!-- Player 1 and Player 2 Inputs -->
+      <div class="players-grid">
+        <div class="player-input-wrap">
+          <label class="input-label" for="p1-input">Joueur 1 (Serveur / Haut de tableau)</label>
+          <input type="text" id="p1-input" class="text-input" placeholder="Tapez 2 lettres (ex: Alcaraz, Sinner...)" autocomplete="off">
+          <div id="p1-dropdown" class="autocomplete-dropdown"></div>
+        </div>
+
+        <div class="swap-btn-wrap">
+          <button type="button" id="swap-btn" class="swap-btn" title="Inverser les joueurs">⇄</button>
+        </div>
+
+        <div class="player-input-wrap">
+          <label class="input-label" for="p2-input">Joueur 2 (Adversaire)</label>
+          <input type="text" id="p2-input" class="text-input" placeholder="Tapez 2 lettres (ex: Djokovic, Medvedev...)" autocomplete="off">
+          <div id="p2-dropdown" class="autocomplete-dropdown"></div>
+        </div>
+      </div>
+
+      <!-- Tournament & Surface Options -->
+      <div class="options-grid">
+        <div class="form-group">
+          <label class="input-label" for="tournament-input">Tournoi</label>
+          <input type="text" id="tournament-input" class="text-input" value="US Open" placeholder="ex: US Open, Cincinnati, Rome...">
+        </div>
+
+        <div class="form-group">
+          <label class="input-label" for="surface-select">Surface</label>
+          <select id="surface-select" class="select-input">
+            <option value="Hard" selected>🟦 Dur (Hard)</option>
+            <option value="Clay">🧱 Terre Battue (Clay)</option>
+            <option value="Grass">🌿 Gazon (Grass)</option>
+            <option value="Carpet">🟫 Moquette (Carpet)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="input-label" for="level-select">Catégorie</label>
+          <select id="level-select" class="select-input">
+            <option value="G" selected>Grand Chelem</option>
+            <option value="M">Masters 1000 / WTA 1000</option>
+            <option value="A">ATP 500 / 250 / WTA 500</option>
+            <option value="C">Challenger / WTA 125</option>
+            <option value="F">Finals (Masters)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="input-label" for="round-select">Tour</label>
+          <select id="round-select" class="select-input">
+            <option value="F" selected>Finale (F)</option>
+            <option value="SF">Demi-Finale (SF)</option>
+            <option value="QF">Quart de Finale (QF)</option>
+            <option value="R16">Huitième (R16)</option>
+            <option value="R32">16ème (R32)</option>
+            <option value="R64">32ème (R64)</option>
+            <option value="R128">1er Tour (R128)</option>
+            <option value="Q">Qualifications (Q)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="input-label" for="best-of-select">Format</label>
+          <select id="best-of-select" class="select-input">
+            <option value="3" selected>Best-of 3 sets</option>
+            <option value="5">Best-of 5 sets (GC)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="input-label" for="indoor-select">Environnement</label>
+          <select id="indoor-select" class="select-input">
+            <option value="0" selected>Outdoor (Plein air)</option>
+            <option value="1">Indoor (Couvert)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Bookmaker Odds -->
+      <div style="margin-top: 16px;">
+        <label class="input-label">💰 Cotes du Bookmaker (Optionnel - pour calcul Value Bet)</label>
+        <div class="odds-grid">
+          <div class="odds-input-wrap">
+            <input type="number" step="0.01" id="odds1-input" class="text-input odds-input" placeholder="Cote J1 (ex: 1.85)">
+          </div>
+          <div class="odds-input-wrap">
+            <input type="number" step="0.01" id="odds2-input" class="text-input odds-input" placeholder="Cote J2 (ex: 2.05)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button type="button" id="btn-predict" class="btn-predict">
+        🔮 Prédire le Match
+      </button>
+    </main>
+
+    <!-- Results Section (Dynamic) -->
+    <section id="results-section">
+      <!-- Probabilities Hero Card -->
+      <div class="card hero-prob-card">
+        <div id="res-context-tag" class="match-context-tag">US Open • Hard • Tour: F • Best-of 3</div>
+
+        <div class="prob-duel-wrap">
+          <div class="player-prob-col p1">
+            <div id="res-p1-name" class="prob-pname">Joueur 1</div>
+            <div id="res-p1-prob" class="prob-percent">00.0%</div>
+            <div id="res-p1-fair-odd" class="fair-odd">Cote juste : 0.00</div>
+          </div>
+
+          <div class="vs-pill">VS</div>
+
+          <div class="player-prob-col p2">
+            <div id="res-p2-name" class="prob-pname">Joueur 2</div>
+            <div id="res-p2-prob" class="prob-percent">00.0%</div>
+            <div id="res-p2-fair-odd" class="fair-odd">Cote juste : 0.00</div>
+          </div>
+        </div>
+
+        <!-- Dual Progress Bar -->
+        <div class="dual-bar-container">
+          <div id="bar-p1" class="dual-bar-p1" style="width: 50%;"></div>
+          <div id="bar-p2" class="dual-bar-p2" style="width: 50%;"></div>
+        </div>
+
+        <!-- Value Bet Card -->
+        <div id="valuebet-container" class="valuebet-card no-vb" style="display: none;"></div>
+      </div>
+
+      <!-- Comparative Ratings & Markov Stats -->
+      <div class="card">
+        <div class="card-title">
+          <span>📊</span> Comparaison Approfondie & Modèle Markov
+        </div>
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>Métrique</th>
+              <th>Joueur 1</th>
+              <th>Joueur 2</th>
+            </tr>
+          </thead>
+          <tbody id="stats-table-body">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      Tennis Predictor AI • XGBoost Calibré & Chaînes de Markov • Optimisé 2026
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

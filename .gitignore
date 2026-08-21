@@ -7,14 +7,24 @@ __pycache__/
 venv/
 env/
 
-# Dossier Data (fichiers trop lourds, générés automatiquement)
-data/
-{data/
-*.parquet
-*.pkl
-*.sqlite
-*.db
+# Data volumineux et caches (on ignore les fichiers bruts et intermédiaires lourds)
+data/raw/
+data/processed/*.parquet
+data/processed/*.sqlite
+data/processed/*.db
 
-# Fichiers OS
+# Whitelist des fichiers modèles indispensables au fonctionnement de l'application
+!data/processed/player_state_atp.pkl
+!data/processed/player_state_wta.pkl
+!data/processed/xgb_model_atp.json
+!data/processed/xgb_model_wta.json
+!data/processed/feature_cols_atp.pkl
+!data/processed/feature_cols_wta.pkl
+!data/processed/calibrator_atp.pkl
+!data/processed/calibrator_wta.pkl
+!data/processed/best_params_atp.json
+!data/processed/best_params_wta.json
+
+# OS
 .DS_Store
 Thumbs.db

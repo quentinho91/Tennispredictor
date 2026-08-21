@@ -54,13 +54,26 @@ import numpy as np
 import re
 import time
 from collections import defaultdict
+import sys
 from pathlib import Path
+
+# Ajouter le répertoire 'src' au sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from markov_tennis import (
+    p_game,
+    p_set,
+    p_match,
+    estimate_point_probabilities
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 K_ELO = 32
+K_SERVE_ELO = 24.0
+K_RETURN_ELO = 24.0
 ELO_INIT = 1500
 MAX_HISTORY = 150       # borne des listes glissantes par joueur (forme, retour, clutch...)
 ELO_TREND_LAG = 10      # "pente" Elo = elo actuel - elo il y a N matchs
@@ -78,6 +91,35 @@ SERVE_RETURN_KEYS = ("ace_rate", "df_rate", "first_in_pct", "first_won_pct",
 
 def elo_expected(ra, rb):
     return 1.0 / (1.0 + 10 ** ((rb - ra) / 400.0))
+
+
+def get_decayed_elo(base_elo, day, last_day, grace_days=60, half_life_days=365.0, init_elo=ELO_INIT):
+    """
+    Applique une dépréciation d'inactivité (Inactivity Decay) sur l'Elo :
+    - Si inactif <= grace_days (ex: 60 jours) : aucun impact.
+    - Au-delà, l'Elo régresse exponentiellement vers la moyenne (init_elo = 1500).
+    - Rétention bornée à min 50% pour préserver le socle historique du joueur.
+    """
+    if last_day is None or day is None:
+        return base_elo
+    days_inactive = day - last_day
+    if days_inactive <= grace_days:
+        return base_elo
+    excess_days = days_inactive - grace_days
+    retention = np.exp(-np.log(2) * (excess_days / half_life_days))
+    retention = max(0.50, retention)
+    return init_elo + (base_elo - init_elo) * retention
+
+
+def get_dynamic_k(base_k, matches_count, k_boost=32.0, halflife_matches=25.0):
+    """
+    Facteur K adaptatif à l'incertitude (Dynamic Uncertainty K-Factor) :
+    - Débutant / espoir montant (0-5 matchs) : K = base_k + 32 (ex: 32+32=64) -> convergence ultra-rapide.
+    - 25 matchs : K = base_k + 16 (ex: 48).
+    - Vétéran / joueur établi (50+ matchs) : K converge vers base_k (ex: 32) -> grande stabilité.
+    """
+    unc_factor = np.exp(-matches_count / halflife_matches)
+    return base_k + k_boost * unc_factor
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +187,7 @@ def derive_match_outcome_stats(score, p1_won, best_of):
             p1_comeback, p2_comeback, tb_played, tb_won_p2)
 
 
-def build_features(df):
+def build_features(df, circuit="atp"):
     df = df.sort_values(["tourney_date", "match_id"]).reset_index(drop=True)
     n = len(df)
 
@@ -208,6 +250,10 @@ def build_features(df):
     # ================= ETAT NON BORNE (scalaires, O(1) par joueur) =================
     elo = defaultdict(lambda: ELO_INIT)
     elo_surface = defaultdict(lambda: defaultdict(lambda: ELO_INIT))
+    serve_elo = defaultdict(lambda: ELO_INIT)
+    return_elo = defaultdict(lambda: ELO_INIT)
+    serve_elo_surface = defaultdict(lambda: defaultdict(lambda: ELO_INIT))
+    return_elo_surface = defaultdict(lambda: defaultdict(lambda: ELO_INIT))
     career_matches = defaultdict(int)
     career_retirements = defaultdict(int)
     peak_rank = defaultdict(lambda: np.inf)          # plus petit = meilleur
@@ -216,6 +262,7 @@ def build_features(df):
     surface_career_wins = defaultdict(lambda: defaultdict(int))
     last_surface = {}
     last_tourney_id = {}
+    last_tourney_country = {}
     matches_this_tourney = defaultdict(int)
     last_retirement = defaultdict(bool)
     streak = defaultdict(int)                         # signé : +N série de victoires, -N série de défaites
@@ -281,6 +328,16 @@ def build_features(df):
     vs_lefty_results = defaultdict(list)
     tourney_champions = {}
     player_ioc_dict = {}
+    game_dominance_hist = defaultdict(list)
+
+    def _game_dominance_ema(hist, n):
+        if not hist:
+            return 0.50
+        k = min(len(hist), n)
+        recent = hist[-k:]
+        alpha = 2.0 / (n + 1.0)
+        weights = [(1.0 - alpha)**(k - 1 - i) for i in range(k)]
+        return float(np.average(recent, weights=weights))
 
     def get_tourney_country(t_name):
         if not isinstance(t_name, str): return "UNKNOWN"
@@ -305,6 +362,52 @@ def build_features(df):
         return "UNKNOWN"
 
     
+    COUNTRY_CONTINENT = {
+        "USA": "NA", "CAN": "NA", "MEX": "NA",
+        "ARG": "SA", "BRA": "SA", "CHI": "SA", "COL": "SA", "ECU": "SA",
+        "FRA": "EU", "ESP": "EU", "GBR": "EU", "ITA": "EU", "GER": "EU", "SUI": "EU",
+        "AUT": "EU", "SWE": "EU", "NED": "EU", "BEL": "EU", "POR": "EU", "CRO": "EU",
+        "SRB": "EU", "GRE": "EU", "CZE": "EU", "POL": "EU", "ROU": "EU", "BUL": "EU",
+        "MON": "EU", "RUS": "EU",
+        "CHN": "AS", "JPN": "AS", "UAE": "AS", "QAT": "AS", "KOR": "AS", "IND": "AS", "KAZ": "AS", "SAU": "AS", "SGP": "AS",
+        "AUS": "OC", "NZL": "OC",
+        "RSA": "AF", "MAR": "AF", "TUN": "AF", "EGY": "AF"
+    }
+
+    def compute_travel_strain(player, day, t1_id, t_country, surf, last_tourney_id_dict, last_play_date_dict, last_tourney_country_dict, last_surface_dict):
+        prev_t_id = last_tourney_id_dict.get(player)
+        if prev_t_id == t1_id or player not in last_play_date_dict:
+            return 0.0, 0.0
+
+        days_rest = day - last_play_date_dict[player]
+        if days_rest > 7:
+            return 0.0, 0.0
+
+        prev_country = last_tourney_country_dict.get(player, "UNKNOWN")
+        prev_cont = COUNTRY_CONTINENT.get(prev_country)
+        curr_cont = COUNTRY_CONTINENT.get(t_country)
+
+        diff_continent = int(prev_cont is not None and curr_cont is not None and prev_cont != curr_cont)
+        diff_country = int(prev_country not in ("UNKNOWN", t_country) and t_country != "UNKNOWN")
+        diff_surface = int(last_surface_dict.get(player) is not None and last_surface_dict[player] != surf)
+
+        strain = 0.0
+        if days_rest <= 4:
+            strain += 1.5
+        elif days_rest <= 7:
+            strain += 0.5
+
+        if diff_continent:
+            strain += 2.0
+        elif diff_country:
+            strain += 0.75
+
+        if diff_surface:
+            strain += 1.25
+
+        short_sc = 1.0 if (days_rest <= 4 and diff_surface) else 0.0
+        return strain, short_sc
+
     ALTITUDES = {"Bogota": 2640, "Quito": 2850, "Johannesburg": 1750, "Gstaad": 1050, "Kitzbuhel": 762, "Sao Paulo": 760, "Madrid": 667, "Sofia": 590, "Santiago": 570, "Munich": 520}
     
     def get_altitude(t_name):
@@ -338,16 +441,27 @@ def build_features(df):
         "late_round_winrate_diff", "early_round_winrate_diff",
         
         "hours_rest_diff", "short_rest_p1", "short_rest_p2", "is_night_match",
+        "travel_strain_diff", "short_rest_surface_change_diff",
+        "game_dominance_ema5_diff", "game_dominance_ema10_diff",
         
         "tourney_cpi", "fast_court_winrate_diff", "medium_court_winrate_diff", "slow_court_winrate_diff",
         "tourney_altitude", "high_altitude_winrate_diff", "home_advantage_diff",
-        "kryptonite_diff", "dominance_ratio_diff", "is_defending_champion_diff",
-        "clutch_index_diff",
+        "kryptonite_diff", "is_defending_champion_diff",
         
         # --- Nouvelles features Archétypes ---
         "surface_bias_diff", "grind_mismatch", 
         "serve_return_edge1", "serve_return_edge2",
-        "winrate_vs_arch_diff"
+        "winrate_vs_arch_diff",
+        
+        # --- Phase B Nouvelles Features ---
+        "matches_last_3d_diff", "matches_last_7d_diff", "hours_played_last_14d_diff",
+        "form20_surface_diff",
+        "serve_momentum_diff", "return_momentum_diff", "elo_momentum_diff",
+
+        # --- Serve & Return Elo + Markov Point-by-Point ---
+        "serve_elo_diff", "return_elo_diff",
+        "serve_elo_surface_diff", "return_elo_surface_diff",
+        "markov_p_win", "markov_hold_diff", "markov_expected_games"
     ]}
 
 
@@ -382,9 +496,14 @@ def build_features(df):
         r1, r2 = p1_rank[i], p2_rank[i]
 
 
-        # ---- Elo ----
-        e1, e2 = elo[p1], elo[p2]
-        es1, es2 = elo_surface[surf][p1], elo_surface[surf][p2]
+        last_p1 = last_play_date.get(p1)
+        last_p2 = last_play_date.get(p2)
+
+        # ---- Elo (avec dépréciation d'inactivité) ----
+        e1 = get_decayed_elo(elo[p1], day, last_p1)
+        e2 = get_decayed_elo(elo[p2], day, last_p2)
+        es1 = get_decayed_elo(elo_surface[surf][p1], day, last_p1)
+        es2 = get_decayed_elo(elo_surface[surf][p2], day, last_p2)
         out["elo_diff"][i] = e1 - e2
         out["elo_surface_diff"][i] = es1 - es2
         out["elo_p1"][i] = e1
@@ -485,6 +604,16 @@ def build_features(df):
         m2 = matches_this_tourney[p2] if last_tourney_id.get(p2) == t1_id else 0
         out["matches_this_tourney_diff"][i] = m1 - m2
 
+        # Travel & Schedule Strain
+        strain1, short_sc1 = compute_travel_strain(p1, day, t1_id, t_country, surf, last_tourney_id, last_play_date, last_tourney_country, last_surface)
+        strain2, short_sc2 = compute_travel_strain(p2, day, t1_id, t_country, surf, last_tourney_id, last_play_date, last_tourney_country, last_surface)
+        out["travel_strain_diff"][i] = strain1 - strain2
+        out["short_rest_surface_change_diff"][i] = short_sc1 - short_sc2
+
+        # Game Dominance EMA
+        out["game_dominance_ema5_diff"][i] = _game_dominance_ema(game_dominance_hist[p1], 5) - _game_dominance_ema(game_dominance_hist[p2], 5)
+        out["game_dominance_ema10_diff"][i] = _game_dominance_ema(game_dominance_hist[p1], 10) - _game_dominance_ema(game_dominance_hist[p2], 10)
+
         out["avg_minutes_recent_diff"][i] = _avg_minutes(rr1, 5) - _avg_minutes(rr2, 5)
         out["last_retirement_diff"][i] = int(last_retirement[p1]) - int(last_retirement[p2])
         cr1 = career_retirements[p1] / career_matches[p1] if career_matches[p1] > 0 else 0.0
@@ -576,13 +705,34 @@ def build_features(df):
         tsw2 = tourney_sets_won[p2]    if last_tourney_id.get(p2) == t1_id else 0
         tst2 = tourney_sets_total[p2]  if last_tourney_id.get(p2) == t1_id else 0
         out["tourney_game_winpct_diff"][i] = (tgw1/tgt1 if tgt1 > 0 else 0.5) - (tgw2/tgt2 if tgt2 > 0 else 0.5)
+        
+        # ---- Phase B: Fatigue ----
+        out["matches_last_3d_diff"][i] = _count_recent_tuples(rr1, day, 3) - _count_recent_tuples(rr2, day, 3)
+        out["matches_last_7d_diff"][i] = _count_recent_tuples(rr1, day, 7) - _count_recent_tuples(rr2, day, 7)
+        out["hours_played_last_14d_diff"][i] = (_avg_minutes(rr1, 14) * _count_recent_tuples(rr1, day, 14) / 60.0 if _avg_minutes(rr1, 14) == _avg_minutes(rr1, 14) else 0) - (_avg_minutes(rr2, 14) * _count_recent_tuples(rr2, day, 14) / 60.0 if _avg_minutes(rr2, 14) == _avg_minutes(rr2, 14) else 0)
+
         # ---- Forme sur la surface courante (récente) ----
         out["form10_surface_diff"][i]  = _winrate_surface(rr1, surf, 10) - _winrate_surface(rr2, surf, 10)
+        out["form20_surface_diff"][i]  = _winrate_surface(rr1, surf, 20) - _winrate_surface(rr2, surf, 20)
         out["form365d_surface_diff"][i] = (_winrate_surface_days(rr1, surf, day, 365)
                                            - _winrate_surface_days(rr2, surf, day, 365))
+        
+        # ---- Phase B: Momentum Serve/Return & Elo ----
+        out["elo_momentum_diff"][i] = (e1 - eh1[-30] if len(eh1) >= 30 else 0) - (e2 - eh2[-30] if len(eh2) >= 30 else 0)
+        
+        # serve momentum = recent (last 5) first won % - long term (last 20) first won %
+        serve_mom1 = r5_1[3] - r20_1[3] if (r5_1[3] == r5_1[3] and r20_1[3] == r20_1[3]) else 0
+        serve_mom2 = r5_2[3] - r20_2[3] if (r5_2[3] == r5_2[3] and r20_2[3] == r20_2[3]) else 0
+        out["serve_momentum_diff"][i] = serve_mom1 - serve_mom2
+        
+        # return momentum = recent return points won % - long term return points won %
+        return_mom1 = r5_1[6] - r20_1[6] if (r5_1[6] == r5_1[6] and r20_1[6] == r20_1[6]) else 0
+        return_mom2 = r5_2[6] - r20_2[6] if (r5_2[6] == r5_2[6] and r20_2[6] == r20_2[6]) else 0
+        out["return_momentum_diff"][i] = return_mom1 - return_mom2
 
-        # ---- Elo surface avec K adaptatif par niveau de tournoi ----
-        esw1, esw2 = elo_surface_w[surf][p1], elo_surface_w[surf][p2]
+        # ---- Elo surface avec K adaptatif par niveau de tournoi (avec dépréciation d'inactivité) ----
+        esw1 = get_decayed_elo(elo_surface_w[surf][p1], day, last_p1)
+        esw2 = get_decayed_elo(elo_surface_w[surf][p2], day, last_p2)
         out["elo_surface_w_diff"][i] = esw1 - esw2
 
         # ---- Giant killer / upset sur les 10 derniers matchs seulement ----
@@ -593,6 +743,29 @@ def build_features(df):
                                                - _winrate_round_type(rr2, day, 730, late=True))
         out["early_round_winrate_diff"][i] = (_winrate_round_type(rr1, day, 730, late=False)
                                                - _winrate_round_type(rr2, day, 730, late=False))
+
+        # ---- Serve & Return Elo + Markov Point-by-Point (avec dépréciation d'inactivité) ----
+        se1 = get_decayed_elo(serve_elo[p1], day, last_p1)
+        se2 = get_decayed_elo(serve_elo[p2], day, last_p2)
+        re1 = get_decayed_elo(return_elo[p1], day, last_p1)
+        re2 = get_decayed_elo(return_elo[p2], day, last_p2)
+        ses1 = get_decayed_elo(serve_elo_surface[surf][p1], day, last_p1)
+        ses2 = get_decayed_elo(serve_elo_surface[surf][p2], day, last_p2)
+        res1 = get_decayed_elo(return_elo_surface[surf][p1], day, last_p1)
+        res2 = get_decayed_elo(return_elo_surface[surf][p2], day, last_p2)
+
+        out["serve_elo_diff"][i] = se1 - se2
+        out["return_elo_diff"][i] = re1 - re2
+        out["serve_elo_surface_diff"][i] = ses1 - ses2
+        out["return_elo_surface_diff"][i] = res1 - res2
+
+        pa_m, pb_m = estimate_point_probabilities(ses1, res2, ses2, res1, surface=surf, circuit=circuit)
+        bo_i = int(best_of[i]) if (best_of[i] == best_of[i] and best_of[i] in (3, 5)) else 3
+        m_res = p_match(pa_m, pb_m, best_of=bo_i)
+
+        out["markov_p_win"][i] = m_res["proba_a"]
+        out["markov_hold_diff"][i] = m_res["hold_proba_a"] - m_res["hold_proba_b"]
+        out["markov_expected_games"][i] = m_res["expected_total_games"]
 
         # ================= MISE A JOUR DE L'ETAT (après calcul des features) =================
         p1_won = bool(target[i])
@@ -615,27 +788,36 @@ def build_features(df):
             game_diff = abs(gw1_m - gw2_m)
             mov_mult = ((game_diff / max(1, n_sets_i)) + 1) / 3.0
             mov_mult = max(0.5, min(mov_mult, 3.0)) # Borner entre x0.5 (très serré) et x3.0 (boucherie)
+
+            if g_total_m > 0:
+                game_dominance_hist[p1].append(gw1_m / g_total_m); _trim(game_dominance_hist[p1], 30)
+                game_dominance_hist[p2].append(gw2_m / g_total_m); _trim(game_dominance_hist[p2], 30)
         else:
             gw1_m = gw2_m = g_total_m = sw1_m = sw2_m = 0
             mov_mult = 1.0
 
-        # Mise à jour Elo (pondérée par MoV)
-        actual_k = K_ELO * mov_mult
-        new_e1 = e1 + actual_k * ((1.0 if p1_won else 0.0) - exp1)
-        new_e2 = e2 + actual_k * ((0.0 if p1_won else 1.0) - (1.0 - exp1))
+        # Mise à jour Elo (pondérée par MoV et K adaptatif à l'incertitude / expérience)
+        k1 = get_dynamic_k(K_ELO, career_matches[p1]) * mov_mult
+        k2 = get_dynamic_k(K_ELO, career_matches[p2]) * mov_mult
+        new_e1 = e1 + k1 * ((1.0 if p1_won else 0.0) - exp1)
+        new_e2 = e2 + k2 * ((0.0 if p1_won else 1.0) - (1.0 - exp1))
         elo[p1], elo[p2] = new_e1, new_e2
         eh1.append(new_e1); _trim(eh1, 60)
         eh2.append(new_e2); _trim(eh2, 60)
 
         exps1 = elo_expected(es1, es2)
-        elo_surface[surf][p1] = es1 + actual_k * ((1.0 if p1_won else 0.0) - exps1)
-        elo_surface[surf][p2] = es2 + actual_k * ((0.0 if p1_won else 1.0) - (1.0 - exps1))
+        ks1 = get_dynamic_k(K_ELO, surface_career_count[p1][surf]) * mov_mult
+        ks2 = get_dynamic_k(K_ELO, surface_career_count[p2][surf]) * mov_mult
+        elo_surface[surf][p1] = es1 + ks1 * ((1.0 if p1_won else 0.0) - exps1)
+        elo_surface[surf][p2] = es2 + ks2 * ((0.0 if p1_won else 1.0) - (1.0 - exps1))
 
-        # Elo surface avec K adaptatif (GC>M1000>ATP500) pondéré par MoV
-        k_lvl = K_ELO_BY_LEVEL.get(str(tourney_level[i]), K_ELO) * mov_mult
+        # Elo surface avec K adaptatif (GC>M1000>ATP500) pondéré par MoV & incertitude
+        base_lvl = K_ELO_BY_LEVEL.get(str(tourney_level[i]), K_ELO)
+        k_lvl_1 = get_dynamic_k(base_lvl, surface_career_count[p1][surf]) * mov_mult
+        k_lvl_2 = get_dynamic_k(base_lvl, surface_career_count[p2][surf]) * mov_mult
         expsw = elo_expected(esw1, esw2)
-        elo_surface_w[surf][p1] = esw1 + k_lvl * ((1.0 if p1_won else 0.0) - expsw)
-        elo_surface_w[surf][p2] = esw2 + k_lvl * ((0.0 if p1_won else 1.0) - (1.0 - expsw))
+        elo_surface_w[surf][p1] = esw1 + k_lvl_1 * ((1.0 if p1_won else 0.0) - expsw)
+        elo_surface_w[surf][p2] = esw2 + k_lvl_2 * ((0.0 if p1_won else 1.0) - (1.0 - expsw))
 
         if r1 == r1:
             peak_rank[p1] = min(peak_rank[p1], r1)
@@ -686,6 +868,8 @@ def build_features(df):
             surface_career_wins[p2][surf] += 1
         last_surface[p1] = surf
         last_surface[p2] = surf
+        last_tourney_country[p1] = t_country
+        last_tourney_country[p2] = t_country
 
         if last_tourney_id.get(p1) == t1_id:
             matches_this_tourney[p1] += 1
@@ -733,6 +917,61 @@ def build_features(df):
         sh1.append(_extract_serve_return_stats(s1, s2, i, min_i)); _trim(sh1, MAX_HISTORY)
         sh2.append(_extract_serve_return_stats(s2, s1, i, min_i)); _trim(sh2, MAX_HISTORY)
 
+        # ---- Mise à jour Serve Elo & Return Elo (général et par surface) ----
+        svpt1_val = s1["svpt"][i]
+        w1_won_val = s1["1stWon"][i] + s1["2ndWon"][i]
+        spw1_actual = (w1_won_val / svpt1_val) if (svpt1_val > 0 and w1_won_val == w1_won_val) else None
+
+        svpt2_val = s2["svpt"][i]
+        w2_won_val = s2["1stWon"][i] + s2["2ndWon"][i]
+        spw2_actual = (w2_won_val / svpt2_val) if (svpt2_val > 0 and w2_won_val == w2_won_val) else None
+
+        pa_gen, pb_gen = estimate_point_probabilities(se1, re2, se2, re1, surface="Default", circuit=circuit)
+        k_srv1 = get_dynamic_k(K_SERVE_ELO, career_matches[p1])
+        k_ret1 = get_dynamic_k(K_RETURN_ELO, career_matches[p1])
+        k_srv2 = get_dynamic_k(K_SERVE_ELO, career_matches[p2])
+        k_ret2 = get_dynamic_k(K_RETURN_ELO, career_matches[p2])
+
+        if spw1_actual is not None:
+            delta1_g = spw1_actual - pa_gen
+            serve_elo[p1] += k_srv1 * delta1_g
+            return_elo[p2] -= k_ret2 * delta1_g
+
+            delta1_s = spw1_actual - pa_m
+            serve_elo_surface[surf][p1] += k_srv1 * delta1_s
+            return_elo_surface[surf][p2] -= k_ret2 * delta1_s
+
+        if spw2_actual is not None:
+            delta2_g = spw2_actual - pb_gen
+            serve_elo[p2] += k_srv2 * delta2_g
+            return_elo[p1] -= k_ret1 * delta2_g
+
+            delta2_s = spw2_actual - pb_m
+            serve_elo_surface[surf][p2] += k_srv2 * delta2_s
+            return_elo_surface[surf][p1] -= k_ret1 * delta2_s
+
+        # Update court speeds results
+        t_cpi_val = get_cpi(t_name, t_year, surf)
+        if t_cpi_val >= 9.5:
+            fast_results[p1].append((day, 1 if p1_won else 0)); _trim(fast_results[p1], 30)
+            fast_results[p2].append((day, 0 if p1_won else 1)); _trim(fast_results[p2], 30)
+        elif t_cpi_val <= 6.5:
+            slow_results[p1].append((day, 1 if p1_won else 0)); _trim(slow_results[p1], 30)
+            slow_results[p2].append((day, 0 if p1_won else 1)); _trim(slow_results[p2], 30)
+        else:
+            medium_results[p1].append((day, 1 if p1_won else 0)); _trim(medium_results[p1], 30)
+            medium_results[p2].append((day, 0 if p1_won else 1)); _trim(medium_results[p2], 30)
+
+        t_alt_val = get_altitude(t_name)
+        if t_alt_val >= 500:
+            high_altitude_results[p1].append((day, 1 if p1_won else 0)); _trim(high_altitude_results[p1], 30)
+            high_altitude_results[p2].append((day, 0 if p1_won else 1)); _trim(high_altitude_results[p2], 30)
+
+        if p2_hand[i] == 'L':
+            vs_lefty_results[p1].append((day, 1 if p1_won else 0)); _trim(vs_lefty_results[p1], 30)
+        if p1_hand[i] == 'L':
+            vs_lefty_results[p2].append((day, 0 if p1_won else 1)); _trim(vs_lefty_results[p2], 30)
+
         # Mise à jour du tenant du titre si finale
         if round_[i] == 'F':
             tourney_champions[tourney_name_arr[i]] = p1 if p1_won else p2
@@ -762,6 +1001,10 @@ def build_features(df):
         "elo": dict(elo),
         "elo_surface": {s: dict(d) for s, d in elo_surface.items()},
         "elo_surface_w": {s: dict(d) for s, d in elo_surface_w.items()},
+        "serve_elo": dict(serve_elo),
+        "return_elo": dict(return_elo),
+        "serve_elo_surface": {s: dict(d) for s, d in serve_elo_surface.items()},
+        "return_elo_surface": {s: dict(d) for s, d in return_elo_surface.items()},
         "elo_history": dict(elo_history),
         "rank_history": dict(rank_history),
         "peak_rank": dict(peak_rank),
@@ -772,6 +1015,7 @@ def build_features(df):
         "surface_career_wins": {p: dict(d) for p, d in surface_career_wins.items()},
         "last_surface": dict(last_surface),
         "last_tourney_id": dict(last_tourney_id),
+        "last_tourney_country": dict(last_tourney_country),
         "matches_this_tourney": dict(matches_this_tourney),
         "tourney_games_won": dict(tourney_games_won),
         "tourney_games_total": dict(tourney_games_total),
@@ -792,6 +1036,7 @@ def build_features(df):
         "wins_vs_arch": {p: dict(d) for p, d in wins_vs_arch.items()},
         "matches_vs_arch": {p: dict(d) for p, d in matches_vs_arch.items()},
         "tourney_champions": dict(tourney_champions),
+        "game_dominance_hist": {p: list(v) for p, v in game_dominance_hist.items()},
         "vs_lefty_results": dict(vs_lefty_results),
         "high_altitude_results": dict(high_altitude_results),
         "player_ioc_dict": dict(player_ioc_dict),
@@ -1044,7 +1289,7 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"{in_path} introuvable. Lance d'abord: python 01_build_dataset.py --circuit {args.circuit}")
     df = pd.read_parquet(in_path)
     t0 = time.time()
-    feats, player_state = build_features(df)
+    feats, player_state = build_features(df, circuit=args.circuit)
     print(f"Temps total: {time.time() - t0:.1f}s")
     out_path = PROCESSED_DIR / f"features_{args.circuit}.parquet"
     feats.to_parquet(out_path, index=False)

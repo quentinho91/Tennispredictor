@@ -5,10 +5,6 @@ on:
     - cron: '0 2,6,10,14,18,22 * * *' # 6 fois par jour (toutes les 4h UTC)
   workflow_dispatch: # Permet de lancer manuellement depuis l'interface GitHub
 
-# Empêche deux runs de tourner en même temps (cron + déclenchement manuel) :
-# sans ça, deux runs concurrents peuvent se marcher dessus sur la
-# suppression/recréation de la release "latest_model" (gh release delete /
-# gh release create) et faire échouer l'étape d'upload.
 concurrency:
   group: model-update
   cancel-in-progress: true
@@ -17,7 +13,7 @@ jobs:
   update-data-and-model:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Requis pour creer une release
+      contents: write # Requis pour créer une release
 
     steps:
       - name: Checkout repository
@@ -33,67 +29,36 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # scikit-learn/xgboost/pandas/pyarrow sont déjà dans requirements.txt,
-          # pas besoin de les réinstaller ici (ça écraserait xgboost-cpu par la
-          # version complète avec dépendances CUDA, inutiles en CI aussi).
 
       - name: Run Data Pipeline
         run: |
-          # Télécharge l'ancienne base de données de prédictions si elle existe
-          python src/cloud_storage.py || true
-          
           python src/00_download_data.py
           
           # ATP Pipeline
           python src/01_build_dataset.py --circuit atp
           python src/02_feature_engineering.py --circuit atp
           python src/03_train_model.py --circuit atp
-          python src/06_export_light_state.py --circuit atp
           
           # WTA Pipeline
           python src/01_build_dataset.py --circuit wta
           python src/02_feature_engineering.py --circuit wta
           python src/03_train_model.py --circuit wta
-          python src/06_export_light_state.py --circuit wta
-          # NOTE : short_term_rest_features.py retiré du pipeline pour l'instant.
-          # C'est un script de démo (liste de joueurs codée en dur, aucune
-          # sauvegarde du résultat) — à réintégrer une fois vraiment câblé
-          # au dataset de features (voir TODO dans le fichier).
-          
-          # Sécurité : créer un fichier vide s'il n'existe toujours pas pour éviter le plantage du release
-          if [ ! -f data/processed/predictions_db.json ]; then
-            echo "{}" > data/processed/predictions_db.json
-          fi
 
       - name: Upload to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Creation ou mise a jour de la release "latest_model"
-          # On supprime l'ancienne si elle existe
           gh release delete latest_model --yes --cleanup-tag || true
           git push --delete origin latest_model || true
           
-          # On recree une release avec le tag latest_model
           gh release create latest_model \
             data/processed/player_state_atp.pkl \
             data/processed/xgb_model_atp.json \
-            data/processed/lgb_model_atp.txt \
-            data/processed/cat_model_atp.cbm \
             data/processed/calibrator_atp.pkl \
             data/processed/feature_cols_atp.pkl \
             data/processed/player_state_wta.pkl \
             data/processed/xgb_model_wta.json \
-            data/processed/lgb_model_wta.txt \
-            data/processed/cat_model_wta.cbm \
             data/processed/calibrator_wta.pkl \
             data/processed/feature_cols_wta.pkl \
-            data/processed/predictions_db.json \
-            --title "Dernieres previsions & modele" \
-            --notes "Mise a jour automatique du modele et des donnees (ATP & WTA)"
-
-      - name: Trigger Render Deployment
-        if: env.RENDER_DEPLOY_HOOK != ''
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: curl "$RENDER_DEPLOY_HOOK"
+            --title "Derniers modèles XGBoost & données" \
+            --notes "Mise à jour automatique du modèle XGBoost (ATP & WTA)"
