@@ -1162,6 +1162,173 @@ body {
 .hist-roi-pill.pos { background: rgba(16,185,129,0.18); color: #34d399; }
 .hist-roi-pill.neg { background: rgba(239,68,68,0.15); color: #f87171; }
 
+/* ============================================================
+   FORM TIMELINE (5 DERNIERS MATCHS)
+   ============================================================ */
+.form-timeline {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+}
+.form-timeline-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-right: 2px;
+  font-weight: 600;
+}
+.form-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.form-dot:hover {
+  transform: translateY(-2px);
+}
+.form-dot.win {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+.form-dot.loss {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+.form-dot.ret {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.form-dot .dot-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 130%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0b1222;
+  color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 100;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.7);
+  transition: opacity 0.18s, visibility 0.18s;
+  pointer-events: none;
+  text-align: left;
+  line-height: 1.4;
+}
+.form-dot .dot-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #0b1222 transparent transparent transparent;
+}
+.form-dot:hover .dot-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* ============================================================
+   BANKROLL CONTROLS & EURO STAKE CALCULATOR
+   ============================================================ */
+.bankroll-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+.bk-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bk-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.bk-input-wrap {
+  display: flex;
+  align-items: center;
+  background: #0b1222;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.bk-input {
+  width: 65px;
+  background: transparent;
+  border: none;
+  color: #34d399;
+  font-weight: 800;
+  font-size: 13px;
+  text-align: right;
+  outline: none;
+}
+.bk-curr {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 700;
+  margin-left: 2px;
+}
+.bk-select {
+  background: #0b1222;
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 11.5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+.bk-select:focus, .bk-input:focus {
+  border-color: var(--primary);
+}
+
+.vb-euro-badge {
+  background: #10b981;
+  color: #022c22;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.vb-profit-tag {
+  font-size: 10.5px;
+  color: #fbbf24;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
 /* Mobile responsive fine-tuning */
 @media (max-width: 600px) {
   .container { padding: 12px; }
@@ -1172,4 +1339,7 @@ body {
   .markets-grid { grid-template-columns: 1fr; }
   .scores-matrix-grid { grid-template-columns: repeat(2, 1fr); }
   .sec-market-row { flex-direction: column; }
+  .bankroll-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .bk-group { justify-content: space-between; }
 }
+

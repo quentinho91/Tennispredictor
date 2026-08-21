@@ -583,6 +583,14 @@ function renderResults(data) {
   barP2.style.width = `${p2Pct}%`;
 
   // ------------------------------------------------------------------------
+  // Form Timeline (5 derniers matchs)
+  // ------------------------------------------------------------------------
+  if (data.recent_matches) {
+    renderFormTimeline('p1-form-timeline', data.recent_matches.p1, data.p1);
+    renderFormTimeline('p2-form-timeline', data.recent_matches.p2, data.p2);
+  }
+
+  // ------------------------------------------------------------------------
   // Confidence Badge & Indicators
   // ------------------------------------------------------------------------
   const conf = data.confidence;
@@ -610,57 +618,9 @@ function renderResults(data) {
   ctxTag.textContent = `${tName} • ${ctx.surface}${cpiStr}${altStr} • ${ctx.round} • Best-of ${ctx.best_of}`;
 
   // ------------------------------------------------------------------------
-  // Value Bets Across All Markets
+  // Value Bets Across All Markets (avec Calculateur Bankroll & Euros Réels)
   // ------------------------------------------------------------------------
-  const vbContainer = document.getElementById('valuebet-container');
-  const allVBs = data.all_value_bets || [];
-
-  if (allVBs.length > 0) {
-    vbContainer.style.display = 'block';
-    vbContainer.className = 'valuebet-card is-vb';
-
-    let vbsHtml = `
-      <div class="vb-header">
-        <span class="vb-badge badge-vb">🎯 ${allVBs.length} VALUE BET${allVBs.length > 1 ? 'S DÉTECTÉS' : ' DÉTECTÉ'}</span>
-      </div>
-      <div class="vb-summary-list">
-    `;
-
-    allVBs.forEach(vb => {
-      vbsHtml += `
-        <div class="vb-summary-item">
-          <div class="vb-sum-left">
-            <span class="vb-sum-market">${escapeHtml(vb.market)}</span>
-            <span class="vb-sum-title">${escapeHtml(vb.selection)}</span>
-            <span style="font-size: 11.5px; color: var(--text-dim);">Proba: ${vb.prob}% • Cote juste: ${vb.fair_odds.toFixed(2)}</span>
-          </div>
-          <div class="vb-sum-right">
-            <div>
-              <div style="font-size: 16px; font-weight: 800; color: #34d399;">@ ${vb.offered_odds.toFixed(2)}</div>
-              <div style="font-size: 11px; color: #fbbf24; font-weight: 700;">+${vb.ev_pct}% EV</div>
-            </div>
-            <div class="vb-sum-badge">Mise: ${vb.kelly_pct}%</div>
-          </div>
-        </div>
-      `;
-    });
-
-    vbsHtml += `</div>`;
-    vbContainer.innerHTML = vbsHtml;
-  } else if (odds1Input.value || (totalLineInput && totalLineInput.value) || (oddsH1Input && oddsH1Input.value) || (oddsTbYesInput && oddsTbYesInput.value)) {
-    vbContainer.style.display = 'block';
-    vbContainer.className = 'valuebet-card no-vb';
-    vbContainer.innerHTML = `
-      <div class="vb-header">
-        <span class="vb-badge badge-no-vb">❌ AUCUN VALUE BET DÉTECTÉ</span>
-      </div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
-        Les cotes bookmakers renseignées sont inférieures ou égales aux probabilités réelles calculées par l'IA.
-      </p>
-    `;
-  } else {
-    vbContainer.style.display = 'none';
-  }
+  renderValueBetsContainer(data.all_value_bets || []);
 
   // ------------------------------------------------------------------------
   // Multi-Market Analysis Grid
@@ -844,6 +804,175 @@ function renderResults(data) {
     </tr>
     <tr><td>Total Jeux Prévu</td><td colspan="2" style="text-align:center; color:#f59e0b;">${data.markov.expected_total_games} jeux</td></tr>
   `;
+}
+
+// --------------------------------------------------------------------------
+// Form Timeline (5 Derniers Matchs)
+// --------------------------------------------------------------------------
+function renderFormTimeline(containerId, matches, playerName) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (!matches || matches.length === 0) {
+    container.innerHTML = '<span class="form-timeline-label">Forme : N/A</span>';
+    return;
+  }
+
+  let html = '<span class="form-timeline-label">Forme :</span>';
+  matches.forEach(m => {
+    const isWin = m.win;
+    const isRet = m.retirement;
+    let dotClass = isWin ? 'win' : 'loss';
+    let label = isWin ? 'V' : 'D';
+    if (isRet) {
+      dotClass = 'ret';
+      label = 'AB';
+    }
+
+    const statusText = isWin ? '✅ Victoire' : (isRet ? '⚠️ Abandon' : '❌ Défaite');
+    const tournText = m.tournament ? `${escapeHtml(m.tournament)}` : 'Tournoi';
+    const surfText = m.surface ? ` • ${escapeHtml(m.surface)}` : '';
+    const oppText = m.opponent ? `vs ${escapeHtml(m.opponent)}` : '';
+    const scoreText = m.score ? `Score : ${escapeHtml(m.score)}` : '';
+
+    html += `
+      <div class="form-dot ${dotClass}">
+        ${label}
+        <div class="dot-tooltip">
+          <div style="font-weight:700; color:${isWin ? '#34d399' : '#f87171'};">${statusText}</div>
+          <div style="color:var(--text-dim); font-size:10px;">🏆 ${tournText}${surfText}</div>
+          <div style="font-size:11px; margin: 1px 0;">${oppText}</div>
+          <div style="font-size:10px; color:#fbbf24; font-weight:600;">${scoreText}</div>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+// --------------------------------------------------------------------------
+// Value Bets Rendering & Real-time Euro Bankroll Calculator
+// --------------------------------------------------------------------------
+function renderValueBetsContainer(allVBs) {
+  const vbContainer = document.getElementById('valuebet-container');
+  if (!vbContainer) return;
+
+  if (!allVBs || allVBs.length === 0) {
+    if (odds1Input.value || (totalLineInput && totalLineInput.value) || (oddsH1Input && oddsH1Input.value) || (oddsTbYesInput && oddsTbYesInput.value)) {
+      vbContainer.style.display = 'block';
+      vbContainer.className = 'valuebet-card no-vb';
+      vbContainer.innerHTML = `
+        <div class="vb-header">
+          <span class="vb-badge badge-no-vb">❌ AUCUN VALUE BET DÉTECTÉ</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+          Les cotes bookmakers renseignées sont inférieures ou égales aux probabilités réelles calculées par l'IA.
+        </p>
+      `;
+    } else {
+      vbContainer.style.display = 'none';
+    }
+    return;
+  }
+
+  vbContainer.style.display = 'block';
+  vbContainer.className = 'valuebet-card is-vb';
+
+  let currentBankroll = parseFloat(localStorage.getItem('tp_user_bankroll') || '500');
+  if (isNaN(currentBankroll) || currentBankroll <= 0) currentBankroll = 500;
+
+  let currentStrategy = localStorage.getItem('tp_user_strategy') || 'quarter';
+
+  function getItemsHtml(bankroll, strategy) {
+    let listHtml = '';
+    allVBs.forEach(vb => {
+      let stakePct = vb.kelly_quarter_pct || vb.kelly_pct || 2.0;
+      if (strategy === 'half') {
+        stakePct = vb.kelly_half_pct || (stakePct * 2.0);
+      } else if (strategy === 'full') {
+        stakePct = vb.kelly_full_pct || (stakePct * 4.0);
+      } else if (strategy === 'flat1') {
+        stakePct = 1.0;
+      } else if (strategy === 'flat2') {
+        stakePct = 2.0;
+      }
+      stakePct = Math.min(stakePct, 15.0);
+
+      const stakeAmount = (bankroll * stakePct / 100).toFixed(2);
+      const netProfit = (parseFloat(stakeAmount) * (vb.offered_odds - 1.0)).toFixed(2);
+
+      listHtml += `
+        <div class="vb-summary-item">
+          <div class="vb-sum-left">
+            <span class="vb-sum-market">${escapeHtml(vb.market)}</span>
+            <span class="vb-sum-title">${escapeHtml(vb.selection)}</span>
+            <span style="font-size: 11.5px; color: var(--text-dim);">Proba: ${vb.prob}% • Cote juste: ${vb.fair_odds.toFixed(2)}</span>
+          </div>
+          <div class="vb-sum-right">
+            <div style="text-align: right;">
+              <div style="font-size: 16px; font-weight: 800; color: #34d399;">@ ${vb.offered_odds.toFixed(2)}</div>
+              <div style="font-size: 11px; color: #fbbf24; font-weight: 700;">+${vb.ev_pct}% EV</div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+              <div class="vb-euro-badge">💶 Miser <b>${stakeAmount} €</b> (${stakePct.toFixed(1)}%)</div>
+              <div class="vb-profit-tag">Gain net : +${netProfit} €</div>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    return listHtml;
+  }
+
+  vbContainer.innerHTML = `
+    <div class="vb-header">
+      <span class="vb-badge badge-vb">🎯 ${allVBs.length} VALUE BET${allVBs.length > 1 ? 'S DÉTECTÉS' : ' DÉTECTÉ'}</span>
+    </div>
+
+    <!-- Bankroll & Strategy Controls -->
+    <div class="bankroll-bar">
+      <div class="bk-group">
+        <label class="bk-label" for="user-bankroll-input">💶 Bankroll :</label>
+        <div class="bk-input-wrap">
+          <input type="number" id="user-bankroll-input" class="bk-input" value="${currentBankroll}" min="10" step="50">
+          <span class="bk-curr">€</span>
+        </div>
+      </div>
+      <div class="bk-group">
+        <label class="bk-label" for="user-strategy-select">Gestion de mise :</label>
+        <select id="user-strategy-select" class="bk-select">
+          <option value="quarter" ${currentStrategy === 'quarter' ? 'selected' : ''}>Quart-Kelly (Conseillé)</option>
+          <option value="half" ${currentStrategy === 'half' ? 'selected' : ''}>Demi-Kelly (Modéré)</option>
+          <option value="full" ${currentStrategy === 'full' ? 'selected' : ''}>Kelly Plein (Agressif)</option>
+          <option value="flat1" ${currentStrategy === 'flat1' ? 'selected' : ''}>Mise Fixe 1% (Prudent)</option>
+          <option value="flat2" ${currentStrategy === 'flat2' ? 'selected' : ''}>Mise Fixe 2%</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="vb-dynamic-list" class="vb-summary-list">
+      ${getItemsHtml(currentBankroll, currentStrategy)}
+    </div>
+  `;
+
+  const bkInput = document.getElementById('user-bankroll-input');
+  const stratSelect = document.getElementById('user-strategy-select');
+  const listEl = document.getElementById('vb-dynamic-list');
+
+  const updateStakes = () => {
+    let val = parseFloat(bkInput.value);
+    if (isNaN(val) || val <= 0) val = 100;
+    const strat = stratSelect.value;
+    localStorage.setItem('tp_user_bankroll', String(val));
+    localStorage.setItem('tp_user_strategy', strat);
+    if (listEl) {
+      listEl.innerHTML = getItemsHtml(val, strat);
+    }
+  };
+
+  if (bkInput) bkInput.addEventListener('input', updateStakes);
+  if (stratSelect) stratSelect.addEventListener('change', updateStakes);
 }
 
 // ==========================================================================

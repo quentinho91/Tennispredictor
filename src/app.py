@@ -292,7 +292,8 @@ def evaluate_market_value(
     is_vb = bool(edge >= 0.045 and ev >= 0.050)
 
     b = odds - 1.0
-    kelly_full = (prob * odds - 1.0) / b if b > 0 else 0.0
+    kelly_full = max(0.0, min((prob * odds - 1.0) / b, 0.15)) if b > 0 else 0.0
+    kelly_half = max(0.0, min(kelly_full * 0.50, 0.08))
     kelly_quarter = max(0.0, min(kelly_full * 0.25, 0.05))
 
     return {
@@ -304,6 +305,9 @@ def evaluate_market_value(
         "ev_pct": round(ev * 100, 1),
         "edge_pct": round(edge * 100, 1),
         "kelly_pct": round(kelly_quarter * 100, 1) if is_vb else 0.0,
+        "kelly_quarter_pct": round(kelly_quarter * 100, 1) if is_vb else 0.0,
+        "kelly_half_pct": round(kelly_half * 100, 1) if is_vb else 0.0,
+        "kelly_full_pct": round(kelly_full * 100, 1) if is_vb else 0.0,
         "is_value_bet": is_vb,
         "badge": "VALUE_BET" if is_vb else ("LOW_EV" if (edge >= 0.02 and ev >= 0.02) else "NO_VALUE")
     }
@@ -639,6 +643,30 @@ def predict_match(req: PredictionRequest):
             "altitude": int(t_alt_val) if t_alt_val else 0,
         },
         "confidence": confidence,
+        "recent_matches": {
+            "p1": [
+                {
+                    "win": bool(r[1]),
+                    "retirement": bool(r[2]) if len(r) > 2 else False,
+                    "surface": str(r[3]) if len(r) > 3 and r[3] is not None else "",
+                    "opponent": str(r[11]) if len(r) > 11 and r[11] is not None else "Adversaire",
+                    "tournament": str(r[12]) if len(r) > 12 and r[12] is not None else "Tournoi",
+                    "score": str(r[13]) if len(r) > 13 and r[13] is not None else ""
+                }
+                for r in state.get("recent_results", {}).get(p1, [])[-5:]
+            ],
+            "p2": [
+                {
+                    "win": bool(r[1]),
+                    "retirement": bool(r[2]) if len(r) > 2 else False,
+                    "surface": str(r[3]) if len(r) > 3 and r[3] is not None else "",
+                    "opponent": str(r[11]) if len(r) > 11 and r[11] is not None else "Adversaire",
+                    "tournament": str(r[12]) if len(r) > 12 and r[12] is not None else "Tournoi",
+                    "score": str(r[13]) if len(r) > 13 and r[13] is not None else ""
+                }
+                for r in state.get("recent_results", {}).get(p2, [])[-5:]
+            ]
+        }
     }
 
 
