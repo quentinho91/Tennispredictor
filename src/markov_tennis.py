@@ -380,12 +380,14 @@ def estimate_point_probabilities(
     return p_a, p_b
 
 
-def price_game_handicap(expected_diff: float, line: float, sigma: float = 3.6) -> Tuple[float, float]:
+def price_game_handicap(expected_diff: float, line: float, sigma: float = 4.0) -> Tuple[float, float]:
     """
     Évalue la probabilité de couvrir un handicap de jeux H : P(Games_A - Games_B > H).
+    Utilise la distribution Normale calibrée sur l'écart de jeux (sigma=4.0 en 3 sets, 7.0 en 5 sets).
     """
-    z = (expected_diff - line) / (sigma * 0.55)
-    p_cover_a = 1.0 / (1.0 + math.exp(-z))
+    z = (expected_diff - line) / (sigma * math.sqrt(2.0))
+    p_cover_a = 0.5 * (1.0 + math.erf(z))
+    p_cover_a = float(np.clip(p_cover_a, 0.01, 0.99))
     p_cover_b = 1.0 - p_cover_a
     return round(p_cover_a, 4), round(p_cover_b, 4)
 
@@ -393,8 +395,10 @@ def price_game_handicap(expected_diff: float, line: float, sigma: float = 3.6) -
 def price_total_games(expected_total: float, line: float, sigma: float = 3.8) -> Tuple[float, float]:
     """
     Évalue la probabilité Over / Under sur le total de jeux : P(Total > T).
+    Utilise la distribution Normale calibrée sur le total de jeux (sigma=3.8 en 3 sets, 6.8 en 5 sets).
     """
-    z = (expected_total - line) / (sigma * 0.55)
-    p_over = 1.0 / (1.0 + math.exp(-z))
+    z = (expected_total - line) / (sigma * math.sqrt(2.0))
+    p_over = 0.5 * (1.0 + math.erf(z))
+    p_over = float(np.clip(p_over, 0.01, 0.99))
     p_under = 1.0 - p_over
     return round(p_over, 4), round(p_under, 4)
