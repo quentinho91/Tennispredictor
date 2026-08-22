@@ -1631,7 +1631,7 @@ async function loadDailyScanner(forceRefresh = false) {
   const refreshParam = forceRefresh ? '&refresh=true' : '';
 
   try {
-    const res = await fetch(`/api/scanner?circuit=all&bookmaker=bet365${keyParam}${refreshParam}`);
+    const res = await fetch(`/api/scanner?circuit=all&bookmaker=betclic${keyParam}${refreshParam}`);
     if (!res.ok) {
       throw new Error(`Erreur serveur HTTP ${res.status}`);
     }

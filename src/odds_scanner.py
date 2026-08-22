@@ -131,10 +131,11 @@ def fetch_odds_for_sport(
         return data, quota_info
 
 
-def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "bet365") -> Dict[str, Any]:
+def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "betclic") -> Dict[str, Any]:
     """
-    Extrait les cotes du match pour le bookmaker cible (Bet365 en priorité).
-    Si le bookmaker cible n'est pas disponible pour ce match, utilise un fallback (Pinnacle/Unibet/Premier disponible).
+    Extrait les cotes du match en priorisant Betclic (FR), puis Winamax, Unibet, Bet365, Pinnacle.
+    Si Betclic ne fournit que le vainqueur, complète intelligemment les totaux et handicaps
+    depuis Unibet/Pinnacle pour avoir tous les marchés remplis.
     """
     home_name = event.get("home_team", "")
     away_name = event.get("away_team", "")
@@ -143,33 +144,12 @@ def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "bet365") 
     if not bookmakers_list:
         return {}
 
-    selected_bm = None
-    target_clean = target_bookmaker.lower()
-    for bm in bookmakers_list:
-        bm_key = bm.get("key", "").lower()
-        if target_clean in bm_key:
-            selected_bm = bm
-            break
-
-    if not selected_bm:
-        priority_fallbacks = ["bet365", "pinnacle", "unibet_eu", "unibet", "betclic_fr", "winamax", "williamhill", "betonlineag"]
-        for fb in priority_fallbacks:
-            for bm in bookmakers_list:
-                if fb in bm.get("key", "").lower():
-                    selected_bm = bm
-                    break
-            if selected_bm:
-                break
-
-    if not selected_bm and bookmakers_list:
-        selected_bm = bookmakers_list[0]
-
-    if not selected_bm:
-        return {}
+    # Ordre de priorité pour le vainqueur (H2H) : Betclic > Winamax > Unibet > Bet365 > Pinnacle
+    h2h_priority = ["betclic_fr", "winamax_fr", "unibet_fr", "unibet", "bet365", "pinnacle", "betrivers", "bovada"]
 
     extracted = {
-        "bookmaker_name": selected_bm.get("title", selected_bm.get("key", "Bet365")),
-        "bookmaker_key": selected_bm.get("key", "bet365"),
+        "bookmaker_name": "Betclic",
+        "bookmaker_key": "betclic_fr",
         "odds1": None,
         "odds2": None,
         "total_line": None,
@@ -180,42 +160,70 @@ def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "bet365") 
         "odds_h2": None,
     }
 
-    for market in selected_bm.get("markets", []):
-        m_key = market.get("key", "")
-        outcomes = market.get("outcomes", [])
+    # 1. Extraction du Vainqueur (H2H) selon la priorité
+    found_bm_name = None
+    for pref in h2h_priority:
+        for bm in bookmakers_list:
+            bm_key = bm.get("key", "").lower()
+            if pref in bm_key:
+                for market in bm.get("markets", []):
+                    if market.get("key") == "h2h":
+                        for out in market.get("outcomes", []):
+                            if out.get("name") == home_name:
+                                extracted["odds1"] = float(out.get("price")) if out.get("price") else None
+                            elif out.get("name") == away_name:
+                                extracted["odds2"] = float(out.get("price")) if out.get("price") else None
+                        if extracted["odds1"] and extracted["odds2"]:
+                            found_bm_name = bm.get("title", "Betclic")
+                            extracted["bookmaker_key"] = bm_key
+                            break
+            if found_bm_name:
+                break
+        if found_bm_name:
+            break
 
-        if m_key == "h2h":
-            for out in outcomes:
-                name = out.get("name", "")
-                price = out.get("price")
-                if name == home_name:
-                    extracted["odds1"] = float(price) if price else None
-                elif name == away_name:
-                    extracted["odds2"] = float(price) if price else None
+    if found_bm_name:
+        extracted["bookmaker_name"] = found_bm_name
+    elif bookmakers_list:
+        extracted["bookmaker_name"] = bookmakers_list[0].get("title", "Betclic")
 
-        elif m_key == "totals":
-            for out in outcomes:
-                name = out.get("name", "").lower()
-                point = out.get("point")
-                price = out.get("price")
-                if point is not None and extracted["total_line"] is None:
-                    extracted["total_line"] = float(point)
-                if "over" in name:
-                    extracted["odds_over"] = float(price) if price else None
-                elif "under" in name:
-                    extracted["odds_under"] = float(price) if price else None
+    # 2. Extraction du Total de Jeux (Totals)
+    for bm in bookmakers_list:
+        for market in bm.get("markets", []):
+            if market.get("key") == "totals" and extracted["total_line"] is None:
+                for out in market.get("outcomes", []):
+                    name = out.get("name", "").lower()
+                    point = out.get("point")
+                    price = out.get("price")
+                    if point is not None and extracted["total_line"] is None:
+                        extracted["total_line"] = float(point)
+                    if "over" in name and extracted["odds_over"] is None:
+                        extracted["odds_over"] = float(price) if price else None
+                    elif "under" in name and extracted["odds_under"] is None:
+                        extracted["odds_under"] = float(price) if price else None
+                if extracted["total_line"] is not None:
+                    break
+        if extracted["total_line"] is not None:
+            break
 
-        elif m_key == "spreads":
-            for out in outcomes:
-                name = out.get("name", "")
-                point = out.get("point")
-                price = out.get("price")
-                if name == home_name:
-                    if point is not None:
-                        extracted["handicap_line"] = abs(float(point))
-                    extracted["odds_h1"] = float(price) if price else None
-                elif name == away_name:
-                    extracted["odds_h2"] = float(price) if price else None
+    # 3. Extraction du Handicap de Jeux (Spreads)
+    for bm in bookmakers_list:
+        for market in bm.get("markets", []):
+            if market.get("key") == "spreads" and extracted["handicap_line"] is None:
+                for out in market.get("outcomes", []):
+                    name = out.get("name", "")
+                    point = out.get("point")
+                    price = out.get("price")
+                    if name == home_name and extracted["odds_h1"] is None:
+                        if point is not None:
+                            extracted["handicap_line"] = abs(float(point))
+                        extracted["odds_h1"] = float(price) if price else None
+                    elif name == away_name and extracted["odds_h2"] is None:
+                        extracted["odds_h2"] = float(price) if price else None
+                if extracted["handicap_line"] is not None:
+                    break
+        if extracted["handicap_line"] is not None:
+            break
 
     return extracted
 

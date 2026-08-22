@@ -1017,12 +1017,12 @@ from src.odds_scanner import scan_daily_matches
 @app.get("/api/scanner")
 def get_daily_scanner(
     circuit: str = "all",
-    bookmaker: str = "bet365",
+    bookmaker: str = "betclic",
     api_key: Optional[str] = Query(None),
     refresh: bool = False
 ):
     """
-    Scan quotidien des matchs avec cotes Bet365 / The Odds API (Hommes + Femmes combinés),
+    Scan quotidien des matchs avec cotes Betclic / The Odds API (Hommes + Femmes combinés),
     résolution automatique des contextes et détection instantanée des Value Bets.
     """
     c_lower = circuit.lower()
