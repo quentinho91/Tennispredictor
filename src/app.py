@@ -403,6 +403,80 @@ def evaluate_market_value(
     }
 
 
+def compute_vb_confidence(vb: Dict[str, Any], match_confidence: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Calcule un indice de confiance spécifique (0-100%) pour un Value Bet donné,
+    basé sur l'ampleur du coussin de sécurité (Edge/EV), la variance structurelle du marché,
+    la qualité des données joueurs et la convergence des modèles.
+    """
+    if not vb:
+        return {"score": 50.0, "label": "Modérée", "level": "medium", "icon": "⚖️"}
+
+    edge_pct = vb.get("edge_pct", 0.0)
+    ev_pct = vb.get("ev_pct", 0.0)
+    prob = vb.get("prob", 50.0)
+    market = vb.get("market", "")
+
+    # 1. Coussin de sécurité (Edge & EV buffer)
+    edge_score = min(max(edge_pct, 0.0) / 20.0, 1.0)
+    ev_score = min(max(ev_pct, 0.0) / 30.0, 1.0)
+    edge_buffer = 0.60 * edge_score + 0.40 * ev_score
+
+    # 2. Stabilité structurelle du marché (variance)
+    if "Total Jeux" in market:
+        market_stability = 0.90
+    elif "Handicap" in market:
+        market_stability = 0.85
+    elif "Vainqueur Match" in market:
+        market_stability = 0.85
+    elif "Nombre de Sets" in market:
+        market_stability = 0.72
+    elif "Tie-Break" in market:
+        market_stability = 0.65
+    elif "Set 1" in market:
+        market_stability = 0.60
+    else:
+        market_stability = 0.65
+
+    # 3. Qualité des données & Accord des modèles
+    details = match_confidence.get("details", {}) if match_confidence else {}
+    dq = details.get("data_quality", 80.0) / 100.0
+    ma = details.get("model_agreement", 80.0) / 100.0
+    model_score = 0.50 * dq + 0.50 * ma
+
+    # 4. Probabilité intrinsèque (évite les gros longshots ultra-volatiles)
+    prob_score = min(prob / 75.0, 1.0)
+
+    # Score combiné (0.0 à 1.0)
+    combined = (
+        0.35 * edge_buffer +
+        0.25 * market_stability +
+        0.25 * model_score +
+        0.15 * prob_score
+    )
+    score_pct = round(float(np.clip(combined * 100.0, 35.0, 96.0)), 1)
+
+    if score_pct >= 75.0:
+        label = "Très haute confiance"
+        level = "high"
+        icon = "🔥"
+    elif score_pct >= 62.0:
+        label = "Bonne confiance"
+        level = "medium"
+        icon = "🎯"
+    else:
+        label = "Confiance modérée"
+        level = "low"
+        icon = "⚖️"
+
+    return {
+        "score": score_pct,
+        "label": label,
+        "level": level,
+        "icon": icon
+    }
+
+
 def filter_uncorrelated_value_bets(
     value_bets: List[Dict[str, Any]],
     p1: str,
@@ -778,14 +852,18 @@ def predict_match(req: PredictionRequest):
     if vb_tb_yes and vb_tb_yes["is_value_bet"]: detected_value_bets.append(vb_tb_yes)
     if vb_tb_no and vb_tb_no["is_value_bet"]: detected_value_bets.append(vb_tb_no)
 
+    # Calcul de l'indice de confiance spécifique à chaque marché / Value Bet
+    all_evaluated = [vb_p1, vb_p2, vb_set1_p1, vb_set1_p2, vb_over, vb_under, vb_h1, vb_h2, vb_sets_over, vb_sets_under, vb_tb_yes, vb_tb_no]
+    for item in all_evaluated:
+        if item is not None:
+            item["confidence"] = compute_vb_confidence(item, confidence)
+
     # Trier les value bets par espérance de gain (EV) décroissante
     detected_value_bets.sort(key=lambda x: x["ev_pct"], reverse=True)
 
     # Filtrage intelligent anti-corrélation (Sélectionne max 1 à 2 meilleurs paris indépendants)
     vb_analysis = filter_uncorrelated_value_bets(detected_value_bets, p1, p2, p_p1)
 
-    # Collecter l'ensemble des cotes saisies analysées (avec EV et statut)
-    all_evaluated = [vb_p1, vb_p2, vb_set1_p1, vb_set1_p2, vb_over, vb_under, vb_h1, vb_h2, vb_sets_over, vb_sets_under, vb_tb_yes, vb_tb_no]
     scanned_markets = [item for item in all_evaluated if item is not None]
 
     h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])

@@ -967,12 +967,14 @@ function renderValueBetsContainer(allVBs, scannedMarkets = [], recommendedVBs = 
         const evColor = sm.ev_pct > 0 ? '#fbbf24' : '#f87171';
         const evSign = sm.ev_pct > 0 ? '+' : '';
         const diagText = sm.ev_pct > 0 ? 'Marge trop faible' : 'Cote insuffisante';
+        const sconf = sm.confidence || { score: 50, label: 'Modérée', level: 'medium', icon: '⚖️' };
         rowsHtml += `
           <tr>
             <td><b>${escapeHtml(sm.selection)}</b> <span style="color:var(--text-dim); font-size:10.5px;">(${escapeHtml(sm.market)})</span></td>
             <td style="color:#f8fafc;">@ ${sm.offered_odds.toFixed(2)}</td>
             <td style="color:var(--text-muted);">${sm.fair_odds.toFixed(2)}</td>
             <td style="color:${evColor}; font-weight:700;">${evSign}${sm.ev_pct}%</td>
+            <td><span class="vb-conf-pill ${sconf.level}" style="font-size:10px; padding:1px 6px;">${sconf.icon} ${sconf.score}%</span></td>
             <td style="color:var(--text-dim); font-size:11px;">${diagText}</td>
           </tr>
         `;
@@ -993,6 +995,7 @@ function renderValueBetsContainer(allVBs, scannedMarkets = [], recommendedVBs = 
               <th>Cote Saisie</th>
               <th>Cote Juste IA</th>
               <th>Espérance EV</th>
+              <th>Confiance VB</th>
               <th>Diagnostic</th>
             </tr>
           </thead>
@@ -1036,11 +1039,16 @@ function renderValueBetsContainer(allVBs, scannedMarkets = [], recommendedVBs = 
 
       const isPrimary = vb.is_primary_pick || idx === 0;
       const rankBadge = isPrimary ? '<span class="vb-pick-tag">⭐ PICK RECOMMANDÉ #1</span>' : `<span class="vb-pick-tag" style="background:#38bdf8; color:#0c4a6e;">🎯 PICK COMPLÉMENTAIRE #${idx + 1}</span>`;
+      const conf = vb.confidence || { score: 75.0, label: 'Haute', level: 'high', icon: '🔥' };
+      const confPillHtml = `<span class="vb-conf-pill ${conf.level}" title="Indice de confiance spécifique à ce Value Bet : ${conf.label}">${conf.icon} Confiance VB : <b>${conf.score}%</b> (${conf.label})</span>`;
 
       listHtml += `
         <div class="vb-summary-item ${isPrimary ? 'primary-pick' : ''}">
           <div class="vb-sum-left">
-            ${rankBadge}
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              ${rankBadge}
+              ${confPillHtml}
+            </div>
             <span class="vb-sum-market">${escapeHtml(vb.market)}</span>
             <span class="vb-sum-title">${escapeHtml(vb.selection)}</span>
             <span style="font-size: 11.5px; color: var(--text-dim);">Proba: ${vb.prob}% • Cote juste: ${vb.fair_odds.toFixed(2)}</span>
@@ -1065,11 +1073,15 @@ function renderValueBetsContainer(allVBs, scannedMarkets = [], recommendedVBs = 
     if (!maskedVBs || maskedVBs.length === 0) return '';
     let html = '';
     maskedVBs.forEach(mvb => {
+      const mconf = mvb.confidence || { score: 60.0, label: 'Modérée', level: 'medium', icon: '⚖️' };
       html += `
         <div class="masked-vb-item">
           <div>
-            <div style="font-size: 13px; font-weight: 700; color: #f1f5f9;">${escapeHtml(mvb.selection)} <span style="font-size: 11px; color: var(--text-dim);">(${escapeHtml(mvb.market)})</span></div>
-            <div style="font-size: 10.5px; color: #fbbf24;">🔒 ${escapeHtml(mvb.masked_reason || 'Pari corrélé')}</div>
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span style="font-size: 13px; font-weight: 700; color: #f1f5f9;">${escapeHtml(mvb.selection)} <span style="font-size: 11px; color: var(--text-dim);">(${escapeHtml(mvb.market)})</span></span>
+              <span class="vb-conf-pill ${mconf.level}" style="font-size: 9.5px; padding: 1px 6px;">${mconf.icon} Confiance: <b>${mconf.score}%</b></span>
+            </div>
+            <div style="font-size: 10.5px; color: #fbbf24; margin-top: 2px;">🔒 ${escapeHtml(mvb.masked_reason || 'Pari corrélé')}</div>
           </div>
           <div style="text-align: right;">
             <div style="font-size: 14px; font-weight: 800; color: #94a3b8;">@ ${mvb.offered_odds.toFixed(2)}</div>
@@ -1208,7 +1220,8 @@ function savePredictionToHistory(data, payload) {
   const vbs = (data.recommended_value_bets && data.recommended_value_bets.length > 0) ? data.recommended_value_bets : (data.all_value_bets || []);
   if (vbs.length > 0) {
     const topVb = vbs[0];
-    mainPick = `🎯 VB: ${topVb.selection}`;
+    const confScore = topVb.confidence ? `${topVb.confidence.score}%` : '';
+    mainPick = `🎯 VB: ${topVb.selection}${confScore ? ' (' + confScore + ' conf)' : ''}`;
     pickOdds = topVb.offered_odds;
     pickType = 'vb';
   } else {
