@@ -165,6 +165,14 @@ function setupCircuitSwitcher() {
   });
 }
 
+// Helper to safely parse decimal numbers with dot or comma
+function parseOddInput(el) {
+  if (!el || !el.value) return null;
+  const raw = String(el.value).trim().replace(',', '.');
+  const val = parseFloat(raw);
+  return (isNaN(val) || val <= 1.0) ? null : val;
+}
+
 // Swap Players
 function setupSwap() {
   swapBtn.addEventListener('click', () => {
@@ -179,6 +187,20 @@ function setupSwap() {
     const tempOdds = odds1Input.value;
     odds1Input.value = odds2Input.value;
     odds2Input.value = tempOdds;
+
+    if (oddsH1Input && oddsH2Input) {
+      const tempH = oddsH1Input.value;
+      oddsH1Input.value = oddsH2Input.value;
+      oddsH2Input.value = tempH;
+    }
+
+    if (oddsSet1P1Input && oddsSet1P2Input) {
+      const tempS1 = oddsSet1P1Input.value;
+      oddsSet1P1Input.value = oddsSet1P2Input.value;
+      oddsSet1P2Input.value = tempS1;
+    }
+
+    updateDynamicLabels();
   });
 }
 
@@ -506,20 +528,20 @@ function setupFormSubmit() {
       round: roundSelect.value,
       best_of: parseInt(bestOfSelect.value, 10),
       indoor: parseInt(indoorSelect.value, 10),
-      odds1: odds1Input.value ? parseFloat(odds1Input.value) : null,
-      odds2: odds2Input.value ? parseFloat(odds2Input.value) : null,
-      total_line: totalLineInput && totalLineInput.value ? parseFloat(totalLineInput.value) : null,
-      odds_over: oddsOverInput && oddsOverInput.value ? parseFloat(oddsOverInput.value) : null,
-      odds_under: oddsUnderInput && oddsUnderInput.value ? parseFloat(oddsUnderInput.value) : null,
-      handicap_line: handicapLineInput && handicapLineInput.value ? parseFloat(handicapLineInput.value) : null,
-      odds_h1: oddsH1Input && oddsH1Input.value ? parseFloat(oddsH1Input.value) : null,
-      odds_h2: oddsH2Input && oddsH2Input.value ? parseFloat(oddsH2Input.value) : null,
-      odds_set1_p1: oddsSet1P1Input && oddsSet1P1Input.value ? parseFloat(oddsSet1P1Input.value) : null,
-      odds_set1_p2: oddsSet1P2Input && oddsSet1P2Input.value ? parseFloat(oddsSet1P2Input.value) : null,
-      odds_sets_over25: oddsSetsOverInput && oddsSetsOverInput.value ? parseFloat(oddsSetsOverInput.value) : null,
-      odds_sets_under25: oddsSetsUnderInput && oddsSetsUnderInput.value ? parseFloat(oddsSetsUnderInput.value) : null,
-      odds_tb_yes: oddsTbYesInput && oddsTbYesInput.value ? parseFloat(oddsTbYesInput.value) : null,
-      odds_tb_no: oddsTbNoInput && oddsTbNoInput.value ? parseFloat(oddsTbNoInput.value) : null,
+      odds1: parseOddInput(odds1Input),
+      odds2: parseOddInput(odds2Input),
+      total_line: totalLineInput && totalLineInput.value ? parseFloat(String(totalLineInput.value).replace(',', '.')) : null,
+      odds_over: parseOddInput(oddsOverInput),
+      odds_under: parseOddInput(oddsUnderInput),
+      handicap_line: handicapLineInput && handicapLineInput.value ? parseFloat(String(handicapLineInput.value).replace(',', '.')) : null,
+      odds_h1: parseOddInput(oddsH1Input),
+      odds_h2: parseOddInput(oddsH2Input),
+      odds_set1_p1: parseOddInput(oddsSet1P1Input),
+      odds_set1_p2: parseOddInput(oddsSet1P2Input),
+      odds_sets_over25: parseOddInput(oddsSetsOverInput),
+      odds_sets_under25: parseOddInput(oddsSetsUnderInput),
+      odds_tb_yes: parseOddInput(oddsTbYesInput),
+      odds_tb_no: parseOddInput(oddsTbNoInput),
     };
 
     try {
@@ -535,7 +557,7 @@ function setupFormSubmit() {
       }
 
       const data = await res.json();
-      renderResults(data);
+      renderResults(data, payload);
       savePredictionToHistory(data, payload);
       resultsSection.scrollIntoView({ behavior: 'smooth' });
     } catch (err) {
@@ -550,13 +572,22 @@ function setupFormSubmit() {
 // --------------------------------------------------------------------------
 // Render Results
 // --------------------------------------------------------------------------
-function renderResults(data) {
+function renderResults(data, payload = {}) {
   resultsSection.style.display = 'block';
 
   // Trigger re-analysis animation
   resultsSection.classList.remove('re-analyzing');
   void resultsSection.offsetWidth;
   resultsSection.classList.add('re-analyzing');
+
+  // Re-analysis toast notification
+  const toastEl = document.getElementById('re-analysis-toast');
+  if (toastEl) {
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    toastEl.innerHTML = `<span>⚡ Analyse actualisée à <b>${timeStr}</b> avec les cotes renseignées</span>`;
+    toastEl.style.display = 'flex';
+  }
 
   // Players & Probabilities
   const p1NameEl = document.getElementById('res-p1-name');
@@ -565,6 +596,8 @@ function renderResults(data) {
   const p2ProbEl = document.getElementById('res-p2-prob');
   const p1FairOddEl = document.getElementById('res-p1-fair-odd');
   const p2FairOddEl = document.getElementById('res-p2-fair-odd');
+  const p1BookOddEl = document.getElementById('res-p1-bookmaker-odd');
+  const p2BookOddEl = document.getElementById('res-p2-bookmaker-odd');
   const barP1 = document.getElementById('bar-p1');
   const barP2 = document.getElementById('bar-p2');
   const ctxTag = document.getElementById('res-context-tag');
@@ -576,8 +609,49 @@ function renderResults(data) {
   p2NameEl.textContent = data.p2;
   p1ProbEl.textContent = `${p1Pct}%`;
   p2ProbEl.textContent = `${p2Pct}%`;
-  p1FairOddEl.textContent = `Cote juste : ${data.fair_odds_p1.toFixed(2)}`;
-  p2FairOddEl.textContent = `Cote juste : ${data.fair_odds_p2.toFixed(2)}`;
+  p1FairOddEl.innerHTML = `Cote juste IA : <b>${data.fair_odds_p1.toFixed(2)}</b>`;
+  p2FairOddEl.innerHTML = `Cote juste IA : <b>${data.fair_odds_p2.toFixed(2)}</b>`;
+
+  // Display Bookmaker Odds & EV Badges in Hero Duel Card
+  if (p1BookOddEl) {
+    if (data.offered_odds_p1) {
+      const vb1 = data.vb_p1;
+      let badgeClass = 'is-no-vb';
+      let badgeText = `${vb1 && vb1.ev_pct > 0 ? '+' : ''}${vb1 ? vb1.ev_pct : '0.0'}% EV`;
+      if (vb1 && vb1.is_value_bet) {
+        badgeClass = 'is-vb';
+        badgeText = `🎯 Value Bet (+${vb1.ev_pct}% EV)`;
+      } else if (vb1 && vb1.ev_pct > 0) {
+        badgeClass = 'is-low-ev';
+        badgeText = `⚖️ +${vb1.ev_pct}% EV`;
+      }
+      p1BookOddEl.className = `bookmaker-odd-badge ${badgeClass}`;
+      p1BookOddEl.innerHTML = `Bookmaker : <b>@ ${data.offered_odds_p1.toFixed(2)}</b> <span style="font-size:10px; margin-left:4px;">(${badgeText})</span>`;
+    } else {
+      p1BookOddEl.className = 'bookmaker-odd-badge';
+      p1BookOddEl.innerHTML = `Bookmaker : <span style="color:var(--text-dim);">Non saisie</span>`;
+    }
+  }
+
+  if (p2BookOddEl) {
+    if (data.offered_odds_p2) {
+      const vb2 = data.vb_p2;
+      let badgeClass = 'is-no-vb';
+      let badgeText = `${vb2 && vb2.ev_pct > 0 ? '+' : ''}${vb2 ? vb2.ev_pct : '0.0'}% EV`;
+      if (vb2 && vb2.is_value_bet) {
+        badgeClass = 'is-vb';
+        badgeText = `🎯 Value Bet (+${vb2.ev_pct}% EV)`;
+      } else if (vb2 && vb2.ev_pct > 0) {
+        badgeClass = 'is-low-ev';
+        badgeText = `⚖️ +${vb2.ev_pct}% EV`;
+      }
+      p2BookOddEl.className = `bookmaker-odd-badge ${badgeClass}`;
+      p2BookOddEl.innerHTML = `Bookmaker : <b>@ ${data.offered_odds_p2.toFixed(2)}</b> <span style="font-size:10px; margin-left:4px;">(${badgeText})</span>`;
+    } else {
+      p2BookOddEl.className = 'bookmaker-odd-badge';
+      p2BookOddEl.innerHTML = `Bookmaker : <span style="color:var(--text-dim);">Non saisie</span>`;
+    }
+  }
 
   barP1.style.width = `${p1Pct}%`;
   barP2.style.width = `${p2Pct}%`;
@@ -620,10 +694,10 @@ function renderResults(data) {
   // ------------------------------------------------------------------------
   // Value Bets Across All Markets (avec Calculateur Bankroll & Euros Réels)
   // ------------------------------------------------------------------------
-  renderValueBetsContainer(data.all_value_bets || []);
+  renderValueBetsContainer(data.all_value_bets || [], data.scanned_markets || []);
 
   // ------------------------------------------------------------------------
-  // Multi-Market Analysis Grid
+  // Multi-Market Analysis Grid (avec affichage cotes bookmakers saisies)
   // ------------------------------------------------------------------------
   const mkts = data.markets;
   const marketsGrid = document.getElementById('markets-grid');
@@ -633,6 +707,18 @@ function renderResults(data) {
     const tb = mkts.tiebreak;
     const s1 = mkts.set1_winner;
     const ns = mkts.number_of_sets;
+
+    const renderMarketPill = (vbObj) => {
+      if (!vbObj || !vbObj.offered_odds) return '';
+      const isVb = vbObj.is_value_bet;
+      const ev = vbObj.ev_pct;
+      const pillClass = isVb ? 'vb' : (ev > 0 ? 'low' : 'neg');
+      const text = isVb ? `VB +${ev}%` : `${ev > 0 ? '+' : ''}${ev}% EV`;
+      return `
+        <span class="mri-bookmaker" title="Cote bookmaker saisie">Book: @${vbObj.offered_odds.toFixed(2)}</span>
+        <span class="mri-ev-pill ${pillClass}" title="Espérance de gain">${text}</span>
+      `;
+    };
 
     marketsGrid.innerHTML = `
       <!-- Total Games Card -->
@@ -644,17 +730,17 @@ function renderResults(data) {
         <div class="market-row-item ${tg.vb_over && tg.vb_over.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">Over ${tg.line}</span>
           <div class="mri-stats">
-            <span class="mri-prob">${tg.proba_over}%</span>
-            <span class="mri-fair">Cote: ${tg.fair_odds_over.toFixed(2)}</span>
-            ${tg.vb_over && tg.vb_over.is_value_bet ? `<span class="mri-vb-pill vb">VB +${tg.vb_over.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${tg.proba_over}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${tg.fair_odds_over.toFixed(2)}</span>
+            ${renderMarketPill(tg.vb_over)}
           </div>
         </div>
         <div class="market-row-item ${tg.vb_under && tg.vb_under.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">Under ${tg.line}</span>
           <div class="mri-stats">
-            <span class="mri-prob">${tg.proba_under}%</span>
-            <span class="mri-fair">Cote: ${tg.fair_odds_under.toFixed(2)}</span>
-            ${tg.vb_under && tg.vb_under.is_value_bet ? `<span class="mri-vb-pill vb">VB +${tg.vb_under.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${tg.proba_under}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${tg.fair_odds_under.toFixed(2)}</span>
+            ${renderMarketPill(tg.vb_under)}
           </div>
         </div>
       </div>
@@ -668,17 +754,17 @@ function renderResults(data) {
         <div class="market-row-item ${hg.vb_h1 && hg.vb_h1.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">${escapeHtml(hg.label_h1)}</span>
           <div class="mri-stats">
-            <span class="mri-prob">${hg.proba_h1}%</span>
-            <span class="mri-fair">Cote: ${hg.fair_odds_h1.toFixed(2)}</span>
-            ${hg.vb_h1 && hg.vb_h1.is_value_bet ? `<span class="mri-vb-pill vb">VB +${hg.vb_h1.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${hg.proba_h1}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${hg.fair_odds_h1.toFixed(2)}</span>
+            ${renderMarketPill(hg.vb_h1)}
           </div>
         </div>
         <div class="market-row-item ${hg.vb_h2 && hg.vb_h2.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">${escapeHtml(hg.label_h2)}</span>
           <div class="mri-stats">
-            <span class="mri-prob">${hg.proba_h2}%</span>
-            <span class="mri-fair">Cote: ${hg.fair_odds_h2.toFixed(2)}</span>
-            ${hg.vb_h2 && hg.vb_h2.is_value_bet ? `<span class="mri-vb-pill vb">VB +${hg.vb_h2.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${hg.proba_h2}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${hg.fair_odds_h2.toFixed(2)}</span>
+            ${renderMarketPill(hg.vb_h2)}
           </div>
         </div>
       </div>
@@ -692,17 +778,17 @@ function renderResults(data) {
         <div class="market-row-item ${tb.vb_yes && tb.vb_yes.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">OUI (+0.5 TB)</span>
           <div class="mri-stats">
-            <span class="mri-prob">${tb.proba_yes}%</span>
-            <span class="mri-fair">Cote: ${tb.fair_odds_yes.toFixed(2)}</span>
-            ${tb.vb_yes && tb.vb_yes.is_value_bet ? `<span class="mri-vb-pill vb">VB +${tb.vb_yes.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${tb.proba_yes}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${tb.fair_odds_yes.toFixed(2)}</span>
+            ${renderMarketPill(tb.vb_yes)}
           </div>
         </div>
         <div class="market-row-item ${tb.vb_no && tb.vb_no.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">NON (0 TB)</span>
           <div class="mri-stats">
-            <span class="mri-prob">${tb.proba_no}%</span>
-            <span class="mri-fair">Cote: ${tb.fair_odds_no.toFixed(2)}</span>
-            ${tb.vb_no && tb.vb_no.is_value_bet ? `<span class="mri-vb-pill vb">VB +${tb.vb_no.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${tb.proba_no}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${tb.fair_odds_no.toFixed(2)}</span>
+            ${renderMarketPill(tb.vb_no)}
           </div>
         </div>
       </div>
@@ -716,17 +802,17 @@ function renderResults(data) {
         <div class="market-row-item ${s1.vb_p1 && s1.vb_p1.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">${escapeHtml(data.p1)}</span>
           <div class="mri-stats">
-            <span class="mri-prob">${s1.proba_p1}%</span>
-            <span class="mri-fair">Cote: ${s1.fair_odds_p1.toFixed(2)}</span>
-            ${s1.vb_p1 && s1.vb_p1.is_value_bet ? `<span class="mri-vb-pill vb">VB +${s1.vb_p1.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${s1.proba_p1}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${s1.fair_odds_p1.toFixed(2)}</span>
+            ${renderMarketPill(s1.vb_p1)}
           </div>
         </div>
         <div class="market-row-item ${s1.vb_p2 && s1.vb_p2.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">${escapeHtml(data.p2)}</span>
           <div class="mri-stats">
-            <span class="mri-prob">${s1.proba_p2}%</span>
-            <span class="mri-fair">Cote: ${s1.fair_odds_p2.toFixed(2)}</span>
-            ${s1.vb_p2 && s1.vb_p2.is_value_bet ? `<span class="mri-vb-pill vb">VB +${s1.vb_p2.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${s1.proba_p2}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${s1.fair_odds_p2.toFixed(2)}</span>
+            ${renderMarketPill(s1.vb_p2)}
           </div>
         </div>
       </div>
@@ -740,17 +826,17 @@ function renderResults(data) {
         <div class="market-row-item ${ns.vb_over && ns.vb_over.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">${escapeHtml(ns.label_over)}</span>
           <div class="mri-stats">
-            <span class="mri-prob">${ns.proba_over}%</span>
-            <span class="mri-fair">Cote: ${ns.fair_odds_over.toFixed(2)}</span>
-            ${ns.vb_over && ns.vb_over.is_value_bet ? `<span class="mri-vb-pill vb">VB +${ns.vb_over.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${ns.proba_over}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${ns.fair_odds_over.toFixed(2)}</span>
+            ${renderMarketPill(ns.vb_over)}
           </div>
         </div>
         <div class="market-row-item ${ns.vb_under && ns.vb_under.is_value_bet ? 'highlight-vb' : ''}">
           <span class="mri-name">${escapeHtml(ns.label_under)}</span>
           <div class="mri-stats">
-            <span class="mri-prob">${ns.proba_under}%</span>
-            <span class="mri-fair">Cote: ${ns.fair_odds_under.toFixed(2)}</span>
-            ${ns.vb_under && ns.vb_under.is_value_bet ? `<span class="mri-vb-pill vb">VB +${ns.vb_under.ev_pct}%</span>` : ''}
+            <span class="mri-prob" title="Probabilité réelle IA">${ns.proba_under}%</span>
+            <span class="mri-fair" title="Cote juste IA">Juste: ${ns.fair_odds_under.toFixed(2)}</span>
+            ${renderMarketPill(ns.vb_under)}
           </div>
         </div>
       </div>
@@ -855,21 +941,55 @@ function renderFormTimeline(containerId, matches, playerName) {
 // --------------------------------------------------------------------------
 // Value Bets Rendering & Real-time Euro Bankroll Calculator
 // --------------------------------------------------------------------------
-function renderValueBetsContainer(allVBs) {
+function renderValueBetsContainer(allVBs, scannedMarkets = []) {
   const vbContainer = document.getElementById('valuebet-container');
   if (!vbContainer) return;
 
+  // If no Value Bets were detected
   if (!allVBs || allVBs.length === 0) {
-    if (odds1Input.value || (totalLineInput && totalLineInput.value) || (oddsH1Input && oddsH1Input.value) || (oddsTbYesInput && oddsTbYesInput.value)) {
+    // Check if user provided any odds
+    if (scannedMarkets && scannedMarkets.length > 0) {
       vbContainer.style.display = 'block';
       vbContainer.className = 'valuebet-card no-vb';
+
+      let rowsHtml = '';
+      scannedMarkets.forEach(sm => {
+        const evColor = sm.ev_pct > 0 ? '#fbbf24' : '#f87171';
+        const evSign = sm.ev_pct > 0 ? '+' : '';
+        const diagText = sm.ev_pct > 0 ? 'Marge trop faible' : 'Cote insuffisante';
+        rowsHtml += `
+          <tr>
+            <td><b>${escapeHtml(sm.selection)}</b> <span style="color:var(--text-dim); font-size:10.5px;">(${escapeHtml(sm.market)})</span></td>
+            <td style="color:#f8fafc;">@ ${sm.offered_odds.toFixed(2)}</td>
+            <td style="color:var(--text-muted);">${sm.fair_odds.toFixed(2)}</td>
+            <td style="color:${evColor}; font-weight:700;">${evSign}${sm.ev_pct}%</td>
+            <td style="color:var(--text-dim); font-size:11px;">${diagText}</td>
+          </tr>
+        `;
+      });
+
       vbContainer.innerHTML = `
         <div class="vb-header">
           <span class="vb-badge badge-no-vb">❌ AUCUN VALUE BET DÉTECTÉ</span>
+          <span style="font-size: 11px; color: var(--text-dim);">${scannedMarkets.length} cote${scannedMarkets.length > 1 ? 's analysées' : ' analysée'}</span>
         </div>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
-          Les cotes bookmakers renseignées sont inférieures ou égales aux probabilités réelles calculées par l'IA.
+        <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">
+          Les cotes bookmakers renseignées sont inférieures ou égales aux probabilités réelles calculées par l'IA (marge bookmaker non couverte).
         </p>
+        <table class="scanned-odds-table">
+          <thead>
+            <tr>
+              <th>Sélection</th>
+              <th>Cote Saisie</th>
+              <th>Cote Juste IA</th>
+              <th>Espérance EV</th>
+              <th>Diagnostic</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
       `;
     } else {
       vbContainer.style.display = 'none';
@@ -877,6 +997,7 @@ function renderValueBetsContainer(allVBs) {
     return;
   }
 
+  // Value Bets Found
   vbContainer.style.display = 'block';
   vbContainer.className = 'valuebet-card is-vb';
 
@@ -1018,10 +1139,7 @@ function savePredictionToHistory(data, payload) {
     const favName = isP1Fav ? data.p1 : data.p2;
     const favProba = isP1Fav ? (data.proba_p1 * 100).toFixed(1) : (data.proba_p2 * 100).toFixed(1);
     mainPick = `⭐ Vainqueur: ${favName} (${favProba}%)`;
-    pickOdds = isP1Fav ? payload.odds1 : payload.odds2;
-    if (!pickOdds) {
-      pickOdds = isP1Fav ? data.fair_odds_p1 : data.fair_odds_p2;
-    }
+    pickOdds = isP1Fav ? (payload.odds1 || data.fair_odds_p1) : (payload.odds2 || data.fair_odds_p2);
   }
 
   const now = new Date();
@@ -1045,8 +1163,10 @@ function savePredictionToHistory(data, payload) {
     result: 'pending', // 'pending' | 'won' | 'lost'
   };
 
-  // Éviter les doublons consécutifs identiques
+  // Éviter les doublons consécutifs identiques : mettre à jour le dernier élément
   if (history.length > 0 && history[0].p1 === item.p1 && history[0].p2 === item.p2 && history[0].tournament === item.tournament) {
+    item.result = history[0].result;
+    item.id = history[0].id;
     history[0] = item;
   } else {
     history.unshift(item);

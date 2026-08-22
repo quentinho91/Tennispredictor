@@ -690,6 +690,10 @@ def predict_match(req: PredictionRequest):
     # Trier les value bets par espérance de gain (EV) décroissante
     detected_value_bets.sort(key=lambda x: x["ev_pct"], reverse=True)
 
+    # Collecter l'ensemble des cotes saisies analysées (avec EV et statut)
+    all_evaluated = [vb_p1, vb_p2, vb_set1_p1, vb_set1_p2, vb_over, vb_under, vb_h1, vb_h2, vb_sets_over, vb_sets_under, vb_tb_yes, vb_tb_no]
+    scanned_markets = [item for item in all_evaluated if item is not None]
+
     h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
 
     return {
@@ -700,42 +704,46 @@ def predict_match(req: PredictionRequest):
         "proba_p2": round(p_p2, 4),
         "fair_odds_p1": round(1.0 / p_p1, 2) if p_p1 > 0 else 999.0,
         "fair_odds_p2": round(1.0 / p_p2, 2) if p_p2 > 0 else 999.0,
+        "offered_odds_p1": req.odds1,
+        "offered_odds_p2": req.odds2,
+        "vb_p1": vb_p1,
+        "vb_p2": vb_p2,
         "markets": {
             "winner": {
-                "p1": p1, "proba_p1": round(p_p1 * 100, 1), "fair_odds_p1": round(1.0 / p_p1, 2),
-                "p2": p2, "proba_p2": round(p_p2 * 100, 1), "fair_odds_p2": round(1.0 / p_p2, 2),
+                "p1": p1, "proba_p1": round(p_p1 * 100, 1), "fair_odds_p1": round(1.0 / p_p1, 2), "offered_odds_p1": req.odds1,
+                "p2": p2, "proba_p2": round(p_p2 * 100, 1), "fair_odds_p2": round(1.0 / p_p2, 2), "offered_odds_p2": req.odds2,
                 "vb_p1": vb_p1, "vb_p2": vb_p2
             },
             "set1_winner": {
-                "proba_p1": round(p_set1_p1 * 100, 1), "fair_odds_p1": round(1.0 / p_set1_p1, 2),
-                "proba_p2": round(p_set1_p2 * 100, 1), "fair_odds_p2": round(1.0 / p_set1_p2, 2),
+                "proba_p1": round(p_set1_p1 * 100, 1), "fair_odds_p1": round(1.0 / p_set1_p1, 2), "offered_odds_p1": req.odds_set1_p1,
+                "proba_p2": round(p_set1_p2 * 100, 1), "fair_odds_p2": round(1.0 / p_set1_p2, 2), "offered_odds_p2": req.odds_set1_p2,
                 "vb_p1": vb_set1_p1, "vb_p2": vb_set1_p2
             },
             "total_games": {
                 "expected": round(exp_total_games, 1),
                 "line": total_line,
-                "proba_over": round(p_over * 100, 1), "fair_odds_over": round(1.0 / p_over, 2),
-                "proba_under": round(p_under * 100, 1), "fair_odds_under": round(1.0 / p_under, 2),
+                "proba_over": round(p_over * 100, 1), "fair_odds_over": round(1.0 / p_over, 2), "offered_odds_over": req.odds_over,
+                "proba_under": round(p_under * 100, 1), "fair_odds_under": round(1.0 / p_under, 2), "offered_odds_under": req.odds_under,
                 "vb_over": vb_over, "vb_under": vb_under
             },
             "handicap_games": {
                 "expected_diff": round(exp_game_diff, 1),
                 "line": h_val,
-                "label_h1": label_h1, "proba_h1": round(p_h1 * 100, 1), "fair_odds_h1": round(1.0 / p_h1, 2),
-                "label_h2": label_h2, "proba_h2": round(p_h2 * 100, 1), "fair_odds_h2": round(1.0 / p_h2, 2),
+                "label_h1": label_h1, "proba_h1": round(p_h1 * 100, 1), "fair_odds_h1": round(1.0 / p_h1, 2), "offered_odds_h1": req.odds_h1,
+                "label_h2": label_h2, "proba_h2": round(p_h2 * 100, 1), "fair_odds_h2": round(1.0 / p_h2, 2), "offered_odds_h2": req.odds_h2,
                 "vb_h1": vb_h1, "vb_h2": vb_h2
             },
             "tiebreak": {
-                "proba_yes": round(p_tb_yes * 100, 1), "fair_odds_yes": round(1.0 / p_tb_yes, 2),
-                "proba_no": round(p_tb_no * 100, 1), "fair_odds_no": round(1.0 / p_tb_no, 2),
+                "proba_yes": round(p_tb_yes * 100, 1), "fair_odds_yes": round(1.0 / p_tb_yes, 2), "offered_odds_yes": req.odds_tb_yes,
+                "proba_no": round(p_tb_no * 100, 1), "fair_odds_no": round(1.0 / p_tb_no, 2), "offered_odds_no": req.odds_tb_no,
                 "proba_per_set": round(p_tb_set * 100, 1),
                 "vb_yes": vb_tb_yes, "vb_no": vb_tb_no
             },
             "number_of_sets": {
                 "label_over": "3 Sets" if req.best_of == 3 else "4 ou 5 Sets",
-                "proba_over": round(p_sets_3 * 100, 1), "fair_odds_over": round(1.0 / p_sets_3, 2),
+                "proba_over": round(p_sets_3 * 100, 1), "fair_odds_over": round(1.0 / p_sets_3, 2), "offered_odds_over": req.odds_sets_over25,
                 "label_under": "2 Sets (Sec)" if req.best_of == 3 else "3 Sets (Sec)",
-                "proba_under": round(p_sets_2 * 100, 1), "fair_odds_under": round(1.0 / p_sets_2, 2),
+                "proba_under": round(p_sets_2 * 100, 1), "fair_odds_under": round(1.0 / p_sets_2, 2), "offered_odds_under": req.odds_sets_under25,
                 "vb_over": vb_sets_over, "vb_under": vb_sets_under
             },
             "exact_scores": {
@@ -747,6 +755,7 @@ def predict_match(req: PredictionRequest):
             }
         },
         "all_value_bets": detected_value_bets,
+        "scanned_markets": scanned_markets,
         "elo": {
             "global_p1": round(state["elo"].get(p1, 1500)),
             "global_p2": round(state["elo"].get(p2, 1500)),
