@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupUpdateData();
   setupFormSubmit();
   setupHistory();
+  setupDailyScanner();
 });
 
 // Dynamic Labels for Handicap and Set 1
@@ -161,6 +162,7 @@ function setupCircuitSwitcher() {
       p1Dropdown.style.display = 'none';
       p2Dropdown.style.display = 'none';
       resultsSection.style.display = 'none';
+      loadDailyScanner(false);
     });
   });
 }
@@ -1507,4 +1509,297 @@ function setupHistory() {
   }
   renderHistory();
 }
+
+// ============================================================
+// DAILY MATCHES SCANNER & BET365 LIVE ODDS
+// ============================================================
+const ODDS_API_KEY_STORAGE = 'tennis_odds_api_key';
+let currentScannerMatches = [];
+let currentScannerFilter = 'all'; // 'all' | 'vb'
+
+function setupDailyScanner() {
+  const btnFilterAll = document.getElementById('btn-filter-all');
+  const btnFilterVb = document.getElementById('btn-filter-vb');
+  const btnRefresh = document.getElementById('btn-refresh-scanner');
+  const btnSettings = document.getElementById('btn-scanner-settings');
+
+  if (btnFilterAll) {
+    btnFilterAll.addEventListener('click', () => {
+      currentScannerFilter = 'all';
+      btnFilterAll.classList.add('active');
+      if (btnFilterVb) btnFilterVb.classList.remove('active');
+      renderScannerGrid();
+    });
+  }
+
+  if (btnFilterVb) {
+    btnFilterVb.addEventListener('click', () => {
+      currentScannerFilter = 'vb';
+      btnFilterVb.classList.add('active');
+      if (btnFilterAll) btnFilterAll.classList.remove('active');
+      renderScannerGrid();
+    });
+  }
+
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      loadDailyScanner(true);
+    });
+  }
+
+  if (btnSettings) {
+    btnSettings.addEventListener('click', openApiKeyModal);
+  }
+
+  // Pre-fill modal input if key already saved
+  const savedKey = localStorage.getItem(ODDS_API_KEY_STORAGE);
+  const keyInput = document.getElementById('odds-api-key-input');
+  if (savedKey && keyInput) {
+    keyInput.value = savedKey;
+  }
+
+  // Initial load
+  loadDailyScanner(false);
+}
+
+function openApiKeyModal() {
+  const modal = document.getElementById('api-key-modal');
+  const keyInput = document.getElementById('odds-api-key-input');
+  const savedKey = localStorage.getItem(ODDS_API_KEY_STORAGE);
+  if (keyInput && savedKey) keyInput.value = savedKey;
+  if (modal) modal.style.display = 'flex';
+}
+window.openApiKeyModal = openApiKeyModal;
+
+function closeApiKeyModal() {
+  const modal = document.getElementById('api-key-modal');
+  if (modal) modal.style.display = 'none';
+}
+window.closeApiKeyModal = closeApiKeyModal;
+
+function saveApiKeyAndRefresh() {
+  const keyInput = document.getElementById('odds-api-key-input');
+  if (keyInput) {
+    const val = keyInput.value.trim();
+    if (val) {
+      localStorage.setItem(ODDS_API_KEY_STORAGE, val);
+    } else {
+      localStorage.removeItem(ODDS_API_KEY_STORAGE);
+    }
+  }
+  closeApiKeyModal();
+  loadDailyScanner(true);
+}
+window.saveApiKeyAndRefresh = saveApiKeyAndRefresh;
+
+async function loadDailyScanner(forceRefresh = false) {
+  const grid = document.getElementById('scanner-grid');
+  const loading = document.getElementById('scanner-loading');
+  const banner = document.getElementById('scanner-mode-banner');
+  const countAll = document.getElementById('count-all-matches');
+  const countVb = document.getElementById('count-vb-matches');
+  const timeText = document.getElementById('scanner-time-text');
+
+  if (loading) loading.style.display = 'block';
+  if (grid) grid.style.opacity = '0.4';
+
+  const savedKey = localStorage.getItem(ODDS_API_KEY_STORAGE) || '';
+  const keyParam = savedKey ? `&api_key=${encodeURIComponent(savedKey)}` : '';
+  const refreshParam = forceRefresh ? '&refresh=true' : '';
+
+  try {
+    const res = await fetch(`/api/scanner?circuit=${currentCircuit}&bookmaker=bet365${keyParam}${refreshParam}`);
+    const data = await res.json();
+
+    if (data.success && data.matches) {
+      currentScannerMatches = data.matches;
+
+      if (countAll) countAll.textContent = data.total_matches || currentScannerMatches.length;
+      if (countVb) countVb.textContent = data.value_bets_count || 0;
+      if (timeText) timeText.textContent = `Actualisé ${data.last_update}`;
+
+      // Mode banner
+      if (banner) {
+        if (data.is_demo_mode) {
+          banner.style.display = 'flex';
+          banner.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+          banner.style.background = 'rgba(59, 130, 246, 0.1)';
+          banner.style.color = '#93c5fd';
+          banner.innerHTML = `
+            <span>💡 <b>Mode Démo actif (Cotes simulées Bet365)</b> • Connectez votre clé The Odds API (gratuite) pour scanner les cotes réelles du jour.</span>
+            <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px;">⚙️ Ajouter ma clé gratuite</button>
+          `;
+        } else {
+          const remaining = (data.quota_info && data.quota_info.requests_remaining) ? data.quota_info.requests_remaining : '500';
+          banner.style.display = 'flex';
+          banner.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+          banner.style.background = 'rgba(16, 185, 129, 0.08)';
+          banner.style.color = '#34d399';
+          banner.innerHTML = `
+            <span>🟢 <b>The Odds API connectée (Bet365 Live)</b> • Quota restant : <b>${remaining}/500</b> appels ce mois-ci.</span>
+            <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Modifier</button>
+          `;
+        }
+      }
+
+      renderScannerGrid();
+    }
+  } catch (err) {
+    console.error('Erreur scanner cotes', err);
+    if (grid) grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 20px; color: #f87171;">⚠️ Impossible de charger les cotes en direct. Vérifiez votre connexion.</div>`;
+  } finally {
+    if (loading) loading.style.display = 'none';
+    if (grid) grid.style.opacity = '1';
+  }
+}
+
+function renderScannerGrid() {
+  const grid = document.getElementById('scanner-grid');
+  if (!grid) return;
+
+  const matchesToShow = currentScannerFilter === 'vb'
+    ? currentScannerMatches.filter(m => m.has_value_bet)
+    : currentScannerMatches;
+
+  if (matchesToShow.length === 0) {
+    if (currentScannerFilter === 'vb') {
+      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 30px; color: var(--text-dim);">🎯 Aucun Value Bet détecté sur les cotes actuelles avec les marges de sécurité requises.</div>`;
+    } else {
+      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 30px; color: var(--text-dim);">Aucun match programmé pour le moment.</div>`;
+    }
+    return;
+  }
+
+  let html = '';
+  matchesToShow.forEach(m => {
+    const hasVb = m.has_value_bet;
+    const topVb = m.top_value_bet;
+
+    const proba1 = m.prediction ? (m.prediction.proba_p1 * 100).toFixed(0) : '-';
+    const proba2 = m.prediction ? (m.prediction.proba_p2 * 100).toFixed(0) : '-';
+    const isP1Fav = m.prediction ? (m.prediction.proba_p1 >= m.prediction.proba_p2) : false;
+
+    let vbHtml = '';
+    if (hasVb && topVb) {
+      const confScore = topVb.confidence ? `${topVb.confidence.score}%` : '80%';
+      vbHtml = `
+        <div class="scan-vb-banner">
+          <div class="scan-vb-title">
+            <span>🎯 ${escapeHtml(topVb.selection)} @ ${topVb.offered_odds.toFixed(2)}</span>
+            <span style="color:#fbbf24; font-size:11px;">+${topVb.ev_percent}% EV</span>
+          </div>
+          <div class="scan-vb-meta">
+            <span>🔥 Confiance : ${confScore}</span>
+            <span>• Edge : +${topVb.edge_percent}%</span>
+          </div>
+        </div>
+      `;
+    } else {
+      vbHtml = `
+        <div class="scan-no-vb-msg">
+          ⚖️ Cotes équilibrées (Marge Bet365)
+        </div>
+      `;
+    }
+
+    const odds1Str = m.odds1 ? m.odds1.toFixed(2) : '-';
+    const odds2Str = m.odds2 ? m.odds2.toFixed(2) : '-';
+
+    html += `
+      <div class="scan-match-card ${hasVb ? 'has-vb' : ''}" onclick="loadMatchFromScanner('${m.id}')" title="Cliquer pour analyser ce match en détail">
+        <div class="scan-card-top">
+          <span class="scan-tourney-tag">🏆 ${escapeHtml(m.tournament)} • ${escapeHtml(m.surface)}</span>
+          <span class="scan-time-tag">⏰ ${escapeHtml(m.time_display)}</span>
+        </div>
+
+        <div class="scan-players-wrap">
+          <div class="scan-player-row">
+            <div class="scan-player-name">
+              ${escapeHtml(m.p1)}
+              <span class="scan-proba-pill ${isP1Fav ? 'fav' : ''}">${proba1}%</span>
+            </div>
+            <div class="scan-odds-pill">@ ${odds1Str}</div>
+          </div>
+
+          <div class="scan-player-row">
+            <div class="scan-player-name">
+              ${escapeHtml(m.p2)}
+              <span class="scan-proba-pill ${!isP1Fav ? 'fav' : ''}">${proba2}%</span>
+            </div>
+            <div class="scan-odds-pill">@ ${odds2Str}</div>
+          </div>
+        </div>
+
+        ${vbHtml}
+
+        <button type="button" class="scan-btn-load">
+          📊 Analyser le match & Gestion de mise
+        </button>
+      </div>
+    `;
+  });
+
+  grid.innerHTML = html;
+}
+
+function loadMatchFromScanner(matchId) {
+  const match = currentScannerMatches.find(m => m.id === matchId);
+  if (!match) return;
+
+  // 1. Players
+  p1Input.value = match.p1 || match.p1_raw || '';
+  p2Input.value = match.p2 || match.p2_raw || '';
+  selectedP1 = match.p1 || match.p1_raw || '';
+  selectedP2 = match.p2 || match.p2_raw || '';
+
+  // 2. Tournament & Surface Options
+  if (tournamentInput) tournamentInput.value = (match.tournament && match.tournament !== 'Tournoi') ? match.tournament : '';
+  if (surfaceSelect && match.surface) surfaceSelect.value = match.surface;
+  if (levelSelect && match.level) levelSelect.value = match.level;
+  if (bestOfSelect && match.best_of) bestOfSelect.value = String(match.best_of);
+  if (indoorSelect && match.indoor !== undefined) indoorSelect.value = String(match.indoor);
+
+  // 3. Main Odds
+  if (odds1Input) odds1Input.value = (match.odds1 !== null && match.odds1 !== undefined) ? match.odds1 : '';
+  if (odds2Input) odds2Input.value = (match.odds2 !== null && match.odds2 !== undefined) ? match.odds2 : '';
+
+  // 4. Secondary Markets (Totals, Handicap)
+  const hasSec = Boolean(match.total_line || match.odds_over || match.odds_under || match.handicap_line || match.odds_h1 || match.odds_h2);
+
+  if (totalLineInput) totalLineInput.value = match.total_line || '';
+  if (oddsOverInput) oddsOverInput.value = match.odds_over || '';
+  if (oddsUnderInput) oddsUnderInput.value = match.odds_under || '';
+
+  if (handicapLineInput) handicapLineInput.value = match.handicap_line || '';
+  if (oddsH1Input) oddsH1Input.value = match.odds_h1 || '';
+  if (oddsH2Input) oddsH2Input.value = match.odds_h2 || '';
+
+  // Reset optional markets not in standard feed
+  if (oddsTbYesInput) oddsTbYesInput.value = '';
+  if (oddsTbNoInput) oddsTbNoInput.value = '';
+  if (oddsSet1P1Input) oddsSet1P1Input.value = '';
+  if (oddsSet1P2Input) oddsSet1P2Input.value = '';
+  if (oddsSetsOverInput) oddsSetsOverInput.value = '';
+  if (oddsSetsUnderInput) oddsSetsUnderInput.value = '';
+
+  if (hasSec && secMarketsContent) {
+    secMarketsContent.style.display = 'flex';
+    if (secToggleIcon) secToggleIcon.classList.add('open');
+  }
+
+  updateDynamicLabels();
+
+  // Scroll to results / main card
+  const mainCard = document.querySelector('main.card');
+  if (mainCard) {
+    mainCard.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Trigger analysis immediately
+  if (predictBtn) {
+    predictBtn.click();
+  }
+}
+window.loadMatchFromScanner = loadMatchFromScanner;
+
 

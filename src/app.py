@@ -1002,6 +1002,40 @@ def predict_match(req: PredictionRequest):
     }
 
 
+# --------------------------------------------------------------------------
+# Scanner Quotidien des Cotes (Bet365 / The Odds API)
+# --------------------------------------------------------------------------
+from src.odds_scanner import scan_daily_matches
+
+
+@app.get("/api/scanner")
+def get_daily_scanner(
+    circuit: str = "atp",
+    bookmaker: str = "bet365",
+    api_key: Optional[str] = Query(None),
+    refresh: bool = False
+):
+    """
+    Scan quotidien des matchs avec cotes Bet365 / The Odds API,
+    résolution automatique des contextes et détection instantanée des Value Bets.
+    """
+    c_lower = circuit.lower()
+    res = get_cached_resources(c_lower)
+    state = res["state"]
+    known = res["players"]
+
+    return scan_daily_matches(
+        circuit=c_lower,
+        bookmaker=bookmaker,
+        api_key=api_key,
+        force_refresh=refresh,
+        predict_func=predict_match,
+        known_players=known,
+        player_state=state,
+        smart_resolve_func=smart_resolve_name
+    )
+
+
 # Montage des fichiers statiques (Frontend)
 STATIC_DIR = BASE_DIR / "src" / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,613 @@
+"""
+odds_scanner.py - Scanner Quotidien des Cotes Tennis (Bet365 / The Odds API)
+
+Fonctionnalités :
+1. Récupère les matchs du jour et les cotes en direct (Bet365, Pinnacle, Unibet, etc.).
+2. Résout automatiquement les noms des joueurs, les tournois, les surfaces et les formats (Best-of-3 / Best-of-5).
+3. Utilise un cache intelligent en mémoire (TTL: 30 min) pour respecter le quota gratuit (500 req/mois).
+4. Analyse instantanément chaque match avec le modèle XGBoost + Markov pour détecter les Value Bets.
+5. Mode Démo intégré si aucune clé API n'est fournie.
+"""
+
+import os
+import time
+import math
+import logging
+from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime, timezone
+import urllib.request
+import urllib.parse
+import json
+
+logger = logging.getLogger("tennis_predictor.odds_scanner")
+
+# Cache global en mémoire : { circuit: { "timestamp": float, "data": dict, "bookmaker": str } }
+SCANNER_CACHE: Dict[str, Dict[str, Any]] = {}
+CACHE_TTL_SECONDS = 1800  # 30 minutes
+
+# Mappings des tournois connus vers surface / niveau / format
+KNOWN_TOURNAMENT_PATTERNS = {
+    "australian open": {"surface": "Hard", "level": "G", "best_of_men": 5, "indoor": 0},
+    "roland garros": {"surface": "Clay", "level": "G", "best_of_men": 5, "indoor": 0},
+    "french open": {"surface": "Clay", "level": "G", "best_of_men": 5, "indoor": 0},
+    "wimbledon": {"surface": "Grass", "level": "G", "best_of_men": 5, "indoor": 0},
+    "us open": {"surface": "Hard", "level": "G", "best_of_men": 5, "indoor": 0},
+    "cincinnati": {"surface": "Hard", "level": "M", "best_of_men": 3, "indoor": 0},
+    "indian wells": {"surface": "Hard", "level": "M", "best_of_men": 3, "indoor": 0},
+    "miami": {"surface": "Hard", "level": "M", "best_of_men": 3, "indoor": 0},
+    "monte carlo": {"surface": "Clay", "level": "M", "best_of_men": 3, "indoor": 0},
+    "madrid": {"surface": "Clay", "level": "M", "best_of_men": 3, "indoor": 0},
+    "rome": {"surface": "Clay", "level": "M", "best_of_men": 3, "indoor": 0},
+    "canada": {"surface": "Hard", "level": "M", "best_of_men": 3, "indoor": 0},
+    "montreal": {"surface": "Hard", "level": "M", "best_of_men": 3, "indoor": 0},
+    "toronto": {"surface": "Hard", "level": "M", "best_of_men": 3, "indoor": 0},
+    "shanghai": {"surface": "Hard", "level": "M", "best_of_men": 3, "indoor": 0},
+    "paris": {"surface": "Hard", "level": "M", "best_of_men": 3, "indoor": 1},
+    "dubai": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 0},
+    "doha": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 0},
+    "barcelona": {"surface": "Clay", "level": "A", "best_of_men": 3, "indoor": 0},
+    "halle": {"surface": "Grass", "level": "A", "best_of_men": 3, "indoor": 0},
+    "queens": {"surface": "Grass", "level": "A", "best_of_men": 3, "indoor": 0},
+    "beijing": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 0},
+    "tokyo": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 0},
+    "vienna": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 1},
+    "basel": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 1},
+    "rotterdam": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 1},
+    "winston-salem": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 0},
+    "cleveland": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 0},
+    "monterrey": {"surface": "Hard", "level": "A", "best_of_men": 3, "indoor": 0},
+}
+
+
+def resolve_tournament_context(sport_title: str, circuit: str = "atp") -> Dict[str, Any]:
+    """Déduit automatiquement la surface, le niveau, le format et l'environnement d'après le nom du tournoi."""
+    title_lower = sport_title.lower()
+    
+    context = {
+        "tournament": sport_title,
+        "surface": "Hard",
+        "level": "A",
+        "best_of": 3,
+        "indoor": 0,
+        "round": "R32"
+    }
+
+    # Détection par motifs connus
+    for pattern, meta in KNOWN_TOURNAMENT_PATTERNS.items():
+        if pattern in title_lower:
+            context["surface"] = meta["surface"]
+            context["level"] = meta["level"]
+            context["indoor"] = meta["indoor"]
+            if circuit.lower() == "atp":
+                context["best_of"] = meta["best_of_men"]
+            else:
+                context["best_of"] = 3
+            break
+
+    # Mots-clés surfaces si non trouvé
+    if "clay" in title_lower or "terre" in title_lower:
+        context["surface"] = "Clay"
+    elif "grass" in title_lower or "gazon" in title_lower:
+        context["surface"] = "Grass"
+    elif "indoor" in title_lower:
+        context["indoor"] = 1
+
+    return context
+
+
+def fetch_the_odds_api_sports(api_key: str) -> List[Dict[str, Any]]:
+    """Récupère la liste des sports / tournois de tennis actifs sur The Odds API."""
+    url = f"https://api.the-odds-api.com/v4/sports?apiKey={api_key}"
+    req = urllib.request.Request(url, headers={"User-Agent": "TennisPredictor/1.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        # Filtrer uniquement les tournois de tennis
+        return [s for s in data if s.get("key", "").startswith("tennis_") and s.get("active", False)]
+
+
+def fetch_odds_for_sport(
+    sport_key: str,
+    api_key: str,
+    bookmakers: str = "bet365,pinnacle,unibet,unibet_eu,betclic_fr,winamax,betmgm"
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Récupère les cotes détaillées d'un tournoi avec les marchés h2h, totals et spreads."""
+    base_url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
+    params = {
+        "apiKey": api_key,
+        "regions": "eu,us,uk",
+        "markets": "h2h,totals,spreads",
+        "oddsFormat": "decimal",
+        "bookmakers": bookmakers
+    }
+    query_string = urllib.parse.urlencode(params)
+    url = f"{base_url}?{query_string}"
+
+    req = urllib.request.Request(url, headers={"User-Agent": "TennisPredictor/1.0"})
+    with urllib.request.urlopen(req, timeout=12) as resp:
+        headers = dict(resp.getheaders())
+        quota_info = {
+            "requests_remaining": headers.get("x-requests-remaining") or headers.get("X-Requests-Remaining"),
+            "requests_used": headers.get("x-requests-used") or headers.get("X-Requests-Used")
+        }
+        data = json.loads(resp.read().decode("utf-8"))
+        return data, quota_info
+
+
+def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "bet365") -> Dict[str, Any]:
+    """
+    Extrait les cotes du match pour le bookmaker cible (Bet365 en priorité).
+    Si le bookmaker cible n'est pas disponible pour ce match, utilise un fallback (Pinnacle/Unibet/Premier disponible).
+    """
+    home_name = event.get("home_team", "")
+    away_name = event.get("away_team", "")
+    bookmakers_list = event.get("bookmakers", [])
+
+    if not bookmakers_list:
+        return {}
+
+    # Recherche du bookmaker cible
+    selected_bm = None
+    target_clean = target_bookmaker.lower()
+    for bm in bookmakers_list:
+        bm_key = bm.get("key", "").lower()
+        if target_clean in bm_key:
+            selected_bm = bm
+            break
+
+    # Fallbacks si le bookmaker cible n'est pas présent sur ce match
+    if not selected_bm:
+        priority_fallbacks = ["bet365", "pinnacle", "unibet_eu", "unibet", "betclic_fr", "winamax", "betonlineag", "draftkings"]
+        for fb in priority_fallbacks:
+            for bm in bookmakers_list:
+                if fb in bm.get("key", "").lower():
+                    selected_bm = bm
+                    break
+            if selected_bm:
+                break
+
+    if not selected_bm and bookmakers_list:
+        selected_bm = bookmakers_list[0]
+
+    if not selected_bm:
+        return {}
+
+    extracted = {
+        "bookmaker_name": selected_bm.get("title", selected_bm.get("key", "Bet365")),
+        "bookmaker_key": selected_bm.get("key", "bet365"),
+        "odds1": None,
+        "odds2": None,
+        "total_line": None,
+        "odds_over": None,
+        "odds_under": None,
+        "handicap_line": None,
+        "odds_h1": None,
+        "odds_h2": None,
+    }
+
+    for market in selected_bm.get("markets", []):
+        m_key = market.get("key", "")
+        outcomes = market.get("outcomes", [])
+
+        if m_key == "h2h":
+            for out in outcomes:
+                name = out.get("name", "")
+                price = out.get("price")
+                if name == home_name:
+                    extracted["odds1"] = float(price) if price else None
+                elif name == away_name:
+                    extracted["odds2"] = float(price) if price else None
+
+        elif m_key == "totals":
+            for out in outcomes:
+                name = out.get("name", "").lower()
+                point = out.get("point")
+                price = out.get("price")
+                if point is not None and extracted["total_line"] is None:
+                    extracted["total_line"] = float(point)
+                if "over" in name:
+                    extracted["odds_over"] = float(price) if price else None
+                elif "under" in name:
+                    extracted["odds_under"] = float(price) if price else None
+
+        elif m_key == "spreads":
+            for out in outcomes:
+                name = out.get("name", "")
+                point = out.get("point")
+                price = out.get("price")
+                if name == home_name:
+                    if point is not None:
+                        extracted["handicap_line"] = abs(float(point))
+                    extracted["odds_h1"] = float(price) if price else None
+                elif name == away_name:
+                    extracted["odds_h2"] = float(price) if price else None
+
+    return extracted
+
+
+def get_demo_matches(circuit: str = "atp") -> List[Dict[str, Any]]:
+    """Génère des matchs de démonstration réalistes avec cotes Bet365 quand aucune clé API n'est fournie."""
+    if circuit.lower() == "atp":
+        return [
+            {
+                "id": "demo_atp_1",
+                "sport_title": "ATP Cincinnati Masters",
+                "tournament": "Cincinnati Masters",
+                "surface": "Hard",
+                "level": "M",
+                "best_of": 3,
+                "indoor": 0,
+                "commence_time": "2026-08-22T15:30:00Z",
+                "time_display": "17:30",
+                "p1_raw": "Carlos Alcaraz",
+                "p2_raw": "Jannik Sinner",
+                "p1": "Carlos Alcaraz",
+                "p2": "Jannik Sinner",
+                "odds1": 2.10,
+                "odds2": 1.75,
+                "total_line": 22.5,
+                "odds_over": 1.85,
+                "odds_under": 1.95,
+                "handicap_line": 1.5,
+                "odds_h1": 1.90,
+                "odds_h2": 1.90,
+                "bookmaker": "Bet365"
+            },
+            {
+                "id": "demo_atp_2",
+                "sport_title": "ATP Winston-Salem Open",
+                "tournament": "Winston-Salem",
+                "surface": "Hard",
+                "level": "A",
+                "best_of": 3,
+                "indoor": 0,
+                "commence_time": "2026-08-22T17:00:00Z",
+                "time_display": "19:00",
+                "p1_raw": "Arthur Fils",
+                "p2_raw": "Flavio Cobolli",
+                "p1": "Arthur Fils",
+                "p2": "Flavio Cobolli",
+                "odds1": 1.36,
+                "odds2": 3.20,
+                "total_line": 22.5,
+                "odds_over": 1.77,
+                "odds_under": 2.05,
+                "handicap_line": 3.5,
+                "odds_h1": 2.15,
+                "odds_h2": 1.73,
+                "bookmaker": "Bet365"
+            },
+            {
+                "id": "demo_atp_3",
+                "sport_title": "ATP Cincinnati Masters",
+                "tournament": "Cincinnati Masters",
+                "surface": "Hard",
+                "level": "M",
+                "best_of": 3,
+                "indoor": 0,
+                "commence_time": "2026-08-22T19:30:00Z",
+                "time_display": "21:30",
+                "p1_raw": "Alexander Zverev",
+                "p2_raw": "Daniil Medvedev",
+                "p1": "Alexander Zverev",
+                "p2": "Daniil Medvedev",
+                "odds1": 1.90,
+                "odds2": 1.90,
+                "total_line": 23.5,
+                "odds_over": 1.83,
+                "odds_under": 1.97,
+                "handicap_line": 1.5,
+                "odds_h1": 1.85,
+                "odds_h2": 1.95,
+                "bookmaker": "Bet365"
+            },
+            {
+                "id": "demo_atp_4",
+                "sport_title": "ATP Winston-Salem Open",
+                "tournament": "Winston-Salem",
+                "surface": "Hard",
+                "level": "A",
+                "best_of": 3,
+                "indoor": 0,
+                "commence_time": "2026-08-22T21:00:00Z",
+                "time_display": "23:00",
+                "p1_raw": "Alex De Minaur",
+                "p2_raw": "Holger Rune",
+                "p1": "Alex De Minaur",
+                "p2": "Holger Rune",
+                "odds1": 1.72,
+                "odds2": 2.15,
+                "total_line": 22.5,
+                "odds_over": 1.88,
+                "odds_under": 1.92,
+                "handicap_line": 2.5,
+                "odds_h1": 1.95,
+                "odds_h2": 1.85,
+                "bookmaker": "Bet365"
+            }
+        ]
+    else:
+        # WTA Demo Matches
+        return [
+            {
+                "id": "demo_wta_1",
+                "sport_title": "WTA Cincinnati Open",
+                "tournament": "Cincinnati Open",
+                "surface": "Hard",
+                "level": "M",
+                "best_of": 3,
+                "indoor": 0,
+                "commence_time": "2026-08-22T16:00:00Z",
+                "time_display": "18:00",
+                "p1_raw": "Aryna Sabalenka",
+                "p2_raw": "Iga Swiatek",
+                "p1": "Aryna Sabalenka",
+                "p2": "Iga Swiatek",
+                "odds1": 2.05,
+                "odds2": 1.80,
+                "total_line": 21.5,
+                "odds_over": 1.85,
+                "odds_under": 1.95,
+                "handicap_line": 2.5,
+                "odds_h1": 1.85,
+                "odds_h2": 1.95,
+                "bookmaker": "Bet365"
+            },
+            {
+                "id": "demo_wta_2",
+                "sport_title": "WTA Cleveland Open",
+                "tournament": "Cleveland",
+                "surface": "Hard",
+                "level": "A",
+                "best_of": 3,
+                "indoor": 0,
+                "commence_time": "2026-08-22T18:00:00Z",
+                "time_display": "20:00",
+                "p1_raw": "Coco Gauff",
+                "p2_raw": "Elena Rybakina",
+                "p1": "Coco Gauff",
+                "p2": "Elena Rybakina",
+                "odds1": 1.85,
+                "odds2": 1.95,
+                "total_line": 21.5,
+                "odds_over": 1.80,
+                "odds_under": 2.00,
+                "handicap_line": 1.5,
+                "odds_h1": 1.90,
+                "odds_h2": 1.90,
+                "bookmaker": "Bet365"
+            }
+        ]
+
+
+def scan_daily_matches(
+    circuit: str = "atp",
+    bookmaker: str = "bet365",
+    api_key: Optional[str] = None,
+    force_refresh: bool = False,
+    predict_func: Optional[Any] = None,
+    known_players: Optional[List[str]] = None,
+    player_state: Optional[Dict[str, Any]] = None,
+    smart_resolve_func: Optional[Any] = None
+) -> Dict[str, Any]:
+    """
+    Exécute le scan quotidien des matchs :
+    1. Vérifie le cache en mémoire (TTL: 30 min).
+    2. Si expiré ou forcé : appelle The Odds API (ou génère le flux démo si pas de clé).
+    3. Résout les noms et contextes.
+    4. Lance la prédiction par match et détecte les Value Bets.
+    5. Met en cache et retourne les résultats structurés.
+    """
+    circuit_key = circuit.lower()
+    now_ts = time.time()
+
+    # 1. Vérification du cache en mémoire
+    if not force_refresh and circuit_key in SCANNER_CACHE:
+        cached_entry = SCANNER_CACHE[circuit_key]
+        if (now_ts - cached_entry["timestamp"]) < CACHE_TTL_SECONDS:
+            logger.info(f"Retour des matchs scannés depuis le cache (âge: {int(now_ts - cached_entry['timestamp'])}s)")
+            cached_data = dict(cached_entry["data"])
+            cached_data["cached"] = True
+            cached_data["cache_age_seconds"] = int(now_ts - cached_entry["timestamp"])
+            return cached_data
+
+    # Clé API : paramètre ou variable d'environnement ODDS_API_KEY
+    resolved_api_key = api_key or os.getenv("ODDS_API_KEY") or os.getenv("THE_ODDS_API_KEY")
+    is_demo_mode = not bool(resolved_api_key and len(resolved_api_key.strip()) > 8)
+
+    raw_matches = []
+    quota_info = {"requests_remaining": None, "requests_used": None}
+
+    if is_demo_mode:
+        logger.info("Aucune clé The Odds API configurée -> Utilisation du mode Démo")
+        raw_matches = get_demo_matches(circuit_key)
+    else:
+        try:
+            active_sports = fetch_the_odds_api_sports(resolved_api_key)
+            target_sport_keys = [
+                s["key"] for s in active_sports
+                if (circuit_key == "atp" and "atp" in s["key"]) or
+                   (circuit_key == "wta" and ("wta" in s["key"] or "women" in s.get("title", "").lower()))
+            ]
+
+            # Si aucun tournoi spécifique n'est trouvé, prendre les sports de tennis généraux
+            if not target_sport_keys:
+                target_sport_keys = [s["key"] for s in active_sports if s.get("key", "").startswith("tennis_")]
+
+            # Récupérer les cotes pour les 2 tournois principaux maximum par scan pour économiser le quota
+            for s_key in target_sport_keys[:2]:
+                events, q_info = fetch_odds_for_sport(s_key, resolved_api_key, bookmakers=f"{bookmaker},pinnacle,unibet_eu,winamax")
+                quota_info = q_info
+                for ev in events:
+                    odds = extract_match_odds(ev, target_bookmaker=bookmaker)
+                    if not odds.get("odds1") or not odds.get("odds2"):
+                        continue
+
+                    commence_raw = ev.get("commence_time", "")
+                    time_display = "Aujourd'hui"
+                    if commence_raw:
+                        try:
+                            dt = datetime.fromisoformat(commence_raw.replace("Z", "+00:00"))
+                            time_display = f"{dt.strftime('%H:%M')}"
+                        except Exception:
+                            pass
+
+                    sport_title = ev.get("sport_title", "Tournoi Tennis")
+                    context = resolve_tournament_context(sport_title, circuit=circuit_key)
+
+                    raw_matches.append({
+                        "id": ev.get("id", f"match_{len(raw_matches)}"),
+                        "sport_title": sport_title,
+                        "tournament": context["tournament"],
+                        "surface": context["surface"],
+                        "level": context["level"],
+                        "best_of": context["best_of"],
+                        "indoor": context["indoor"],
+                        "commence_time": commence_raw,
+                        "time_display": time_display,
+                        "p1_raw": ev.get("home_team", ""),
+                        "p2_raw": ev.get("away_team", ""),
+                        "p1": ev.get("home_team", ""),
+                        "p2": ev.get("away_team", ""),
+                        "odds1": odds.get("odds1"),
+                        "odds2": odds.get("odds2"),
+                        "total_line": odds.get("total_line"),
+                        "odds_over": odds.get("odds_over"),
+                        "odds_under": odds.get("odds_under"),
+                        "handicap_line": odds.get("handicap_line"),
+                        "odds_h1": odds.get("odds_h1"),
+                        "odds_h2": odds.get("odds_h2"),
+                        "bookmaker": odds.get("bookmaker_name", bookmaker.capitalize())
+                    })
+        except Exception as e:
+            logger.error(f"Erreur lors de l'appel The Odds API: {e} -> Fallback sur mode Démo")
+            raw_matches = get_demo_matches(circuit_key)
+            is_demo_mode = True
+
+    # Si aucun match trouvé en live, fallback gracieux sur les matchs de démo
+    if not raw_matches:
+        raw_matches = get_demo_matches(circuit_key)
+        is_demo_mode = True
+
+    # 3. Résolution des noms et analyse prédictive des matchs
+    analyzed_matches = []
+    total_vbs_found = 0
+
+    for m in raw_matches:
+        p1_resolved = m["p1_raw"]
+        p2_resolved = m["p2_raw"]
+
+        if smart_resolve_func and known_players and player_state:
+            p1_resolved = smart_resolve_func(m["p1_raw"], known_players, player_state)
+            p2_resolved = smart_resolve_func(m["p2_raw"], known_players, player_state)
+
+        m_item = {
+            "id": m.get("id"),
+            "sport_title": m.get("sport_title"),
+            "tournament": m.get("tournament"),
+            "surface": m.get("surface"),
+            "level": m.get("level"),
+            "best_of": m.get("best_of"),
+            "indoor": m.get("indoor"),
+            "commence_time": m.get("commence_time"),
+            "time_display": m.get("time_display"),
+            "p1_raw": m["p1_raw"],
+            "p2_raw": m["p2_raw"],
+            "p1": p1_resolved,
+            "p2": p2_resolved,
+            "bookmaker": m.get("bookmaker", "Bet365"),
+            "odds1": m.get("odds1"),
+            "odds2": m.get("odds2"),
+            "total_line": m.get("total_line"),
+            "odds_over": m.get("odds_over"),
+            "odds_under": m.get("odds_under"),
+            "handicap_line": m.get("handicap_line"),
+            "odds_h1": m.get("odds_h1"),
+            "odds_h2": m.get("odds_h2"),
+            "prediction": None,
+            "has_value_bet": False,
+            "top_value_bet": None,
+            "all_value_bets": []
+        }
+
+        # Exécuter la prédiction complète si predict_func est fourni
+        if predict_func:
+            try:
+                from pydantic import BaseModel
+                class DummyReq:
+                    def __init__(self, **kwargs):
+                        for k, v in kwargs.items():
+                            setattr(self, k, v)
+
+                req_obj = DummyReq(
+                    circuit=circuit_key,
+                    p1=p1_resolved,
+                    p2=p2_resolved,
+                    surface=m.get("surface", "Hard"),
+                    tournament=m.get("tournament", "Tournoi"),
+                    level=m.get("level", "A"),
+                    round="R32",
+                    best_of=m.get("best_of", 3),
+                    indoor=m.get("indoor", 0),
+                    date=None,
+                    odds1=m.get("odds1"),
+                    odds2=m.get("odds2"),
+                    total_line=m.get("total_line"),
+                    odds_over=m.get("odds_over"),
+                    odds_under=m.get("odds_under"),
+                    handicap_line=m.get("handicap_line"),
+                    odds_h1=m.get("odds_h1"),
+                    odds_h2=m.get("odds_h2"),
+                    odds_set1_p1=None,
+                    odds_set1_p2=None,
+                    odds_sets_over25=None,
+                    odds_sets_under25=None,
+                    odds_tb_yes=None,
+                    odds_tb_no=None
+                )
+
+                pred_res = predict_func(req_obj)
+                m_item["prediction"] = {
+                    "proba_p1": pred_res.get("proba_p1"),
+                    "proba_p2": pred_res.get("proba_p2"),
+                    "fair_odds_p1": pred_res.get("fair_odds_p1"),
+                    "fair_odds_p2": pred_res.get("fair_odds_p2"),
+                    "match_confidence": pred_res.get("confidence", {}).get("score", 75),
+                    "confidence_level": pred_res.get("confidence", {}).get("level", "Moyenne"),
+                }
+
+                rec_vbs = pred_res.get("recommended_value_bets", [])
+                m_item["all_value_bets"] = rec_vbs
+                if rec_vbs:
+                    m_item["has_value_bet"] = True
+                    m_item["top_value_bet"] = rec_vbs[0]
+                    total_vbs_found += 1
+            except Exception as pe:
+                logger.warning(f"Erreur prédiction pour {p1_resolved} vs {p2_resolved}: {pe}")
+
+        analyzed_matches.append(m_item)
+
+    now_datetime = datetime.now()
+    last_update_str = f"{now_datetime.strftime('%H:%M')}"
+
+    response_payload = {
+        "success": True,
+        "circuit": circuit.upper(),
+        "bookmaker": bookmaker,
+        "is_demo_mode": is_demo_mode,
+        "cached": False,
+        "cache_ttl_minutes": int(CACHE_TTL_SECONDS / 60),
+        "last_update": last_update_str,
+        "total_matches": len(analyzed_matches),
+        "value_bets_count": total_vbs_found,
+        "quota_info": quota_info,
+        "matches": analyzed_matches
+    }
+
+    # Sauvegarder dans le cache en mémoire
+    SCANNER_CACHE[circuit_key] = {
+        "timestamp": now_ts,
+        "data": response_payload,
+        "bookmaker": bookmaker
+    }
+
+    return response_payload

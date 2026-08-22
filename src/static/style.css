@@ -1591,17 +1591,374 @@ body {
   margin-top: 2px;
 }
 
-/* Mobile responsive fine-tuning */
-@media (max-width: 600px) {
-  .container { padding: 12px; }
-  .card { padding: 16px; }
-  .prob-percent { font-size: 26px; }
-  .prob-pname { font-size: 15px; }
-  .options-grid { grid-template-columns: 1fr; }
-  .markets-grid { grid-template-columns: 1fr; }
-  .scores-matrix-grid { grid-template-columns: repeat(2, 1fr); }
-  .sec-market-row { flex-direction: column; }
-  .bankroll-bar { flex-direction: column; align-items: stretch; gap: 8px; }
-  .bk-group { justify-content: space-between; }
+/* ============================================================
+   DAILY MATCHES SCANNER & BET365 LIVE ODDS
+   ============================================================ */
+.scanner-card {
+  margin-bottom: 24px;
+  border-color: rgba(59, 130, 246, 0.35);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.85) 100%);
 }
+
+.scanner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.scanner-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bm-badge {
+  background: #15803d;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+.scanner-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.scanner-filters {
+  display: flex;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.filter-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-btn.active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.filter-btn.highlight.active {
+  background: #10b981;
+  color: #022c22;
+}
+
+.scanner-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.scanner-action-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.scanner-action-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.scanner-action-btn.settings-btn {
+  color: var(--text-muted);
+}
+
+.scanner-mode-banner {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.scanner-loading {
+  text-align: center;
+  padding: 24px;
+  color: #60a5fa;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scanner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+/* Individual Scanner Match Card */
+.scan-match-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-match-card:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  background: rgba(30, 41, 59, 0.7);
+}
+
+.scan-match-card.has-vb {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.06) 0%, rgba(15, 23, 42, 0.7) 100%);
+}
+
+.scan-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.scan-tourney-tag {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.scan-time-tag {
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+.scan-players-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scan-player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scan-player-name {
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scan-proba-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+
+.scan-proba-pill.fav {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  font-weight: 800;
+}
+
+.scan-odds-pill {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  font-weight: 800;
+  font-size: 13px;
+  color: #fbbf24;
+  padding: 2px 8px;
+  border-radius: 4px;
+  min-width: 48px;
+  text-align: center;
+}
+
+/* Value Bet Banner in Scanner Card */
+.scan-vb-banner {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scan-vb-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #34d399;
+}
+
+.scan-vb-meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+}
+
+.scan-no-vb-msg {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 4px 0;
+}
+
+.scan-btn-load {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  width: 100%;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.scan-btn-load:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+/* ============================================================
+   MODAL CONFIGURATION API KEY
+   ============================================================ */
+.custom-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  position: relative;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  width: 90%;
+  max-width: 480px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.modal-header h3 {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.modal-close:hover { color: #ffffff; }
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-save-key {
+  background: #2563eb;
+  border: 1px solid #3b82f6;
+  color: #ffffff;
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.btn-save-key:hover { background: #1d4ed8; }
 
