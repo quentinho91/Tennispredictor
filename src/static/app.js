@@ -1720,10 +1720,11 @@ function renderScannerGrid() {
       const evVal = (topVb.ev_pct !== undefined) ? topVb.ev_pct : ((topVb.ev_percent !== undefined) ? topVb.ev_percent : 0);
       const edgeVal = (topVb.edge_pct !== undefined) ? topVb.edge_pct : ((topVb.edge_percent !== undefined) ? topVb.edge_percent : 0);
 
+      const offeredOddsVal = (topVb.offered_odds && !isNaN(parseFloat(topVb.offered_odds))) ? parseFloat(topVb.offered_odds).toFixed(2) : '2.00';
       vbHtml = `
         <div class="scan-vb-banner">
           <div class="scan-vb-title">
-            <span>🎯 ${escapeHtml(topVb.selection)} @ ${topVb.offered_odds.toFixed(2)}</span>
+            <span>🎯 ${escapeHtml(topVb.selection || '')} @ ${offeredOddsVal}</span>
             <span style="color:#fbbf24; font-size:11px; font-weight:800;">+${evVal}% EV</span>
           </div>
           <div class="scan-vb-meta">
