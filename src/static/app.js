@@ -1251,6 +1251,7 @@ function savePredictionToHistory(data, payload) {
     hasVb: vbs.length > 0,
     vbCount: vbs.length,
     result: 'pending', // 'pending' | 'won' | 'lost'
+    payload: payload, // Cotes et paramètres complets du formulaire
   };
 
   // Éviter les doublons consécutifs identiques : mettre à jour le dernier élément
@@ -1280,6 +1281,97 @@ function updateHistoryResult(id, newResult) {
   }
 }
 window.updateHistoryResult = updateHistoryResult;
+
+function loadPredictionFromHistory(id) {
+  const history = getHistory();
+  const item = history.find(h => h.id === id);
+  if (!item) return;
+
+  const p = item.payload || {
+    circuit: item.circuit,
+    p1: item.p1,
+    p2: item.p2,
+    tournament: item.tournament,
+    surface: item.surface,
+    odds1: item.pickType === 'fav' ? item.pickOdds : null
+  };
+
+  // 1. Circuit switch
+  const targetCircuit = (p.circuit || item.circuit || 'atp').toLowerCase();
+  circuitBtns.forEach(b => {
+    if (b.dataset.circuit === targetCircuit) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+  currentCircuit = targetCircuit;
+
+  // 2. Player Inputs
+  p1Input.value = p.p1 || item.p1 || '';
+  p2Input.value = p.p2 || item.p2 || '';
+  selectedP1 = p.p1 || item.p1 || '';
+  selectedP2 = p.p2 || item.p2 || '';
+
+  // 3. Tournament & Context Options
+  if (tournamentInput) tournamentInput.value = (p.tournament && p.tournament !== 'Tournoi' && p.tournament !== 'Tournament') ? p.tournament : '';
+  if (surfaceSelect && p.surface) surfaceSelect.value = p.surface;
+  if (levelSelect && p.level) levelSelect.value = p.level;
+  if (roundSelect && p.round) roundSelect.value = p.round;
+  if (bestOfSelect && p.best_of) bestOfSelect.value = String(p.best_of);
+  if (indoorSelect && p.indoor !== undefined) indoorSelect.value = String(p.indoor);
+
+  // 4. Main Odds
+  if (odds1Input) odds1Input.value = (p.odds1 !== null && p.odds1 !== undefined) ? p.odds1 : '';
+  if (odds2Input) odds2Input.value = (p.odds2 !== null && p.odds2 !== undefined) ? p.odds2 : '';
+
+  // 5. Secondary Markets Odds
+  const hasSecOdds = Boolean(
+    p.odds_over || p.odds_under || p.total_line ||
+    p.odds_h1 || p.odds_h2 || p.handicap_line ||
+    p.odds_set1_p1 || p.odds_set1_p2 ||
+    p.odds_sets_over25 || p.odds_sets_under25 ||
+    p.odds_tb_yes || p.odds_tb_no
+  );
+
+  if (totalLineInput) totalLineInput.value = (p.total_line !== null && p.total_line !== undefined) ? p.total_line : '';
+  if (oddsOverInput) oddsOverInput.value = (p.odds_over !== null && p.odds_over !== undefined) ? p.odds_over : '';
+  if (oddsUnderInput) oddsUnderInput.value = (p.odds_under !== null && p.odds_under !== undefined) ? p.odds_under : '';
+
+  if (handicapLineInput) handicapLineInput.value = (p.handicap_line !== null && p.handicap_line !== undefined) ? p.handicap_line : '';
+  if (oddsH1Input) oddsH1Input.value = (p.odds_h1 !== null && p.odds_h1 !== undefined) ? p.odds_h1 : '';
+  if (oddsH2Input) oddsH2Input.value = (p.odds_h2 !== null && p.odds_h2 !== undefined) ? p.odds_h2 : '';
+
+  if (oddsTbYesInput) oddsTbYesInput.value = (p.odds_tb_yes !== null && p.odds_tb_yes !== undefined) ? p.odds_tb_yes : '';
+  if (oddsTbNoInput) oddsTbNoInput.value = (p.odds_tb_no !== null && p.odds_tb_no !== undefined) ? p.odds_tb_no : '';
+
+  if (oddsSet1P1Input) oddsSet1P1Input.value = (p.odds_set1_p1 !== null && p.odds_set1_p1 !== undefined) ? p.odds_set1_p1 : '';
+  if (oddsSet1P2Input) oddsSet1P2Input.value = (p.odds_set1_p2 !== null && p.odds_set1_p2 !== undefined) ? p.odds_set1_p2 : '';
+
+  if (oddsSetsOverInput) oddsSetsOverInput.value = (p.odds_sets_over25 !== null && p.odds_sets_over25 !== undefined) ? p.odds_sets_over25 : '';
+  if (oddsSetsUnderInput) oddsSetsUnderInput.value = (p.odds_sets_under25 !== null && p.odds_sets_under25 !== undefined) ? p.odds_sets_under25 : '';
+
+  // Open secondary accordion if secondary odds exist
+  if (hasSecOdds && secMarketsContent) {
+    secMarketsContent.style.display = 'flex';
+    if (secToggleIcon) secToggleIcon.classList.add('open');
+  }
+
+  // Update dynamic labels
+  updateDynamicLabels();
+
+  // Scroll to main match card smoothly
+  const mainCard = document.querySelector('main.card');
+  if (mainCard) {
+    mainCard.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Automatically trigger prediction and report generation
+  if (predictBtn) {
+    predictBtn.click();
+  }
+}
+window.loadPredictionFromHistory = loadPredictionFromHistory;
 
 function clearHistory() {
   if (confirm('Voulez-vous vraiment effacer les 10 dernières prédictions ?')) {
@@ -1370,15 +1462,18 @@ function renderHistory() {
     const oddsDisplay = item.pickOdds ? ` @ ${item.pickOdds.toFixed(2)}` : '';
 
     html += `
-      <div class="history-item ${statusClass}">
+      <div class="history-item ${statusClass}" onclick="loadPredictionFromHistory('${item.id}')" title="Cliquer pour réinjecter ce match et ses cotes dans le formulaire et régénérer le rapport">
         <div class="hist-main">
           <div class="hist-matchup">${escapeHtml(item.p1)} <span style="font-weight:400; color:var(--text-dim);">(${item.proba_p1}%)</span> vs ${escapeHtml(item.p2)} <span style="font-weight:400; color:var(--text-dim);">(${item.proba_p2}%)</span></div>
           <div class="hist-meta">🏆 ${escapeHtml(item.tournament)} • ${escapeHtml(item.surface)} • ${item.timestamp}</div>
           <div class="hist-pick">${escapeHtml(item.mainPick)}<b style="color:#34d399;">${oddsDisplay}</b></div>
         </div>
         <div class="hist-actions">
-          ${resultBadge}
-          <div class="hist-outcome-btns">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" class="hist-reload-btn" onclick="event.stopPropagation(); loadPredictionFromHistory('${item.id}')" title="Recharger et réanalyser">🔄 Réanalyser</button>
+            ${resultBadge}
+          </div>
+          <div class="hist-outcome-btns" onclick="event.stopPropagation();">
             <button class="hist-btn win-btn ${isWon ? 'active' : ''}" title="Marquer Gagné" onclick="updateHistoryResult('${item.id}', 'won')">✅</button>
             <button class="hist-btn loss-btn ${isLost ? 'active' : ''}" title="Marquer Perdu" onclick="updateHistoryResult('${item.id}', 'lost')">❌</button>
           </div>
