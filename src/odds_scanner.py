@@ -106,14 +106,14 @@ def fetch_the_odds_api_sports(api_key: str) -> List[Dict[str, Any]]:
 def fetch_odds_for_sport(
     sport_key: str,
     api_key: str,
-    bookmakers: str = "bet365,pinnacle,unibet,unibet_eu,unibet_fr,betclic_fr,betclic,winamax,williamhill"
+    bookmakers: str = "betclic_fr,betclic,winamax_fr,unibet_fr,unibet,bet365,pinnacle"
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Récupère les cotes détaillées d'un tournoi avec les marchés h2h, totals et spreads."""
+    """Récupère les cotes du tournoi ciblées sur le marché Vainqueur (h2h) Betclic."""
     base_url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
     params = {
         "apiKey": api_key,
         "regions": "eu,us,uk,au",
-        "markets": "h2h,totals,spreads",
+        "markets": "h2h",
         "oddsFormat": "decimal",
         "bookmakers": bookmakers
     }
@@ -562,12 +562,12 @@ def scan_daily_matches(
                     date=None,
                     odds1=m.get("odds1"),
                     odds2=m.get("odds2"),
-                    total_line=m.get("total_line"),
-                    odds_over=m.get("odds_over"),
-                    odds_under=m.get("odds_under"),
-                    handicap_line=m.get("handicap_line"),
-                    odds_h1=m.get("odds_h1"),
-                    odds_h2=m.get("odds_h2"),
+                    total_line=None,
+                    odds_over=None,
+                    odds_under=None,
+                    handicap_line=None,
+                    odds_h1=None,
+                    odds_h2=None,
                     odds_set1_p1=None,
                     odds_set1_p2=None,
                     odds_sets_over25=None,
@@ -588,11 +588,23 @@ def scan_daily_matches(
                 # Garder le rapport complet pour affichage instantané dans la popup modale
                 m_item["full_report"] = pred_res
 
-                rec_vbs = pred_res.get("recommended_value_bets", [])
-                m_item["all_value_bets"] = rec_vbs
-                if rec_vbs:
+                # Filtrer les Value Bets strictement sur le marché Vainqueur du Match
+                all_vbs = pred_res.get("recommended_value_bets", [])
+                winner_vbs = [vb for vb in all_vbs if vb.get("market") == "Vainqueur Match"]
+                
+                # Vérification directe des cotes Betclic vainqueur
+                if not winner_vbs:
+                    vb1 = pred_res.get("vb_p1")
+                    vb2 = pred_res.get("vb_p2")
+                    if vb1 and vb1.get("is_value_bet"):
+                        winner_vbs.append(vb1)
+                    if vb2 and vb2.get("is_value_bet"):
+                        winner_vbs.append(vb2)
+
+                m_item["all_value_bets"] = winner_vbs
+                if winner_vbs:
                     m_item["has_value_bet"] = True
-                    m_item["top_value_bet"] = rec_vbs[0]
+                    m_item["top_value_bet"] = winner_vbs[0]
                     total_vbs_found += 1
             except Exception as pe:
                 logger.warning(f"Erreur prédiction pour {p1_resolved} vs {p2_resolved}: {pe}")
