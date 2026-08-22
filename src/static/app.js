@@ -1166,7 +1166,12 @@ function renderValueBetsContainer(allVBs, scannedMarkets = [], recommendedVBs = 
       scannedMarkets.forEach(sm => {
         const evColor = sm.ev_pct > 0 ? '#fbbf24' : '#f87171';
         const evSign = sm.ev_pct > 0 ? '+' : '';
-        const diagText = sm.ev_pct > 0 ? 'Marge trop faible' : 'Cote insuffisante';
+        let diagText = sm.ev_pct > 0 ? 'Marge trop faible' : 'Cote insuffisante';
+        if (sm.badge === 'ANOMALY' || sm.is_market_anomaly) {
+          diagText = '⚠️ Anomalie Marché (Écart > 25%)';
+        } else if (sm.badge === 'BLOCKED' || (sm.confidence_status === 'BLOCKED_LOW_CONFIDENCE')) {
+          diagText = '🛑 Bloqué (Confiance < 45%)';
+        }
         const sconf = sm.confidence || { score: 50, label: 'Modérée', level: 'medium', icon: '⚖️' };
         rowsHtml += `
           <tr>
@@ -1241,6 +1246,7 @@ function renderValueBetsContainer(allVBs, scannedMarkets = [], recommendedVBs = 
       const rankBadge = isPrimary ? '<span class="vb-pick-tag">⭐ PICK RECOMMANDÉ #1</span>' : `<span class="vb-pick-tag" style="background:#38bdf8; color:#0c4a6e;">🎯 PICK COMPLÉMENTAIRE #${idx + 1}</span>`;
       const conf = vb.confidence || { score: 75.0, label: 'Haute', level: 'high', icon: '🔥' };
       const confPillHtml = `<span class="vb-conf-pill ${conf.level}" title="Indice de confiance spécifique à ce Value Bet : ${conf.label}">${conf.icon} Confiance VB : <b>${conf.score}%</b> (${conf.label})</span>`;
+      const dampingHtml = (vb.confidence_damping === 0.5) ? '<span class="vb-conf-pill" style="background:rgba(251,191,36,0.15); color:#fbbf24; border:1px solid rgba(251,191,36,0.3); font-size:10px; font-weight:700;">🟡 Mise amortie x0.5</span>' : '';
 
       listHtml += `
         <div class="vb-summary-item ${isPrimary ? 'primary-pick' : ''}">
@@ -1248,6 +1254,7 @@ function renderValueBetsContainer(allVBs, scannedMarkets = [], recommendedVBs = 
             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
               ${rankBadge}
               ${confPillHtml}
+              ${dampingHtml}
             </div>
             <span class="vb-sum-market">${escapeHtml(vb.market)}</span>
             <span class="vb-sum-title">${escapeHtml(vb.selection)}</span>

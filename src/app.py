@@ -355,18 +355,26 @@ def evaluate_market_value(
     odds: Optional[float],
     opp_odds: Optional[float],
     market_name: str,
-    selection: str
+    selection: str,
+    match_confidence: Optional[Any] = None
 ) -> Optional[Dict[str, Any]]:
     """
-    Évalue un Value Bet de façon rigoureuse et sélective :
+    Évalue un Value Bet de façon rigoureuse avec Consensus Hybride & Filtrage Actif :
     1. Retire la marge (overround / vig) du bookmaker si les deux côtés du marché sont renseignés.
-    2. Exige un Edge net d'au moins 4.5% ET une Espérance de gain (EV) d'au moins +5.0% pour éliminer le bruit.
+    2. CONSENSUS HYBRIDE (Market Shrinkage) :
+       - P_finale = 70% P_modèle + 30% P_marché
+       - Ancre la prédiction dans la réalité du marché pour éliminer les erreurs d'estimation.
+    3. PROTECTION ANOMALIE DE MARCHÉ :
+       - Si l'écart entre l'IA et le marché dépasse 25%, alerte anomalie (suspicion de blessure / forfait).
+    4. FILTRE ACTIF DE CONFIANCE :
+       - Score < 45% : Blocage total (is_vb = False, Kelly = 0.0).
+       - Score 45-70% : Amortissement Kelly x 0.5 (demi-mise).
+       - Score >= 70% : Pleine exposition Kelly.
     """
     if not odds or odds <= 1.0 or prob <= 0.01 or prob >= 0.99:
         return None
 
-    fair_odds = round(1.0 / prob, 2)
-    ev = (prob * odds) - 1.0
+    raw_model_prob = prob
 
     # Déduction de la vraie probabilité implicite du marché (sans la marge du bookmaker)
     if opp_odds and opp_odds > 1.0:
@@ -377,20 +385,67 @@ def evaluate_market_value(
         # Si seule une cote est renseignée, on applique une marge bookmaker standard de 5.5%
         market_prob = (1.0 / odds) / 1.055
 
-    edge = prob - market_prob
+    # --------------------------------------------------------------------------
+    # CONSENSUS HYBRIDE : 70% Modèle IA + 30% Marché Bookmaker
+    # --------------------------------------------------------------------------
+    blended_prob = 0.70 * raw_model_prob + 0.30 * market_prob
+    blended_prob = float(np.clip(blended_prob, 0.01, 0.99))
 
-    # Seuil strict de sélection : Edge >= 4.5% et EV >= +5.0% (évite les faux positifs)
-    is_vb = bool(edge >= 0.045 and ev >= 0.050)
+    fair_odds = round(1.0 / blended_prob, 2)
+    ev = (blended_prob * odds) - 1.0
+    edge = blended_prob - market_prob
+
+    # --------------------------------------------------------------------------
+    # DÉTECTION D'ANOMALIE DE MARCHÉ (Suspicion de blessure / forfait de dernière minute)
+    # --------------------------------------------------------------------------
+    market_divergence = abs(raw_model_prob - market_prob)
+    is_market_anomaly = bool(market_divergence >= 0.25)
+
+    # --------------------------------------------------------------------------
+    # FILTRAGE ACTIF PAR LE SCORE DE CONFIANCE
+    # --------------------------------------------------------------------------
+    conf_score = 70.0
+    if match_confidence is not None:
+        if isinstance(match_confidence, dict):
+            conf_score = float(match_confidence.get("score", 70.0))
+        else:
+            try:
+                conf_score = float(match_confidence)
+            except Exception:
+                conf_score = 70.0
+
+    if is_market_anomaly:
+        is_vb = False
+        confidence_damping = 0.0
+        confidence_status = "BLOCKED_MARKET_ANOMALY"
+        confidence_note = f"Alerte anomalie de marché (écart {market_divergence*100:.0f}%) : Suspicion de blessure ou forfait de dernière minute"
+    elif conf_score < 45.0:
+        is_vb = False
+        confidence_damping = 0.0
+        confidence_status = "BLOCKED_LOW_CONFIDENCE"
+        confidence_note = "Bloqué par l'indice de confiance (< 45%) : Risque d'estimation élevé"
+    elif conf_score < 70.0:
+        is_vb = bool(edge >= 0.035 and ev >= 0.040)
+        confidence_damping = 0.50
+        confidence_status = "DAMPED_MEDIUM_CONFIDENCE"
+        confidence_note = "Mise amortie (-50%) en raison d'une confiance modérée"
+    else:
+        is_vb = bool(edge >= 0.035 and ev >= 0.040)
+        confidence_damping = 1.0
+        confidence_status = "FULL_HIGH_CONFIDENCE"
+        confidence_note = "Consensus Hybride validé : Pleine confiance"
 
     b = odds - 1.0
-    kelly_full = max(0.0, min((prob * odds - 1.0) / b, 0.15)) if b > 0 else 0.0
+    kelly_full = max(0.0, min((blended_prob * odds - 1.0) / b, 0.15)) * confidence_damping if b > 0 else 0.0
     kelly_half = max(0.0, min(kelly_full * 0.50, 0.08))
     kelly_quarter = max(0.0, min(kelly_full * 0.25, 0.05))
 
     return {
         "market": market_name,
         "selection": selection,
-        "prob": round(prob * 100, 1),
+        "prob": round(blended_prob * 100, 1),
+        "prob_model_raw": round(raw_model_prob * 100, 1),
+        "prob_market": round(market_prob * 100, 1),
         "fair_odds": fair_odds,
         "offered_odds": odds,
         "ev_pct": round(ev * 100, 1),
@@ -399,8 +454,12 @@ def evaluate_market_value(
         "kelly_quarter_pct": round(kelly_quarter * 100, 1) if is_vb else 0.0,
         "kelly_half_pct": round(kelly_half * 100, 1) if is_vb else 0.0,
         "kelly_full_pct": round(kelly_full * 100, 1) if is_vb else 0.0,
+        "confidence_damping": confidence_damping,
+        "confidence_status": confidence_status,
+        "confidence_note": confidence_note,
+        "is_market_anomaly": is_market_anomaly,
         "is_value_bet": is_vb,
-        "badge": "VALUE_BET" if is_vb else ("LOW_EV" if (edge >= 0.02 and ev >= 0.02) else "NO_VALUE")
+        "badge": "VALUE_BET" if is_vb else ("ANOMALY" if is_market_anomaly else ("BLOCKED" if (edge >= 0.035 and ev >= 0.040 and conf_score < 45.0) else ("LOW_EV" if (edge >= 0.015 and ev >= 0.02) else "NO_VALUE")))
     }
 
 
@@ -1105,16 +1164,16 @@ def predict_match(req: PredictionRequest):
     detected_value_bets = []
 
     # 1. Marché Vainqueur du Match
-    vb_p1 = evaluate_market_value(p_p1, req.odds1, req.odds2, "Vainqueur Match", p1)
-    vb_p2 = evaluate_market_value(p_p2, req.odds2, req.odds1, "Vainqueur Match", p2)
+    vb_p1 = evaluate_market_value(p_p1, req.odds1, req.odds2, "Vainqueur Match", p1, match_confidence=confidence)
+    vb_p2 = evaluate_market_value(p_p2, req.odds2, req.odds1, "Vainqueur Match", p2, match_confidence=confidence)
     if vb_p1 and vb_p1["is_value_bet"]: detected_value_bets.append(vb_p1)
     if vb_p2 and vb_p2["is_value_bet"]: detected_value_bets.append(vb_p2)
 
     # 2. Marché Vainqueur Set 1
     p_set1_p1 = float(m_r.get("set_proba_a", p_p1))
     p_set1_p2 = float(m_r.get("set_proba_b", p_p2))
-    vb_set1_p1 = evaluate_market_value(p_set1_p1, req.odds_set1_p1, req.odds_set1_p2, "Vainqueur Set 1", p1)
-    vb_set1_p2 = evaluate_market_value(p_set1_p2, req.odds_set1_p2, req.odds_set1_p1, "Vainqueur Set 1", p2)
+    vb_set1_p1 = evaluate_market_value(p_set1_p1, req.odds_set1_p1, req.odds_set1_p2, "Vainqueur Set 1", p1, match_confidence=confidence)
+    vb_set1_p2 = evaluate_market_value(p_set1_p2, req.odds_set1_p2, req.odds_set1_p1, "Vainqueur Set 1", p2, match_confidence=confidence)
     if vb_set1_p1 and vb_set1_p1["is_value_bet"]: detected_value_bets.append(vb_set1_p1)
     if vb_set1_p2 and vb_set1_p2["is_value_bet"]: detected_value_bets.append(vb_set1_p2)
 
@@ -1126,8 +1185,8 @@ def predict_match(req: PredictionRequest):
     match_games_dist = m_r.get("match_games_distribution")
     p_over, p_under = price_total_games(exp_total_games, total_line, sigma=sigma_games, match_games_dist=match_games_dist)
 
-    vb_over = evaluate_market_value(p_over, req.odds_over, req.odds_under, f"Total Jeux ({total_line})", f"Over {total_line} Jeux")
-    vb_under = evaluate_market_value(p_under, req.odds_under, req.odds_over, f"Total Jeux ({total_line})", f"Under {total_line} Jeux")
+    vb_over = evaluate_market_value(p_over, req.odds_over, req.odds_under, f"Total Jeux ({total_line})", f"Over {total_line} Jeux", match_confidence=confidence)
+    vb_under = evaluate_market_value(p_under, req.odds_under, req.odds_over, f"Total Jeux ({total_line})", f"Under {total_line} Jeux", match_confidence=confidence)
     if vb_over and vb_over["is_value_bet"]: detected_value_bets.append(vb_over)
     if vb_under and vb_under["is_value_bet"]: detected_value_bets.append(vb_under)
 
@@ -1146,8 +1205,8 @@ def predict_match(req: PredictionRequest):
         label_h1 = f"{p1} (+{h_val:.1f})"
         label_h2 = f"{p2} (-{h_val:.1f})"
 
-    vb_h1 = evaluate_market_value(p_h1, req.odds_h1, req.odds_h2, f"Handicap ({h_val:.1f})", label_h1)
-    vb_h2 = evaluate_market_value(p_h2, req.odds_h2, req.odds_h1, f"Handicap ({h_val:.1f})", label_h2)
+    vb_h1 = evaluate_market_value(p_h1, req.odds_h1, req.odds_h2, f"Handicap ({h_val:.1f})", label_h1, match_confidence=confidence)
+    vb_h2 = evaluate_market_value(p_h2, req.odds_h2, req.odds_h1, f"Handicap ({h_val:.1f})", label_h2, match_confidence=confidence)
     if vb_h1 and vb_h1["is_value_bet"]: detected_value_bets.append(vb_h1)
     if vb_h2 and vb_h2["is_value_bet"]: detected_value_bets.append(vb_h2)
 
@@ -1156,13 +1215,13 @@ def predict_match(req: PredictionRequest):
     if req.best_of == 3:
         p_sets_3 = float(set_scores_dict.get("2-1", 0.25) + set_scores_dict.get("1-2", 0.25))
         p_sets_2 = float(set_scores_dict.get("2-0", 0.25) + set_scores_dict.get("0-2", 0.25))
-        vb_sets_over = evaluate_market_value(p_sets_3, req.odds_sets_over25, req.odds_sets_under25, "Nombre de Sets", "Plus de 2.5 Sets (3 Sets)")
-        vb_sets_under = evaluate_market_value(p_sets_2, req.odds_sets_under25, req.odds_sets_over25, "Nombre de Sets", "Moins de 2.5 Sets (2-0 sec)")
+        vb_sets_over = evaluate_market_value(p_sets_3, req.odds_sets_over25, req.odds_sets_under25, "Nombre de Sets", "Plus de 2.5 Sets (3 Sets)", match_confidence=confidence)
+        vb_sets_under = evaluate_market_value(p_sets_2, req.odds_sets_under25, req.odds_sets_over25, "Nombre de Sets", "Moins de 2.5 Sets (2-0 sec)", match_confidence=confidence)
     else:
         p_sets_2 = float(set_scores_dict.get("3-0", 0.2) + set_scores_dict.get("0-3", 0.2))
         p_sets_3 = 1.0 - p_sets_2
-        vb_sets_over = evaluate_market_value(p_sets_3, req.odds_sets_over25, req.odds_sets_under25, "Nombre de Sets", "Plus de 3.5 Sets")
-        vb_sets_under = evaluate_market_value(p_sets_2, req.odds_sets_under25, req.odds_sets_over25, "Nombre de Sets", "3 Sets (3-0 sec)")
+        vb_sets_over = evaluate_market_value(p_sets_3, req.odds_sets_over25, req.odds_sets_under25, "Nombre de Sets", "Plus de 3.5 Sets", match_confidence=confidence)
+        vb_sets_under = evaluate_market_value(p_sets_2, req.odds_sets_under25, req.odds_sets_over25, "Nombre de Sets", "3 Sets (3-0 sec)", match_confidence=confidence)
 
     if vb_sets_over and vb_sets_over["is_value_bet"]: detected_value_bets.append(vb_sets_over)
     if vb_sets_under and vb_sets_under["is_value_bet"]: detected_value_bets.append(vb_sets_under)
@@ -1188,8 +1247,8 @@ def predict_match(req: PredictionRequest):
     p_tb_yes = float(np.clip(1.0 - p_no_tb, 0.03, 0.97))
     p_tb_no = 1.0 - p_tb_yes
 
-    vb_tb_yes = evaluate_market_value(p_tb_yes, req.odds_tb_yes, req.odds_tb_no, "Tie-Break (+0.5 TB)", "Au moins 1 Tie-Break (+0.5 TB - OUI)")
-    vb_tb_no = evaluate_market_value(p_tb_no, req.odds_tb_no, req.odds_tb_yes, "Tie-Break (0 TB)", "Aucun Tie-Break (0 TB - NON)")
+    vb_tb_yes = evaluate_market_value(p_tb_yes, req.odds_tb_yes, req.odds_tb_no, "Tie-Break (+0.5 TB)", "Au moins 1 Tie-Break (+0.5 TB - OUI)", match_confidence=confidence)
+    vb_tb_no = evaluate_market_value(p_tb_no, req.odds_tb_no, req.odds_tb_yes, "Tie-Break (0 TB)", "Aucun Tie-Break (0 TB - NON)", match_confidence=confidence)
     if vb_tb_yes and vb_tb_yes["is_value_bet"]: detected_value_bets.append(vb_tb_yes)
     if vb_tb_no and vb_tb_no["is_value_bet"]: detected_value_bets.append(vb_tb_no)
 
