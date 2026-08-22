@@ -998,6 +998,8 @@ function renderResults(data, payload = {}) {
     </tr>
     <tr><td>Total Jeux Prévu</td><td colspan="2" style="text-align:center; color:#f59e0b;">${data.markov.expected_total_games} jeux</td></tr>
   `;
+}
+
 // --------------------------------------------------------------------------
 // Explicabilité SHAP & Multi-Modèles Stacking
 // --------------------------------------------------------------------------

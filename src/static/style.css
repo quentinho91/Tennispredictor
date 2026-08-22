@@ -98,6 +98,16 @@ body {
   border-radius: var(--radius-full);
 }
 
+/* Header Controls */
+.header-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
 /* Circuit Switcher */
 .circuit-switcher {
   display: flex;
