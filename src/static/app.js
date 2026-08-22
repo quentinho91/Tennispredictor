@@ -1930,9 +1930,7 @@ function openMatchDetailModal(matchId) {
     const fairTbYes = tbM.fair_odds_yes ? `@ ${parseFloat(tbM.fair_odds_yes).toFixed(2)}` : '@ 2.60';
     const fairTbNo = tbM.fair_odds_no ? `@ ${parseFloat(tbM.fair_odds_no).toFixed(2)}` : '@ 1.62';
 
-    // Ranks / Elos
-    const r1 = stats.rank_p1 ? `#${stats.rank_p1}` : '-';
-    const r2 = stats.rank_p2 ? `#${stats.rank_p2}` : '-';
+    // Detailed Analytics & Player data
     const det = rep.detailed_analytics || {};
     const enClair = det.summary_en_clair || '';
     const p1Det = det.p1 || {};
@@ -1947,6 +1945,14 @@ function openMatchDetailModal(matchId) {
     const fat1 = p1Det.fatigue || { charge: 80, min_7d: 890, min_30d: 890, frais_pct: 52, fatigue_pct: 61 };
     const fat2 = p2Det.fatigue || { charge: 80, min_7d: 623, min_30d: 899, frais_pct: 61, fatigue_pct: 59 };
     const compMetrics = det.comparative_metrics || [];
+
+    // Ranks / Elos / Holds
+    const r1 = stats.rank_p1 ? `#${stats.rank_p1}` : (p1Det.rank ? `#${p1Det.rank}` : '-');
+    const r2 = stats.rank_p2 ? `#${stats.rank_p2}` : (p2Det.rank ? `#${p2Det.rank}` : '-');
+    const elo1 = p1Det.elo_surface || stats.elo_surface_p1 || stats.elo_p1 || 1800;
+    const elo2 = p2Det.elo_surface || stats.elo_surface_p2 || stats.elo_p2 || 1800;
+    const hold1 = (stats.hold_p1 !== undefined && stats.hold_p1 !== null) ? `${(stats.hold_p1 * 100).toFixed(0)}%` : '78%';
+    const hold2 = (stats.hold_p2 !== undefined && stats.hold_p2 !== null) ? `${(stats.hold_p2 * 100).toFixed(0)}%` : '78%';
 
     const enClairHtml = enClair ? `
       <div class="en-clair-box">

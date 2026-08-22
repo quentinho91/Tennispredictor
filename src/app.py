@@ -66,7 +66,7 @@ def get_cached_resources(circuit: str):
 # Démarrage rapide et léger (aucun modèle lourd préchargé)
 @app.on_event("startup")
 def startup_event():
-    print("🎾 Serveur Tennis Match Predictor prêt !")
+    print("[INIT] Serveur Tennis Match Predictor pret !")
 
 
 def get_circuit_players(circuit: str) -> List[Dict[str, Any]]:
