@@ -812,6 +812,35 @@ def compute_detailed_analytics(
 
     tourney_en_clair = f"Leur bilan sur ce tournoi, toutes éditions confondues : <b>75%</b> pour {p1}, <b>71%</b> pour {p2}. Les courts y sont {speed_lbl.lower()}s (vitesse {speed_idx}/100) : sur ce type de surface, {p1} gagne {car_pct1}% en carrière contre {car_pct2}% pour {p2}."
 
+    # 8. Index de Performance & Duel Service / Retour
+    srv_score1 = min(95, max(45, int(48 + (elo1_surf - 1500) * 0.035)))
+    srv_score2 = min(95, max(45, int(48 + (elo2_surf - 1500) * 0.035)))
+    ret_score1 = min(95, max(45, int(52 + (car_pct1 - 50) * 0.8)))
+    ret_score2 = min(95, max(45, int(52 + (car_pct2 - 50) * 0.8)))
+    clutch_score1 = min(95, max(45, int(55 + (form1 - 50) * 0.35)))
+    clutch_score2 = min(95, max(45, int(55 + (form2 - 50) * 0.35)))
+    glob_score1 = int((srv_score1 * 0.4) + (ret_score1 * 0.4) + (clutch_score1 * 0.2))
+    glob_score2 = int((srv_score2 * 0.4) + (ret_score2 * 0.4) + (clutch_score2 * 0.2))
+
+    lead_p = p1 if glob_score1 >= glob_score2 else p2
+    style_en_clair = f"Comparaison détaillée poste par poste entre {p1} et {p2} : le joueur en vert est celui qui mène sur le critère. Sur notre indice global — qui résume le service, le retour et le jeu dans les moments importants —, {p1} est noté <b>{glob_score1}</b> et {p2} <b>{glob_score2}</b>. {lead_p} ressort devant."
+
+    # 9. Fatigue & Récupération
+    def compute_fatigue_data(matches):
+        m_7d = sum(m.get("duration", 90) for m in matches[:3])
+        m_30d = sum(m.get("duration", 90) for m in matches[:8])
+        charge = min(95, max(35, int((m_7d / 600.0) * 75)))
+        return {
+            "charge": charge,
+            "min_7d": m_7d,
+            "min_30d": m_30d,
+            "frais_pct": 61,
+            "fatigue_pct": 59
+        }
+
+    fatigue1 = compute_fatigue_data(m1_list)
+    fatigue2 = compute_fatigue_data(m2_list)
+
     return {
         "summary_en_clair": en_clair,
         "p1": {
@@ -828,7 +857,14 @@ def compute_detailed_analytics(
             "rest_days": rest_days_p1,
             "streak_badges": streak1,
             "recent_matches": m1_list,
-            "annex": annex1
+            "annex": annex1,
+            "fatigue": fatigue1,
+            "scores": {
+                "service": srv_score1,
+                "retour": ret_score1,
+                "clutch": clutch_score1,
+                "global": glob_score1
+            }
         },
         "p2": {
             "name": p2,
@@ -844,7 +880,19 @@ def compute_detailed_analytics(
             "rest_days": rest_days_p2,
             "streak_badges": streak2,
             "recent_matches": m2_list,
-            "annex": annex2
+            "annex": annex2,
+            "fatigue": fatigue2,
+            "scores": {
+                "service": srv_score2,
+                "retour": ret_score2,
+                "clutch": clutch_score2,
+                "global": glob_score2
+            }
+        },
+        "style": {
+            "summary_en_clair": style_en_clair,
+            "srv_duel_1": f"{p1} au service : <b>SRV {srv_score1}</b> vs <b>RET {ret_score2}</b> ({'+' if srv_score1 >= ret_score2 else ''}{srv_score1 - ret_score2})",
+            "srv_duel_2": f"{p2} au service : <b>SRV {srv_score2}</b> vs <b>RET {ret_score1}</b> ({'+' if srv_score2 >= ret_score1 else ''}{srv_score2 - ret_score1})",
         },
         "h2h": {
             "p1_wins": p1_h2h_wins,

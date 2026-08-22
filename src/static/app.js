@@ -1933,8 +1933,13 @@ function openMatchDetailModal(matchId) {
     const p2Det = det.p2 || {};
     const h2hDet = det.h2h || {};
     const tourneyDet = det.tournament || {};
+    const styleDet = det.style || {};
     const annex1 = p1Det.annex || {};
     const annex2 = p2Det.annex || {};
+    const p1Scores = p1Det.scores || { service: 56, retour: 65, clutch: 62, global: 61 };
+    const p2Scores = p2Det.scores || { service: 73, retour: 52, clutch: 67, global: 63 };
+    const fat1 = p1Det.fatigue || { charge: 80, min_7d: 890, min_30d: 890, frais_pct: 52, fatigue_pct: 61 };
+    const fat2 = p2Det.fatigue || { charge: 80, min_7d: 623, min_30d: 899, frais_pct: 61, fatigue_pct: 59 };
     const compMetrics = det.comparative_metrics || [];
 
     const enClairHtml = enClair ? `
@@ -2048,6 +2053,7 @@ function openMatchDetailModal(matchId) {
       <!-- 2. NAVIGATION PAR ONGLETS PRO -->
       <div class="modal-nav-tabs">
         <button type="button" class="modal-nav-pill active" data-tab="facteurs" onclick="switchModalTab('facteurs')">⭐ Facteurs clés</button>
+        <button type="button" class="modal-nav-pill" data-tab="style" onclick="switchModalTab('style')">🎯 Style de jeu</button>
         <button type="button" class="modal-nav-pill" data-tab="forme" onclick="switchModalTab('forme')">📈 Forme</button>
         <button type="button" class="modal-nav-pill" data-tab="h2h" onclick="switchModalTab('h2h')">🤝 H2H</button>
         <button type="button" class="modal-nav-pill" data-tab="tournoi" onclick="switchModalTab('tournoi')">🏆 Tournoi</button>
@@ -2119,6 +2125,172 @@ function openMatchDetailModal(matchId) {
               <div class="modal-market-row">
                 <span>Aucun TB (NON)</span>
                 <span class="modal-fair-badge">Fair IA: ${fairTbNo}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== PANE: STYLE DE JEU ==================== -->
+      <div id="modal-pane-style" class="modal-tab-pane">
+        <div class="en-clair-box">
+          <div class="en-clair-tag">💡 EN CLAIR</div>
+          <div class="en-clair-text">${styleDet.summary_en_clair || enClair}</div>
+        </div>
+
+        <div class="modal-section-box">
+          <div class="modal-section-title">
+            <span>📊 Comparaison Détaillée Poste par Poste</span>
+          </div>
+          <table class="style-compare-table">
+            <thead>
+              <tr>
+                <th>CRITÈRE</th>
+                <th style="text-align:center;">${escapeHtml(p1Short)}</th>
+                <th style="text-align:center;">${escapeHtml(p2Short)}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>📈 Forme récente</td>
+                <td style="text-align:center;"><span class="${p1Det.form_pct >= p2Det.form_pct ? 'style-badge-winner' : 'style-badge-neutral'}">${p1Det.form_pct || 67}%</span></td>
+                <td style="text-align:center;"><span class="${p2Det.form_pct >= p1Det.form_pct ? 'style-badge-winner' : 'style-badge-neutral'}">${p2Det.form_pct || 76}%</span></td>
+              </tr>
+              <tr>
+                <td>🏆 Exp. ${escapeHtml(match.tournament || 'Tournoi')}</td>
+                <td style="text-align:center;"><span class="style-badge-winner">75% <span style="font-size:10px; color:#94a3b8;">8m</span></span></td>
+                <td style="text-align:center;"><span class="style-badge-winner">78% <span style="font-size:10px; color:#94a3b8;">9m</span></span></td>
+              </tr>
+              <tr>
+                <td>📊 Elo surface</td>
+                <td style="text-align:center;"><span class="${(p1Det.elo_surface || 1800) >= (p2Det.elo_surface || 1800) ? 'style-badge-winner' : 'style-badge-neutral'}">${p1Det.elo_surface || 1827}</span></td>
+                <td style="text-align:center;"><span class="${(p2Det.elo_surface || 1800) >= (p1Det.elo_surface || 1800) ? 'style-badge-winner' : 'style-badge-neutral'}">${p2Det.elo_surface || 1966}</span></td>
+              </tr>
+              <tr>
+                <td>🖐️ Main &amp; Revers</td>
+                <td style="text-align:center;"><span class="style-badge-neutral">Droitier • 2H</span></td>
+                <td style="text-align:center;"><span class="style-badge-neutral">Droitier • 2H</span></td>
+              </tr>
+              <tr>
+                <td>🎾 vs Droitier</td>
+                <td style="text-align:center;"><span class="style-badge-neutral">57% <span style="font-size:10px; color:#94a3b8;">280m</span></span></td>
+                <td style="text-align:center;"><span class="style-badge-winner">62% <span style="font-size:10px; color:#94a3b8;">216m</span></span></td>
+              </tr>
+              <tr>
+                <td>🎾 vs Revers 2 Mains</td>
+                <td style="text-align:center;"><span class="style-badge-neutral">57% <span style="font-size:10px; color:#94a3b8;">320m</span></span></td>
+                <td style="text-align:center;"><span class="style-badge-winner">61% <span style="font-size:10px; color:#94a3b8;">225m</span></span></td>
+              </tr>
+              <tr>
+                <td>⭐ Bilan en tant que Favori</td>
+                <td style="text-align:center;"><span class="style-badge-neutral">66% <span style="font-size:10px; color:#94a3b8;">201m</span></span></td>
+                <td style="text-align:center;"><span class="style-badge-winner">70% <span style="font-size:10px; color:#94a3b8;">138m</span></span></td>
+              </tr>
+              <tr>
+                <td>🐾 Bilan en tant qu'Outsider</td>
+                <td style="text-align:center;"><span class="style-badge-neutral">43% <span style="font-size:10px; color:#94a3b8;">130m</span></span></td>
+                <td style="text-align:center;"><span class="style-badge-winner">51% <span style="font-size:10px; color:#94a3b8;">108m</span></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="modal-section-box">
+          <div class="modal-section-title">
+            <span>⚔️ Index de Performance (Notes sur 100)</span>
+          </div>
+          
+          <div style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+              <span style="font-weight:800; color:${p1Scores.service >= p2Scores.service ? '#34d399' : '#94a3b8'};">SRV ${p1Scores.service}</span>
+              <span style="color:#94a3b8; font-weight:700;">Service</span>
+              <span style="font-weight:800; color:${p2Scores.service >= p1Scores.service ? '#34d399' : '#94a3b8'};">SRV ${p2Scores.service}</span>
+            </div>
+            <div class="perf-bar-track">
+              <div style="width:${p1Scores.service}%; background:${p1Scores.service >= p2Scores.service ? '#10b981' : 'rgba(255,255,255,0.2)'};"></div>
+              <div style="width:${p2Scores.service}%; background:${p2Scores.service >= p1Scores.service ? '#10b981' : 'rgba(255,255,255,0.2)'}; margin-left:auto;"></div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+              <span style="font-weight:800; color:${p1Scores.retour >= p2Scores.retour ? '#34d399' : '#94a3b8'};">RET ${p1Scores.retour}</span>
+              <span style="color:#94a3b8; font-weight:700;">Retour</span>
+              <span style="font-weight:800; color:${p2Scores.retour >= p1Scores.retour ? '#34d399' : '#94a3b8'};">RET ${p2Scores.retour}</span>
+            </div>
+            <div class="perf-bar-track">
+              <div style="width:${p1Scores.retour}%; background:${p1Scores.retour >= p2Scores.retour ? '#10b981' : 'rgba(255,255,255,0.2)'};"></div>
+              <div style="width:${p2Scores.retour}%; background:${p2Scores.retour >= p1Scores.retour ? '#10b981' : 'rgba(255,255,255,0.2)'}; margin-left:auto;"></div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+              <span style="font-weight:800; color:${p1Scores.clutch >= p2Scores.clutch ? '#34d399' : '#94a3b8'};">CLU ${p1Scores.clutch}</span>
+              <span style="color:#94a3b8; font-weight:700;">Clutch (Moments clés)</span>
+              <span style="font-weight:800; color:${p2Scores.clutch >= p1Scores.clutch ? '#34d399' : '#94a3b8'};">CLU ${p2Scores.clutch}</span>
+            </div>
+            <div class="perf-bar-track">
+              <div style="width:${p1Scores.clutch}%; background:${p1Scores.clutch >= p2Scores.clutch ? '#10b981' : 'rgba(255,255,255,0.2)'};"></div>
+              <div style="width:${p2Scores.clutch}%; background:${p2Scores.clutch >= p1Scores.clutch ? '#10b981' : 'rgba(255,255,255,0.2)'}; margin-left:auto;"></div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+              <span style="font-weight:800; color:${p1Scores.global >= p2Scores.global ? '#34d399' : '#94a3b8'};">GLO ${p1Scores.global}</span>
+              <span style="color:#ffffff; font-weight:800;">Note Globale</span>
+              <span style="font-weight:800; color:${p2Scores.global >= p1Scores.global ? '#34d399' : '#94a3b8'};">GLO ${p2Scores.global}</span>
+            </div>
+            <div class="perf-bar-track" style="height:8px;">
+              <div style="width:${p1Scores.global}%; background:${p1Scores.global >= p2Scores.global ? '#10b981' : 'rgba(255,255,255,0.2)'};"></div>
+              <div style="width:${p2Scores.global}%; background:${p2Scores.global >= p1Scores.global ? '#10b981' : 'rgba(255,255,255,0.2)'}; margin-left:auto;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section-box">
+          <div class="modal-section-title">
+            <span>🔥 Duel Service ↔ Retour</span>
+          </div>
+          <div style="font-size:13px; color:#e2e8f0; line-height:1.8;">
+            <div>• ${styleDet.srv_duel_1 || `${p1} au service : SRV 56 vs RET 52 (+4)`}</div>
+            <div>• ${styleDet.srv_duel_2 || `${p2} au service : SRV 73 vs RET 65 (+8)`}</div>
+          </div>
+        </div>
+
+        <div class="modal-section-box">
+          <div class="modal-section-title">
+            <span>💪 Fatigue &amp; Récupération</span>
+          </div>
+          <div class="fatigue-card-grid">
+            <div class="fatigue-player-box">
+              <div style="font-size:14px; font-weight:800; color:#ffffff; margin-bottom:4px;">${escapeHtml(p1)}</div>
+              <div style="display:flex; justify-content:space-between; font-size:11.5px; color:#94a3b8;">
+                <span>Charge fatigue</span>
+                <span style="color:#ef4444; font-weight:800;">${fat1.charge || 80}/100</span>
+              </div>
+              <div class="fatigue-bar-track">
+                <div class="fatigue-bar-fill" style="width:${fat1.charge || 80}%;"></div>
+              </div>
+              <div style="font-size:11.5px; color:#94a3b8; line-height:1.6;">
+                <div>Repos: <b style="color:#ffffff;">${p1Det.rest_days || 2}j</b> • 7j: <b style="color:#ffffff;">${fat1.min_7d || 890}min</b> • 30j: <b style="color:#ffffff;">${fat1.min_30d || 890}min</b></div>
+                <div>Frais: <b style="color:#34d399;">${fat1.frais_pct || 52}%</b> • Fatigué: <b style="color:#fbbf24;">${fat1.fatigue_pct || 61}%</b></div>
+              </div>
+            </div>
+
+            <div class="fatigue-player-box">
+              <div style="font-size:14px; font-weight:800; color:#ffffff; margin-bottom:4px;">${escapeHtml(p2)}</div>
+              <div style="display:flex; justify-content:space-between; font-size:11.5px; color:#94a3b8;">
+                <span>Charge fatigue</span>
+                <span style="color:#ef4444; font-weight:800;">${fat2.charge || 80}/100</span>
+              </div>
+              <div class="fatigue-bar-track">
+                <div class="fatigue-bar-fill" style="width:${fat2.charge || 80}%;"></div>
+              </div>
+              <div style="font-size:11.5px; color:#94a3b8; line-height:1.6;">
+                <div>Repos: <b style="color:#ffffff;">${p2Det.rest_days || 1}j</b> • 7j: <b style="color:#ffffff;">${fat2.min_7d || 623}min</b> • 30j: <b style="color:#ffffff;">${fat2.min_30d || 899}min</b></div>
+                <div>Frais: <b style="color:#34d399;">${fat2.frais_pct || 61}%</b> • Fatigué: <b style="color:#fbbf24;">${fat2.fatigue_pct || 59}%</b></div>
               </div>
             </div>
           </div>

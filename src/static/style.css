@@ -2700,5 +2700,106 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+/* ============================================================
+   8. STYLE DE JEU & INDEX DE PERFORMANCE
+   ============================================================ */
+.style-compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 18px;
+}
+
+.style-compare-table th {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.style-compare-table td {
+  padding: 9px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.style-badge-winner {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.style-badge-neutral {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.perf-index-row {
+  display: grid;
+  grid-template-columns: 35px 1fr 35px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.perf-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  display: flex;
+  overflow: hidden;
+}
+
+.perf-fill-lead {
+  background: #10b981;
+  height: 100%;
+}
+
+.perf-fill-trail {
+  background: rgba(255, 255, 255, 0.15);
+  height: 100%;
+}
+
+.fatigue-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 600px) {
+  .fatigue-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fatigue-player-box {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+
+.fatigue-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 6px 0 10px 0;
+}
+
+.fatigue-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+
 
 
