@@ -692,9 +692,16 @@ function renderResults(data, payload = {}) {
   ctxTag.textContent = `${tName} • ${ctx.surface}${cpiStr}${altStr} • ${ctx.round} • Best-of ${ctx.best_of}`;
 
   // ------------------------------------------------------------------------
-  // Value Bets Across All Markets (avec Calculateur Bankroll & Euros Réels)
+  // Value Bets Across All Markets (avec Filtrage Anti-Corrélation & Calculateur Bankroll)
   // ------------------------------------------------------------------------
-  renderValueBetsContainer(data.all_value_bets || [], data.scanned_markets || []);
+  renderValueBetsContainer(
+    data.all_value_bets || [],
+    data.scanned_markets || [],
+    data.recommended_value_bets || [],
+    data.correlated_masked_bets || [],
+    data.has_correlated_bets || false,
+    data.filter_note || ''
+  );
 
   // ------------------------------------------------------------------------
   // Multi-Market Analysis Grid (avec affichage cotes bookmakers saisies)
@@ -939,14 +946,17 @@ function renderFormTimeline(containerId, matches, playerName) {
 }
 
 // --------------------------------------------------------------------------
-// Value Bets Rendering & Real-time Euro Bankroll Calculator
+// Value Bets Rendering & Real-time Euro Bankroll Calculator (avec Filtre Anti-Corrélation)
 // --------------------------------------------------------------------------
-function renderValueBetsContainer(allVBs, scannedMarkets = []) {
+function renderValueBetsContainer(allVBs, scannedMarkets = [], recommendedVBs = [], maskedVBs = [], hasCorr = false, filterNote = '') {
   const vbContainer = document.getElementById('valuebet-container');
   if (!vbContainer) return;
 
+  // Use recommended value bets (filtered against correlation) as active picks
+  const activeVBs = (recommendedVBs && recommendedVBs.length > 0) ? recommendedVBs : (allVBs || []);
+
   // If no Value Bets were detected
-  if (!allVBs || allVBs.length === 0) {
+  if (!activeVBs || activeVBs.length === 0) {
     // Check if user provided any odds
     if (scannedMarkets && scannedMarkets.length > 0) {
       vbContainer.style.display = 'block';
@@ -1008,7 +1018,7 @@ function renderValueBetsContainer(allVBs, scannedMarkets = []) {
 
   function getItemsHtml(bankroll, strategy) {
     let listHtml = '';
-    allVBs.forEach(vb => {
+    activeVBs.forEach((vb, idx) => {
       let stakePct = vb.kelly_quarter_pct || vb.kelly_pct || 2.0;
       if (strategy === 'half') {
         stakePct = vb.kelly_half_pct || (stakePct * 2.0);
@@ -1024,9 +1034,13 @@ function renderValueBetsContainer(allVBs, scannedMarkets = []) {
       const stakeAmount = (bankroll * stakePct / 100).toFixed(2);
       const netProfit = (parseFloat(stakeAmount) * (vb.offered_odds - 1.0)).toFixed(2);
 
+      const isPrimary = vb.is_primary_pick || idx === 0;
+      const rankBadge = isPrimary ? '<span class="vb-pick-tag">⭐ PICK RECOMMANDÉ #1</span>' : `<span class="vb-pick-tag" style="background:#38bdf8; color:#0c4a6e;">🎯 PICK COMPLÉMENTAIRE #${idx + 1}</span>`;
+
       listHtml += `
-        <div class="vb-summary-item">
+        <div class="vb-summary-item ${isPrimary ? 'primary-pick' : ''}">
           <div class="vb-sum-left">
+            ${rankBadge}
             <span class="vb-sum-market">${escapeHtml(vb.market)}</span>
             <span class="vb-sum-title">${escapeHtml(vb.selection)}</span>
             <span style="font-size: 11.5px; color: var(--text-dim);">Proba: ${vb.prob}% • Cote juste: ${vb.fair_odds.toFixed(2)}</span>
@@ -1047,10 +1061,60 @@ function renderValueBetsContainer(allVBs, scannedMarkets = []) {
     return listHtml;
   }
 
+  function getMaskedItemsHtml() {
+    if (!maskedVBs || maskedVBs.length === 0) return '';
+    let html = '';
+    maskedVBs.forEach(mvb => {
+      html += `
+        <div class="masked-vb-item">
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #f1f5f9;">${escapeHtml(mvb.selection)} <span style="font-size: 11px; color: var(--text-dim);">(${escapeHtml(mvb.market)})</span></div>
+            <div style="font-size: 10.5px; color: #fbbf24;">🔒 ${escapeHtml(mvb.masked_reason || 'Pari corrélé')}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 14px; font-weight: 800; color: #94a3b8;">@ ${mvb.offered_odds.toFixed(2)}</div>
+            <div style="font-size: 10.5px; color: #34d399;">+${mvb.ev_pct}% EV</div>
+          </div>
+        </div>
+      `;
+    });
+    return html;
+  }
+
+  const antiCorrBannerHtml = hasCorr ? `
+    <div class="anti-corr-banner">
+      <div class="ac-icon">🛡️</div>
+      <div class="ac-text">
+        <div class="ac-title">Filtre Anti-Corrélation Actif (${allVBs.length} Value Bets détectés)</div>
+        <div class="ac-desc">
+          Plusieurs paris dépendent du même scénario de match. L'IA a isolé <b>le meilleur pari (#1)</b> pour éliminer le risque d'accumulation de mises sur un même scénario.
+        </div>
+      </div>
+    </div>
+  ` : '';
+
+  const maskedAccordionHtml = (maskedVBs && maskedVBs.length > 0) ? `
+    <div class="masked-vbs-accordion">
+      <button type="button" id="btn-toggle-masked-vbs" class="btn-toggle-masked">
+        <span>🔒 Voir les ${maskedVBs.length} autre(s) pari(s) corrélé(s) masqué(s)</span>
+        <span id="masked-toggle-icon" class="toggle-arrow">▼</span>
+      </button>
+      <div id="masked-vbs-content" class="masked-vbs-content" style="display: none;">
+        <div class="masked-vbs-warning">
+          ⚠️ <b>Règle de Bankroll :</b> Ces paris découlent du même scénario que le Pick sélectionné. Ne les cumulez pas afin d'éviter une perte multiple en cas de scénario inverse.
+        </div>
+        ${getMaskedItemsHtml()}
+      </div>
+    </div>
+  ` : '';
+
   vbContainer.innerHTML = `
     <div class="vb-header">
-      <span class="vb-badge badge-vb">🎯 ${allVBs.length} VALUE BET${allVBs.length > 1 ? 'S DÉTECTÉS' : ' DÉTECTÉ'}</span>
+      <span class="vb-badge badge-vb">🎯 ${activeVBs.length} VALUE BET${activeVBs.length > 1 ? 'S RECOMMANDÉS' : ' RECOMMANDÉ'}</span>
+      ${hasCorr ? `<span style="font-size: 11px; color: #60a5fa; font-weight: 700;">🛡️ 1-2 Picks Max</span>` : ''}
     </div>
+
+    ${antiCorrBannerHtml}
 
     <!-- Bankroll & Strategy Controls -->
     <div class="bankroll-bar">
@@ -1076,11 +1140,24 @@ function renderValueBetsContainer(allVBs, scannedMarkets = []) {
     <div id="vb-dynamic-list" class="vb-summary-list">
       ${getItemsHtml(currentBankroll, currentStrategy)}
     </div>
+
+    ${maskedAccordionHtml}
   `;
 
   const bkInput = document.getElementById('user-bankroll-input');
   const stratSelect = document.getElementById('user-strategy-select');
   const listEl = document.getElementById('vb-dynamic-list');
+  const toggleMaskedBtn = document.getElementById('btn-toggle-masked-vbs');
+  const maskedContent = document.getElementById('masked-vbs-content');
+  const maskedIcon = document.getElementById('masked-toggle-icon');
+
+  if (toggleMaskedBtn && maskedContent) {
+    toggleMaskedBtn.addEventListener('click', () => {
+      const isHidden = maskedContent.style.display === 'none';
+      maskedContent.style.display = isHidden ? 'flex' : 'none';
+      if (maskedIcon) maskedIcon.classList.toggle('open', isHidden);
+    });
+  }
 
   const updateStakes = () => {
     let val = parseFloat(bkInput.value);
@@ -1123,12 +1200,12 @@ function saveHistory(list) {
 function savePredictionToHistory(data, payload) {
   const history = getHistory();
 
-  // Déterminer le pick principal (Value Bet prioritaire, sinon Favori du match)
+  // Déterminer le pick principal (Value Bet prioritaire recommandé, sinon Favori du match)
   let mainPick = '';
   let pickOdds = null;
   let pickType = 'fav';
 
-  const vbs = data.all_value_bets || [];
+  const vbs = (data.recommended_value_bets && data.recommended_value_bets.length > 0) ? data.recommended_value_bets : (data.all_value_bets || []);
   if (vbs.length > 0) {
     const topVb = vbs[0];
     mainPick = `🎯 VB: ${topVb.selection}`;

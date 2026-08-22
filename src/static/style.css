@@ -1051,6 +1051,36 @@ body {
 }
 
 /* Multi-Value Bets Container */
+.anti-corr-banner {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(16, 185, 129, 0.08));
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-top: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.ac-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.ac-text {
+  flex: 1;
+}
+.ac-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #60a5fa;
+  margin-bottom: 2px;
+}
+.ac-desc {
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
 .vb-summary-list {
   display: flex;
   flex-direction: column;
@@ -1066,6 +1096,25 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.vb-summary-item.primary-pick {
+  border-width: 2px;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(59, 130, 246, 0.08));
+}
+
+.vb-pick-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: #022c22;
+  background: #34d399;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  display: inline-block;
+  width: fit-content;
 }
 
 .vb-sum-left {
@@ -1100,6 +1149,56 @@ body {
   font-weight: 800;
   padding: 3px 8px;
   border-radius: var(--radius-full);
+}
+
+/* Masked Correlated Bets Accordion */
+.masked-vbs-accordion {
+  margin-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 10px;
+}
+.btn-toggle-masked {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  transition: all 0.2s ease;
+}
+.btn-toggle-masked:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+.masked-vbs-content {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.masked-vbs-warning {
+  font-size: 11px;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  line-height: 1.35;
+}
+.masked-vb-item {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 /* Footer */

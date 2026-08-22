@@ -403,6 +403,97 @@ def evaluate_market_value(
     }
 
 
+def filter_uncorrelated_value_bets(
+    value_bets: List[Dict[str, Any]],
+    p1: str,
+    p2: str,
+    p_p1: float
+) -> Dict[str, Any]:
+    """
+    Détecte les corrélations entre les Value Bets d'un même match
+    et sélectionne automatiquement les 1 à 2 meilleurs paris indépendants (anti-surexposition).
+    """
+    if not value_bets:
+        return {
+            "recommended_value_bets": [],
+            "correlated_masked_bets": [],
+            "has_correlated_bets": False,
+            "total_vb_count": 0,
+            "filter_note": "Aucun Value Bet détecté."
+        }
+
+    is_p1_fav = p_p1 >= 0.5
+    fav_name = p1 if is_p1_fav else p2
+    dog_name = p2 if is_p1_fav else p1
+
+    for vb in value_bets:
+        m = vb.get("market", "")
+        sel = vb.get("selection", "")
+
+        # Scénario A : Match Long / Accrochage Outsider / Over
+        if (
+            "Over" in sel or "3 Sets" in sel or "Plus de" in sel or "+0.5 TB" in sel 
+            or (dog_name in sel and "+" in sel)
+            or (dog_name in sel and "Set 1" in m)
+            or (dog_name in sel and "Vainqueur Match" in m)
+        ):
+            vb["scenario"] = "OVER_DOG_RESISTANCE"
+            vb["scenario_label"] = f"Match serré / Accrochage de {dog_name}"
+        # Scénario B : Match Court / Dominance Favori / Under
+        elif (
+            "Under" in sel or "2 Sets" in sel or "0 TB" in sel or "NON" in sel
+            or (fav_name in sel and "-" in sel)
+            or (fav_name in sel and "Set 1" in m)
+            or (fav_name in sel and "Vainqueur Match" in m)
+        ):
+            vb["scenario"] = "UNDER_FAV_DOMINANCE"
+            vb["scenario_label"] = f"Match rapide / Dominance de {fav_name}"
+        else:
+            vb["scenario"] = "OTHER"
+            vb["scenario_label"] = "Scénario spécifique"
+
+    # Score de priorité : EV pondéré, Edge, probabilité et type de marché (marché continu > binaire)
+    def bet_priority_score(vb):
+        ev = vb.get("ev_pct", 0.0)
+        edge = vb.get("edge_pct", 0.0)
+        prob = vb.get("prob", 50.0)
+        m = vb.get("market", "")
+        market_bonus = 6.0 if "Total Jeux" in m else (5.0 if "Handicap" in m else (3.0 if "Vainqueur Match" in m else 0.0))
+        return (ev * 0.5) + (edge * 0.3) + (prob * 0.2) + market_bonus
+
+    sorted_vbs = sorted(value_bets, key=bet_priority_score, reverse=True)
+
+    recommended = []
+    masked = []
+    seen_scenarios = set()
+
+    for idx, vb in enumerate(sorted_vbs):
+        scen = vb["scenario"]
+        # Accepter 1 seul pari par grand scénario corrélé, et max 2 paris distincts au total
+        if scen not in seen_scenarios and len(recommended) < 2:
+            vb_copy = dict(vb)
+            vb_copy["is_primary_pick"] = (len(recommended) == 0)
+            vb_copy["pick_rank"] = len(recommended) + 1
+            recommended.append(vb_copy)
+            seen_scenarios.add(scen)
+        else:
+            vb_copy = dict(vb)
+            vb_copy["is_primary_pick"] = False
+            ref_rank = recommended[0].get("pick_rank", 1) if recommended else 1
+            vb_copy["masked_reason"] = f"Corrélation directe avec le Pick #{ref_rank} ({vb['scenario_label']})"
+            masked.append(vb_copy)
+
+    has_corr = len(masked) > 0
+
+    return {
+        "recommended_value_bets": recommended,
+        "correlated_masked_bets": masked,
+        "has_correlated_bets": has_corr,
+        "total_vb_count": len(value_bets),
+        "filter_note": f"{len(value_bets)} Value Bets détectés - Sélection du meilleur pari (Pick #1) pour éliminer le risque de corrélation multiple." if has_corr else f"{len(recommended)} Value Bet(s) recommandé(s)."
+    }
+
+
 def smart_resolve_name(name: str, known: List[str], state: Dict[str, Any]) -> str:
     """Résolution intelligente et robuste du nom du joueur."""
     if not name or not isinstance(name, str):
@@ -690,6 +781,9 @@ def predict_match(req: PredictionRequest):
     # Trier les value bets par espérance de gain (EV) décroissante
     detected_value_bets.sort(key=lambda x: x["ev_pct"], reverse=True)
 
+    # Filtrage intelligent anti-corrélation (Sélectionne max 1 à 2 meilleurs paris indépendants)
+    vb_analysis = filter_uncorrelated_value_bets(detected_value_bets, p1, p2, p_p1)
+
     # Collecter l'ensemble des cotes saisies analysées (avec EV et statut)
     all_evaluated = [vb_p1, vb_p2, vb_set1_p1, vb_set1_p2, vb_over, vb_under, vb_h1, vb_h2, vb_sets_over, vb_sets_under, vb_tb_yes, vb_tb_no]
     scanned_markets = [item for item in all_evaluated if item is not None]
@@ -755,6 +849,10 @@ def predict_match(req: PredictionRequest):
             }
         },
         "all_value_bets": detected_value_bets,
+        "recommended_value_bets": vb_analysis["recommended_value_bets"],
+        "correlated_masked_bets": vb_analysis["correlated_masked_bets"],
+        "has_correlated_bets": vb_analysis["has_correlated_bets"],
+        "filter_note": vb_analysis["filter_note"],
         "scanned_markets": scanned_markets,
         "elo": {
             "global_p1": round(state["elo"].get(p1, 1500)),
