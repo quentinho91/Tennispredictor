@@ -1816,16 +1816,18 @@ function openMatchDetailModal(matchId) {
       `;
     }
 
-    const p1 = match.p1;
-    const p2 = match.p2;
-    const p1Short = p1.split(' ').pop();
-    const p2Short = p2.split(' ').pop();
+    const p1 = match.p1 || match.p1_raw || 'Joueur 1';
+    const p2 = match.p2 || match.p2_raw || 'Joueur 2';
+    const p1Short = (typeof p1 === 'string' && p1.includes(' ')) ? p1.split(' ').pop() : p1;
+    const p2Short = (typeof p2 === 'string' && p2.includes(' ')) ? p2.split(' ').pop() : p2;
 
     const rep = match.full_report || {};
     const pred = match.prediction || { proba_p1: 0.50, proba_p2: 0.50, fair_odds_p1: 2.0, fair_odds_p2: 2.0, match_confidence: 75, confidence_level: 'Moyenne' };
-    const proba1 = (pred.proba_p1 * 100).toFixed(1);
-    const proba2 = (pred.proba_p2 * 100).toFixed(1);
-    const isP1Fav = pred.proba_p1 >= pred.proba_p2;
+    const p1ProbVal = (pred.proba_p1 !== undefined) ? parseFloat(pred.proba_p1) : 0.5;
+    const p2ProbVal = (pred.proba_p2 !== undefined) ? parseFloat(pred.proba_p2) : 0.5;
+    const proba1 = (p1ProbVal * 100).toFixed(1);
+    const proba2 = (p2ProbVal * 100).toFixed(1);
+    const isP1Fav = p1ProbVal >= p2ProbVal;
 
     const mkts = rep.markets || {};
     const winnerM = mkts.winner || {};
@@ -1843,15 +1845,18 @@ function openMatchDetailModal(matchId) {
 
     // Value bets cards
     let vbsHtml = '';
-    if (match.all_value_bets && match.all_value_bets.length > 0) {
+    const vbsList = match.all_value_bets || (rep.all_value_bets || []);
+    if (vbsList && vbsList.length > 0) {
       let cardsHtml = '';
-      match.all_value_bets.forEach((vb, idx) => {
+      vbsList.forEach((vb, idx) => {
         const conf = vb.confidence || { score: 85, label: 'Très haute', level: 'high', icon: '🔥' };
         const kellyQuarter = vb.kelly_quarter_pct || vb.kelly_pct || 1.5;
         const bEl = document.getElementById('bankroll-input');
         const bankrollTotal = (bEl && parseFloat(bEl.value)) ? parseFloat(bEl.value) : 1000.0;
         const betAmountEuro = ((bankrollTotal * kellyQuarter) / 100).toFixed(0);
-        const estGainEuro = (parseFloat(betAmountEuro) * (vb.offered_odds - 1.0)).toFixed(0);
+        const offeredOddsNum = parseFloat(vb.offered_odds) || 2.0;
+        const fairOddsNum = parseFloat(vb.fair_odds) || 2.0;
+        const estGainEuro = (parseFloat(betAmountEuro) * (offeredOddsNum - 1.0)).toFixed(0);
         const evVal = (vb.ev_pct !== undefined) ? vb.ev_pct : ((vb.ev_percent !== undefined) ? vb.ev_percent : 0);
         const edgeVal = (vb.edge_pct !== undefined) ? vb.edge_pct : ((vb.edge_percent !== undefined) ? vb.edge_percent : 0);
 
@@ -1862,16 +1867,16 @@ function openMatchDetailModal(matchId) {
               <span class="vb-conf-pill ${conf.level}" style="font-size: 11.5px; font-weight: 700; color: #fbbf24;">${conf.icon} Confiance : ${conf.score}% (${conf.label})</span>
             </div>
             <div class="vb-selection-title" style="font-size: 16px; font-weight: 900; color: #ffffff; margin-bottom: 10px;">
-              🎯 ${escapeHtml(vb.selection)}
+              🎯 ${escapeHtml(vb.selection || '')}
             </div>
             <div class="vb-details-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px;">
               <div class="vb-stat-box" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; text-align: center;">
                 <span class="vb-stat-label" style="font-size: 10.5px; color: #94a3b8; display: block;">Cote Bookmaker</span>
-                <span class="vb-stat-val odd" style="font-size: 15px; font-weight: 900; color: #38bdf8;">@ ${vb.offered_odds.toFixed(2)}</span>
+                <span class="vb-stat-val odd" style="font-size: 15px; font-weight: 900; color: #38bdf8;">@ ${offeredOddsNum.toFixed(2)}</span>
               </div>
               <div class="vb-stat-box" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; text-align: center;">
                 <span class="vb-stat-label" style="font-size: 10.5px; color: #94a3b8; display: block;">Cote Équitable IA</span>
-                <span class="vb-stat-val" style="font-size: 15px; font-weight: 800; color: #f1f5f9;">@ ${vb.fair_odds.toFixed(2)}</span>
+                <span class="vb-stat-val" style="font-size: 15px; font-weight: 800; color: #f1f5f9;">@ ${fairOddsNum.toFixed(2)}</span>
               </div>
               <div class="vb-stat-box" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; text-align: center;">
                 <span class="vb-stat-label" style="font-size: 10.5px; color: #94a3b8; display: block;">Espérance (EV)</span>
@@ -1906,23 +1911,23 @@ function openMatchDetailModal(matchId) {
     }
 
     // Odds string fallbacks
-    const odds1Str = match.odds1 ? match.odds1.toFixed(2) : '-';
-    const odds2Str = match.odds2 ? match.odds2.toFixed(2) : '-';
+    const odds1Str = (match.odds1 && !isNaN(parseFloat(match.odds1))) ? parseFloat(match.odds1).toFixed(2) : '-';
+    const odds2Str = (match.odds2 && !isNaN(parseFloat(match.odds2))) ? parseFloat(match.odds2).toFixed(2) : '-';
     const totLine = match.total_line || (totalM.line || 22.5);
-    const oddsOvStr = match.odds_over ? match.odds_over.toFixed(2) : '-';
-    const oddsUnStr = match.odds_under ? match.odds_under.toFixed(2) : '-';
+    const oddsOvStr = (match.odds_over && !isNaN(parseFloat(match.odds_over))) ? parseFloat(match.odds_over).toFixed(2) : '-';
+    const oddsUnStr = (match.odds_under && !isNaN(parseFloat(match.odds_under))) ? parseFloat(match.odds_under).toFixed(2) : '-';
     const hLine = match.handicap_line || (hcapM.line || 3.5);
-    const oddsH1Str = match.odds_h1 ? match.odds_h1.toFixed(2) : '-';
-    const oddsH2Str = match.odds_h2 ? match.odds_h2.toFixed(2) : '-';
+    const oddsH1Str = (match.odds_h1 && !isNaN(parseFloat(match.odds_h1))) ? parseFloat(match.odds_h1).toFixed(2) : '-';
+    const oddsH2Str = (match.odds_h2 && !isNaN(parseFloat(match.odds_h2))) ? parseFloat(match.odds_h2).toFixed(2) : '-';
 
     // Markov computed fair odds
-    const fairSet1P1 = set1M.fair_odds_p1 ? `@ ${set1M.fair_odds_p1.toFixed(2)}` : `@ ${(1.0 / (pred.proba_p1 || 0.5)).toFixed(2)}`;
-    const fairSet1P2 = set1M.fair_odds_p2 ? `@ ${set1M.fair_odds_p2.toFixed(2)}` : `@ ${(1.0 / (pred.proba_p2 || 0.5)).toFixed(2)}`;
-    const fairSets2 = setsCountM.fair_odds_2sets ? `@ ${setsCountM.fair_odds_2sets.toFixed(2)}` : '@ 1.65';
-    const fairSets3 = setsCountM.fair_odds_3sets ? `@ ${setsCountM.fair_odds_3sets.toFixed(2)}` : '@ 2.45';
+    const fairSet1P1 = set1M.fair_odds_p1 ? `@ ${parseFloat(set1M.fair_odds_p1).toFixed(2)}` : `@ ${(1.0 / (p1ProbVal || 0.5)).toFixed(2)}`;
+    const fairSet1P2 = set1M.fair_odds_p2 ? `@ ${parseFloat(set1M.fair_odds_p2).toFixed(2)}` : `@ ${(1.0 / (p2ProbVal || 0.5)).toFixed(2)}`;
+    const fairSets2 = setsCountM.fair_odds_2sets ? `@ ${parseFloat(setsCountM.fair_odds_2sets).toFixed(2)}` : '@ 1.65';
+    const fairSets3 = setsCountM.fair_odds_3sets ? `@ ${parseFloat(setsCountM.fair_odds_3sets).toFixed(2)}` : '@ 2.45';
     const probaTbYes = tbM.proba_yes !== undefined ? `${tbM.proba_yes}%` : '38%';
-    const fairTbYes = tbM.fair_odds_yes ? `@ ${tbM.fair_odds_yes.toFixed(2)}` : '@ 2.60';
-    const fairTbNo = tbM.fair_odds_no ? `@ ${tbM.fair_odds_no.toFixed(2)}` : '@ 1.62';
+    const fairTbYes = tbM.fair_odds_yes ? `@ ${parseFloat(tbM.fair_odds_yes).toFixed(2)}` : '@ 2.60';
+    const fairTbNo = tbM.fair_odds_no ? `@ ${parseFloat(tbM.fair_odds_no).toFixed(2)}` : '@ 1.62';
 
     // Ranks / Elos
     const r1 = stats.rank_p1 ? `#${stats.rank_p1}` : '-';
@@ -2533,12 +2538,12 @@ function openMatchDetailModal(matchId) {
                 <td><b style="color:#34d399;">Notre modèle IA</b></td>
                 <td style="color:#fbbf24; font-weight:800;">${proba1}%</td>
                 <td style="color:#34d399; font-weight:800;">${proba2}%</td>
-                <td><span class="vb-stat-val ev" style="font-size:12px; font-weight:800;">EV : ${match.all_value_bets && match.all_value_bets.length > 0 ? `+${match.all_value_bets[0].ev_pct}%` : '+0.0%'}</span></td>
+                <td><span class="vb-stat-val ev" style="font-size:12px; font-weight:800;">EV : ${vbsList && vbsList.length > 0 ? `+${vbsList[0].ev_pct || 0}%` : '+0.0%'}</span></td>
               </tr>
             </tbody>
           </table>
           <div style="margin-top:14px; padding:10px; background:rgba(255,255,255,0.02); border-radius:6px; font-size:12.5px; color:#e2e8f0;">
-            ⚖️ <b>Recommandation IA</b> : ${match.all_value_bets && match.all_value_bets.length > 0 ? `Opportunité rentable détectée sur <b>${escapeHtml(match.all_value_bets[0].selection)}</b> (@ ${match.all_value_bets[0].offered_odds.toFixed(2)}) avec une espérance de gain de +${match.all_value_bets[0].ev_pct}%.` : `Les cotes proposées par Betclic reflètent fidèlement les probabilités réelles du match. Aucun avantage statistique marquant.`}
+            ⚖️ <b>Recommandation IA</b> : ${vbsList && vbsList.length > 0 ? `Opportunité rentable détectée sur <b>${escapeHtml(vbsList[0].selection || '')}</b> (@ ${(parseFloat(vbsList[0].offered_odds) || 2.0).toFixed(2)}) avec une espérance de gain de +${vbsList[0].ev_pct || 0}%.` : `Les cotes proposées par Betclic reflètent fidèlement les probabilités réelles du match. Aucun avantage statistique marquant.`}
           </div>
         </div>
       </div>
@@ -2556,8 +2561,7 @@ function openMatchDetailModal(matchId) {
 
     modal.style.display = 'flex';
   } catch (err) {
-    console.error('Erreur lors de l ouverture de la modale de match:', err);
-    transferMatchToManual(matchId);
+    console.error("Erreur lors de l'ouverture de la modale de match:", err);
   }
 }
 window.openMatchDetailModal = openMatchDetailModal;
