@@ -3,10 +3,11 @@ odds_scanner.py - Scanner Quotidien des Cotes Tennis (Bet365 / The Odds API)
 
 Fonctionnalités :
 1. Récupère les matchs du jour et les cotes en direct (Bet365, Pinnacle, Unibet, etc.).
-2. Résout automatiquement les noms des joueurs, les tournois, les surfaces et les formats (Best-of-3 / Best-of-5).
-3. Utilise un cache intelligent en mémoire (TTL: 30 min) pour respecter le quota gratuit (500 req/mois).
-4. Analyse instantanément chaque match avec le modèle XGBoost + Markov pour détecter les Value Bets.
-5. Mode Démo intégré si aucune clé API n'est fournie.
+2. Supporte la vue combinée Hommes (ATP) & Femmes (WTA).
+3. Résout automatiquement les noms des joueurs, les tournois, les surfaces et les formats (Best-of-3 / Best-of-5).
+4. Utilise un cache intelligent en mémoire (TTL: 30 min) pour respecter le quota gratuit (500 req/mois).
+5. Analyse instantanément chaque match avec le modèle XGBoost + Markov pour détecter les Value Bets.
+6. Mode Démo intégré si aucune clé API n'est fournie.
 """
 
 import os
@@ -72,7 +73,6 @@ def resolve_tournament_context(sport_title: str, circuit: str = "atp") -> Dict[s
         "round": "R32"
     }
 
-    # Détection par motifs connus
     for pattern, meta in KNOWN_TOURNAMENT_PATTERNS.items():
         if pattern in title_lower:
             context["surface"] = meta["surface"]
@@ -84,7 +84,6 @@ def resolve_tournament_context(sport_title: str, circuit: str = "atp") -> Dict[s
                 context["best_of"] = 3
             break
 
-    # Mots-clés surfaces si non trouvé
     if "clay" in title_lower or "terre" in title_lower:
         context["surface"] = "Clay"
     elif "grass" in title_lower or "gazon" in title_lower:
@@ -101,20 +100,19 @@ def fetch_the_odds_api_sports(api_key: str) -> List[Dict[str, Any]]:
     req = urllib.request.Request(url, headers={"User-Agent": "TennisPredictor/1.0"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode("utf-8"))
-        # Filtrer uniquement les tournois de tennis
         return [s for s in data if s.get("key", "").startswith("tennis_") and s.get("active", False)]
 
 
 def fetch_odds_for_sport(
     sport_key: str,
     api_key: str,
-    bookmakers: str = "bet365,pinnacle,unibet,unibet_eu,betclic_fr,winamax,betmgm"
+    bookmakers: str = "bet365,pinnacle,unibet,unibet_eu,unibet_fr,betclic_fr,betclic,winamax,williamhill"
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Récupère les cotes détaillées d'un tournoi avec les marchés h2h, totals et spreads."""
     base_url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
     params = {
         "apiKey": api_key,
-        "regions": "eu,us,uk",
+        "regions": "eu,us,uk,au",
         "markets": "h2h,totals,spreads",
         "oddsFormat": "decimal",
         "bookmakers": bookmakers
@@ -145,7 +143,6 @@ def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "bet365") 
     if not bookmakers_list:
         return {}
 
-    # Recherche du bookmaker cible
     selected_bm = None
     target_clean = target_bookmaker.lower()
     for bm in bookmakers_list:
@@ -154,9 +151,8 @@ def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "bet365") 
             selected_bm = bm
             break
 
-    # Fallbacks si le bookmaker cible n'est pas présent sur ce match
     if not selected_bm:
-        priority_fallbacks = ["bet365", "pinnacle", "unibet_eu", "unibet", "betclic_fr", "winamax", "betonlineag", "draftkings"]
+        priority_fallbacks = ["bet365", "pinnacle", "unibet_eu", "unibet", "betclic_fr", "winamax", "williamhill", "betonlineag"]
         for fb in priority_fallbacks:
             for bm in bookmakers_list:
                 if fb in bm.get("key", "").lower():
@@ -224,178 +220,165 @@ def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "bet365") 
     return extracted
 
 
-def get_demo_matches(circuit: str = "atp") -> List[Dict[str, Any]]:
-    """Génère des matchs de démonstration réalistes avec cotes Bet365 quand aucune clé API n'est fournie."""
-    if circuit.lower() == "atp":
-        return [
-            {
-                "id": "demo_atp_1",
-                "sport_title": "ATP Cincinnati Masters",
-                "tournament": "Cincinnati Masters",
-                "surface": "Hard",
-                "level": "M",
-                "best_of": 3,
-                "indoor": 0,
-                "commence_time": "2026-08-22T15:30:00Z",
-                "time_display": "17:30",
-                "p1_raw": "Carlos Alcaraz",
-                "p2_raw": "Jannik Sinner",
-                "p1": "Carlos Alcaraz",
-                "p2": "Jannik Sinner",
-                "odds1": 2.10,
-                "odds2": 1.75,
-                "total_line": 22.5,
-                "odds_over": 1.85,
-                "odds_under": 1.95,
-                "handicap_line": 1.5,
-                "odds_h1": 1.90,
-                "odds_h2": 1.90,
-                "bookmaker": "Bet365"
-            },
-            {
-                "id": "demo_atp_2",
-                "sport_title": "ATP Winston-Salem Open",
-                "tournament": "Winston-Salem",
-                "surface": "Hard",
-                "level": "A",
-                "best_of": 3,
-                "indoor": 0,
-                "commence_time": "2026-08-22T17:00:00Z",
-                "time_display": "19:00",
-                "p1_raw": "Arthur Fils",
-                "p2_raw": "Flavio Cobolli",
-                "p1": "Arthur Fils",
-                "p2": "Flavio Cobolli",
-                "odds1": 1.36,
-                "odds2": 3.20,
-                "total_line": 22.5,
-                "odds_over": 1.77,
-                "odds_under": 2.05,
-                "handicap_line": 3.5,
-                "odds_h1": 2.15,
-                "odds_h2": 1.73,
-                "bookmaker": "Bet365"
-            },
-            {
-                "id": "demo_atp_3",
-                "sport_title": "ATP Cincinnati Masters",
-                "tournament": "Cincinnati Masters",
-                "surface": "Hard",
-                "level": "M",
-                "best_of": 3,
-                "indoor": 0,
-                "commence_time": "2026-08-22T19:30:00Z",
-                "time_display": "21:30",
-                "p1_raw": "Alexander Zverev",
-                "p2_raw": "Daniil Medvedev",
-                "p1": "Alexander Zverev",
-                "p2": "Daniil Medvedev",
-                "odds1": 1.90,
-                "odds2": 1.90,
-                "total_line": 23.5,
-                "odds_over": 1.83,
-                "odds_under": 1.97,
-                "handicap_line": 1.5,
-                "odds_h1": 1.85,
-                "odds_h2": 1.95,
-                "bookmaker": "Bet365"
-            },
-            {
-                "id": "demo_atp_4",
-                "sport_title": "ATP Winston-Salem Open",
-                "tournament": "Winston-Salem",
-                "surface": "Hard",
-                "level": "A",
-                "best_of": 3,
-                "indoor": 0,
-                "commence_time": "2026-08-22T21:00:00Z",
-                "time_display": "23:00",
-                "p1_raw": "Alex De Minaur",
-                "p2_raw": "Holger Rune",
-                "p1": "Alex De Minaur",
-                "p2": "Holger Rune",
-                "odds1": 1.72,
-                "odds2": 2.15,
-                "total_line": 22.5,
-                "odds_over": 1.88,
-                "odds_under": 1.92,
-                "handicap_line": 2.5,
-                "odds_h1": 1.95,
-                "odds_h2": 1.85,
-                "bookmaker": "Bet365"
-            }
-        ]
+def get_demo_matches(circuit: str = "all") -> List[Dict[str, Any]]:
+    """Génère des matchs de démonstration réalistes combinant ATP et WTA avec cotes Bet365."""
+    atp_matches = [
+        {
+            "id": "demo_atp_1",
+            "circuit": "atp",
+            "sport_title": "ATP Cincinnati Masters",
+            "tournament": "Cincinnati Masters",
+            "surface": "Hard",
+            "level": "M",
+            "best_of": 3,
+            "indoor": 0,
+            "commence_time": "2026-08-22T15:30:00Z",
+            "time_display": "17:30",
+            "p1_raw": "Carlos Alcaraz",
+            "p2_raw": "Jannik Sinner",
+            "p1": "Carlos Alcaraz",
+            "p2": "Jannik Sinner",
+            "odds1": 2.10,
+            "odds2": 1.75,
+            "total_line": 22.5,
+            "odds_over": 1.85,
+            "odds_under": 1.95,
+            "handicap_line": 1.5,
+            "odds_h1": 1.90,
+            "odds_h2": 1.90,
+            "bookmaker": "Bet365"
+        },
+        {
+            "id": "demo_atp_2",
+            "circuit": "atp",
+            "sport_title": "ATP Winston-Salem Open",
+            "tournament": "Winston-Salem",
+            "surface": "Hard",
+            "level": "A",
+            "best_of": 3,
+            "indoor": 0,
+            "commence_time": "2026-08-22T17:00:00Z",
+            "time_display": "19:00",
+            "p1_raw": "Arthur Fils",
+            "p2_raw": "Flavio Cobolli",
+            "p1": "Arthur Fils",
+            "p2": "Flavio Cobolli",
+            "odds1": 1.36,
+            "odds2": 3.20,
+            "total_line": 22.5,
+            "odds_over": 1.77,
+            "odds_under": 2.05,
+            "handicap_line": 3.5,
+            "odds_h1": 2.15,
+            "odds_h2": 1.73,
+            "bookmaker": "Bet365"
+        },
+        {
+            "id": "demo_atp_3",
+            "circuit": "atp",
+            "sport_title": "ATP Cincinnati Masters",
+            "tournament": "Cincinnati Masters",
+            "surface": "Hard",
+            "level": "M",
+            "best_of": 3,
+            "indoor": 0,
+            "commence_time": "2026-08-22T19:30:00Z",
+            "time_display": "21:30",
+            "p1_raw": "Alexander Zverev",
+            "p2_raw": "Daniil Medvedev",
+            "p1": "Alexander Zverev",
+            "p2": "Daniil Medvedev",
+            "odds1": 1.90,
+            "odds2": 1.90,
+            "total_line": 23.5,
+            "odds_over": 1.83,
+            "odds_under": 1.97,
+            "handicap_line": 1.5,
+            "odds_h1": 1.85,
+            "odds_h2": 1.95,
+            "bookmaker": "Bet365"
+        }
+    ]
+
+    wta_matches = [
+        {
+            "id": "demo_wta_1",
+            "circuit": "wta",
+            "sport_title": "WTA Cincinnati Open",
+            "tournament": "Cincinnati Open",
+            "surface": "Hard",
+            "level": "M",
+            "best_of": 3,
+            "indoor": 0,
+            "commence_time": "2026-08-22T16:00:00Z",
+            "time_display": "18:00",
+            "p1_raw": "Aryna Sabalenka",
+            "p2_raw": "Iga Swiatek",
+            "p1": "Aryna Sabalenka",
+            "p2": "Iga Swiatek",
+            "odds1": 2.05,
+            "odds2": 1.80,
+            "total_line": 21.5,
+            "odds_over": 1.85,
+            "odds_under": 1.95,
+            "handicap_line": 2.5,
+            "odds_h1": 1.85,
+            "odds_h2": 1.95,
+            "bookmaker": "Bet365"
+        },
+        {
+            "id": "demo_wta_2",
+            "circuit": "wta",
+            "sport_title": "WTA Cleveland Open",
+            "tournament": "Cleveland",
+            "surface": "Hard",
+            "level": "A",
+            "best_of": 3,
+            "indoor": 0,
+            "commence_time": "2026-08-22T18:00:00Z",
+            "time_display": "20:00",
+            "p1_raw": "Coco Gauff",
+            "p2_raw": "Elena Rybakina",
+            "p1": "Coco Gauff",
+            "p2": "Elena Rybakina",
+            "odds1": 1.85,
+            "odds2": 1.95,
+            "total_line": 21.5,
+            "odds_over": 1.80,
+            "odds_under": 2.00,
+            "handicap_line": 1.5,
+            "odds_h1": 1.90,
+            "odds_h2": 1.90,
+            "bookmaker": "Bet365"
+        }
+    ]
+
+    c_clean = circuit.lower()
+    if c_clean == "atp":
+        return atp_matches
+    elif c_clean == "wta":
+        return wta_matches
     else:
-        # WTA Demo Matches
-        return [
-            {
-                "id": "demo_wta_1",
-                "sport_title": "WTA Cincinnati Open",
-                "tournament": "Cincinnati Open",
-                "surface": "Hard",
-                "level": "M",
-                "best_of": 3,
-                "indoor": 0,
-                "commence_time": "2026-08-22T16:00:00Z",
-                "time_display": "18:00",
-                "p1_raw": "Aryna Sabalenka",
-                "p2_raw": "Iga Swiatek",
-                "p1": "Aryna Sabalenka",
-                "p2": "Iga Swiatek",
-                "odds1": 2.05,
-                "odds2": 1.80,
-                "total_line": 21.5,
-                "odds_over": 1.85,
-                "odds_under": 1.95,
-                "handicap_line": 2.5,
-                "odds_h1": 1.85,
-                "odds_h2": 1.95,
-                "bookmaker": "Bet365"
-            },
-            {
-                "id": "demo_wta_2",
-                "sport_title": "WTA Cleveland Open",
-                "tournament": "Cleveland",
-                "surface": "Hard",
-                "level": "A",
-                "best_of": 3,
-                "indoor": 0,
-                "commence_time": "2026-08-22T18:00:00Z",
-                "time_display": "20:00",
-                "p1_raw": "Coco Gauff",
-                "p2_raw": "Elena Rybakina",
-                "p1": "Coco Gauff",
-                "p2": "Elena Rybakina",
-                "odds1": 1.85,
-                "odds2": 1.95,
-                "total_line": 21.5,
-                "odds_over": 1.80,
-                "odds_under": 2.00,
-                "handicap_line": 1.5,
-                "odds_h1": 1.90,
-                "odds_h2": 1.90,
-                "bookmaker": "Bet365"
-            }
-        ]
+        # Combined
+        return atp_matches + wta_matches
 
 
 def scan_daily_matches(
-    circuit: str = "atp",
+    circuit: str = "all",
     bookmaker: str = "bet365",
     api_key: Optional[str] = None,
     force_refresh: bool = False,
     predict_func: Optional[Any] = None,
-    known_players: Optional[List[str]] = None,
-    player_state: Optional[Dict[str, Any]] = None,
+    get_resources_func: Optional[Any] = None,
     smart_resolve_func: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
-    Exécute le scan quotidien des matchs :
+    Exécute le scan quotidien des matchs (ATP + WTA combinés ou séparés) :
     1. Vérifie le cache en mémoire (TTL: 30 min).
-    2. Si expiré ou forcé : appelle The Odds API (ou génère le flux démo si pas de clé).
-    3. Résout les noms et contextes.
-    4. Lance la prédiction par match et détecte les Value Bets.
-    5. Met en cache et retourne les résultats structurés.
+    2. Appelle The Odds API (ou flux démo si pas de clé).
+    3. Résout automatiquement les contextes tournois/surfaces/formats.
+    4. Exécute l'analyse prédictive ML + Markov pour chaque match.
+    5. Retourne les matchs triés et enrichis pour la vue dashboard et popup modal.
     """
     circuit_key = circuit.lower()
     now_ts = time.time()
@@ -410,7 +393,6 @@ def scan_daily_matches(
             cached_data["cache_age_seconds"] = int(now_ts - cached_entry["timestamp"])
             return cached_data
 
-    # Clé API : paramètre ou variable d'environnement ODDS_API_KEY
     resolved_api_key = api_key or os.getenv("ODDS_API_KEY") or os.getenv("THE_ODDS_API_KEY")
     is_demo_mode = not bool(resolved_api_key and len(resolved_api_key.strip()) > 8)
 
@@ -423,20 +405,22 @@ def scan_daily_matches(
     else:
         try:
             active_sports = fetch_the_odds_api_sports(resolved_api_key)
-            target_sport_keys = [
-                s["key"] for s in active_sports
-                if (circuit_key == "atp" and "atp" in s["key"]) or
-                   (circuit_key == "wta" and ("wta" in s["key"] or "women" in s.get("title", "").lower()))
-            ]
 
-            # Si aucun tournoi spécifique n'est trouvé, prendre les sports de tennis généraux
-            if not target_sport_keys:
+            if circuit_key == "atp":
+                target_sport_keys = [s["key"] for s in active_sports if "atp" in s["key"]]
+            elif circuit_key == "wta":
+                target_sport_keys = [s["key"] for s in active_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())]
+            else:
+                # All: ATP + WTA
                 target_sport_keys = [s["key"] for s in active_sports if s.get("key", "").startswith("tennis_")]
 
-            # Récupérer les cotes pour les 2 tournois principaux maximum par scan pour économiser le quota
-            for s_key in target_sport_keys[:2]:
-                events, q_info = fetch_odds_for_sport(s_key, resolved_api_key, bookmakers=f"{bookmaker},pinnacle,unibet_eu,winamax")
-                quota_info = q_info
+            # Récupérer les tournois actifs
+            for s_key in target_sport_keys[:4]:
+                m_circuit = "wta" if ("wta" in s_key or "women" in s_key) else "atp"
+                events, q_info = fetch_odds_for_sport(s_key, resolved_api_key)
+                if q_info.get("requests_remaining"):
+                    quota_info = q_info
+
                 for ev in events:
                     odds = extract_match_odds(ev, target_bookmaker=bookmaker)
                     if not odds.get("odds1") or not odds.get("odds2"):
@@ -452,10 +436,11 @@ def scan_daily_matches(
                             pass
 
                     sport_title = ev.get("sport_title", "Tournoi Tennis")
-                    context = resolve_tournament_context(sport_title, circuit=circuit_key)
+                    context = resolve_tournament_context(sport_title, circuit=m_circuit)
 
                     raw_matches.append({
                         "id": ev.get("id", f"match_{len(raw_matches)}"),
+                        "circuit": m_circuit,
                         "sport_title": sport_title,
                         "tournament": context["tournament"],
                         "surface": context["surface"],
@@ -479,11 +464,10 @@ def scan_daily_matches(
                         "bookmaker": odds.get("bookmaker_name", bookmaker.capitalize())
                     })
         except Exception as e:
-            logger.error(f"Erreur lors de l'appel The Odds API: {e} -> Fallback sur mode Démo")
+            logger.error(f"Erreur appel The Odds API: {e} -> Fallback sur mode Démo")
             raw_matches = get_demo_matches(circuit_key)
             is_demo_mode = True
 
-    # Si aucun match trouvé en live, fallback gracieux sur les matchs de démo
     if not raw_matches:
         raw_matches = get_demo_matches(circuit_key)
         is_demo_mode = True
@@ -491,8 +475,26 @@ def scan_daily_matches(
     # 3. Résolution des noms et analyse prédictive des matchs
     analyzed_matches = []
     total_vbs_found = 0
+    atp_count = 0
+    wta_count = 0
+
+    # Cache des ressources par circuit pour éviter de recharger plusieurs fois
+    circuit_resources = {}
 
     for m in raw_matches:
+        m_circuit = m.get("circuit", "atp").lower()
+        if m_circuit == "atp":
+            atp_count += 1
+        else:
+            wta_count += 1
+
+        if m_circuit not in circuit_resources and get_resources_func:
+            circuit_resources[m_circuit] = get_resources_func(m_circuit)
+
+        res = circuit_resources.get(m_circuit, {})
+        known_players = res.get("players", [])
+        player_state = res.get("state", {})
+
         p1_resolved = m["p1_raw"]
         p2_resolved = m["p2_raw"]
 
@@ -502,6 +504,7 @@ def scan_daily_matches(
 
         m_item = {
             "id": m.get("id"),
+            "circuit": m_circuit,
             "sport_title": m.get("sport_title"),
             "tournament": m.get("tournament"),
             "surface": m.get("surface"),
@@ -524,22 +527,22 @@ def scan_daily_matches(
             "odds_h1": m.get("odds_h1"),
             "odds_h2": m.get("odds_h2"),
             "prediction": None,
+            "full_report": None,
             "has_value_bet": False,
             "top_value_bet": None,
             "all_value_bets": []
         }
 
-        # Exécuter la prédiction complète si predict_func est fourni
+        # Exécuter la prédiction complète
         if predict_func:
             try:
-                from pydantic import BaseModel
                 class DummyReq:
                     def __init__(self, **kwargs):
                         for k, v in kwargs.items():
                             setattr(self, k, v)
 
                 req_obj = DummyReq(
-                    circuit=circuit_key,
+                    circuit=m_circuit,
                     p1=p1_resolved,
                     p2=p2_resolved,
                     surface=m.get("surface", "Hard"),
@@ -574,6 +577,8 @@ def scan_daily_matches(
                     "match_confidence": pred_res.get("confidence", {}).get("score", 75),
                     "confidence_level": pred_res.get("confidence", {}).get("level", "Moyenne"),
                 }
+                # Garder le rapport complet pour affichage instantané dans la popup modale
+                m_item["full_report"] = pred_res
 
                 rec_vbs = pred_res.get("recommended_value_bets", [])
                 m_item["all_value_bets"] = rec_vbs
@@ -591,19 +596,20 @@ def scan_daily_matches(
 
     response_payload = {
         "success": True,
-        "circuit": circuit.upper(),
+        "circuit": circuit_key,
         "bookmaker": bookmaker,
         "is_demo_mode": is_demo_mode,
         "cached": False,
         "cache_ttl_minutes": int(CACHE_TTL_SECONDS / 60),
         "last_update": last_update_str,
         "total_matches": len(analyzed_matches),
+        "atp_count": atp_count,
+        "wta_count": wta_count,
         "value_bets_count": total_vbs_found,
         "quota_info": quota_info,
         "matches": analyzed_matches
     }
 
-    # Sauvegarder dans le cache en mémoire
     SCANNER_CACHE[circuit_key] = {
         "timestamp": now_ts,
         "data": response_payload,

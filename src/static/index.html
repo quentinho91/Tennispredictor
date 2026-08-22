@@ -45,79 +45,78 @@
       <div id="update-status-msg" class="update-status-msg"></div>
     </header>
 
-    <!-- Daily Odds & Value Bets Scanner (Bet365 / The Odds API) -->
-    <section class="card scanner-card" id="scanner-section">
-      <div class="scanner-header">
-        <div class="scanner-title-wrap">
-          <div class="card-title" style="margin-bottom: 2px;">
-            <span>📅</span> Matchs du Jour & Scanner Value Bets
+    <!-- Main Navigation Tabs -->
+    <nav class="main-tabs-nav">
+      <button type="button" class="tab-nav-btn active" id="tab-btn-scanner" onclick="switchPageTab('scanner')">
+        <span class="tab-icon">📅</span> Matchs du Jour &amp; Scanner
+        <span class="tab-badge" id="tab-scanner-count">0</span>
+      </button>
+      <button type="button" class="tab-nav-btn" id="tab-btn-manual" onclick="switchPageTab('manual')">
+        <span class="tab-icon">⚔️</span> Analyse Manuelle &amp; Personnalisée
+      </button>
+    </nav>
+
+    <!-- ============================================================
+         PAGE 1 : SCANNER DES MATCHS DU JOUR (ATP + WTA)
+         ============================================================ -->
+    <div id="page-scanner" class="page-view active">
+      <section class="card scanner-card" id="scanner-section">
+        <div class="scanner-header">
+          <div class="scanner-title-wrap">
+            <div class="card-title" style="margin-bottom: 2px;">
+              <span>📅</span> Programme du Jour &amp; Value Bets
+            </div>
+            <div class="scanner-subtitle">
+              Cotes réelles <span class="bm-badge">Bet365</span> • Hommes &amp; Femmes en direct
+            </div>
           </div>
-          <div class="scanner-subtitle">
-            Cotes en direct <span class="bm-badge">Bet365</span> & détection automatique des opportunités de value
-          </div>
-        </div>
 
-        <div class="scanner-controls">
-          <div class="scanner-filters">
-            <button type="button" class="filter-btn active" data-filter="all" id="btn-filter-all">
-              Tous les matchs (<span id="count-all-matches">0</span>)
-            </button>
-            <button type="button" class="filter-btn highlight" data-filter="vb" id="btn-filter-vb">
-              🎯 Value Bets (<span id="count-vb-matches">0</span>)
-            </button>
-          </div>
+          <div class="scanner-controls">
+            <div class="scanner-filters">
+              <button type="button" class="filter-btn active" data-filter="all" id="btn-filter-all">
+                Tous (<span id="count-all-matches">0</span>)
+              </button>
+              <button type="button" class="filter-btn" data-filter="atp" id="btn-filter-atp">
+                🏆 ATP (<span id="count-atp-matches">0</span>)
+              </button>
+              <button type="button" class="filter-btn" data-filter="wta" id="btn-filter-wta">
+                👑 WTA (<span id="count-wta-matches">0</span>)
+              </button>
+              <button type="button" class="filter-btn highlight" data-filter="vb" id="btn-filter-vb">
+                🎯 Value Bets (<span id="count-vb-matches">0</span>)
+              </button>
+            </div>
 
-          <div class="scanner-actions">
-            <button type="button" id="btn-refresh-scanner" class="scanner-action-btn" title="Actualiser le scan des cotes">
-              <span class="refresh-icon">🔄</span> <span id="scanner-time-text">Actualiser</span>
-            </button>
-            <button type="button" id="btn-scanner-settings" class="scanner-action-btn settings-btn" title="Configurer la clé The Odds API">
-              ⚙️ Clé API
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Demo / API Key status banner -->
-      <div id="scanner-mode-banner" class="scanner-mode-banner" style="display: none;"></div>
-
-      <!-- Loading State -->
-      <div id="scanner-loading" class="scanner-loading" style="display: none;">
-        <span class="scanner-spinner">⏳</span> Analyse des matchs et scan des cotes Bet365 en cours...
-      </div>
-
-      <!-- Match Cards Grid -->
-      <div id="scanner-grid" class="scanner-grid">
-        <!-- Injected via JavaScript -->
-      </div>
-    </section>
-
-    <!-- Modal Configuration Clé API The Odds API -->
-    <div id="api-key-modal" class="custom-modal" style="display: none;">
-      <div class="modal-backdrop" onclick="closeApiKeyModal()"></div>
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>⚙️ Configuration The Odds API (Gratuit)</h3>
-          <button type="button" class="modal-close" onclick="closeApiKeyModal()">✕</button>
-        </div>
-        <div class="modal-body">
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px;">
-            The Odds API offre <b>500 requêtes gratuites par mois</b> pour récupérer les cotes réelles de <b>Bet365</b>, Pinnacle, Unibet et Betclic. Grâce à notre système de cache (30 min), vous n'utiliserez que ~40 requêtes/mois.
-          </p>
-          <label class="input-label" for="odds-api-key-input">Votre clé API The Odds API :</label>
-          <input type="text" id="odds-api-key-input" class="text-input" placeholder="ex: 1a2b3c4d5e6f7g8h9i0j..." autocomplete="off">
-          <div style="margin-top: 8px; font-size: 11.5px; color: var(--text-dim);">
-            👉 Vous n'avez pas de clé ? Obtenez-la gratuitement en 30 secondes sur <a href="https://the-odds-api.com/#get-access" target="_blank" style="color: #60a5fa; text-decoration: underline;">the-odds-api.com</a>.
+            <div class="scanner-actions">
+              <button type="button" id="btn-refresh-scanner" class="scanner-action-btn" title="Actualiser le scan des cotes">
+                <span class="refresh-icon">🔄</span> <span id="scanner-time-text">Actualiser</span>
+              </button>
+              <button type="button" id="btn-scanner-settings" class="scanner-action-btn settings-btn" title="Configurer la clé The Odds API">
+                ⚙️ Clé API
+              </button>
+            </div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-cancel" onclick="closeApiKeyModal()">Annuler</button>
-          <button type="button" class="btn-save-key" onclick="saveApiKeyAndRefresh()">💾 Enregistrer et Scanner</button>
+
+        <!-- Demo / API Key status banner -->
+        <div id="scanner-mode-banner" class="scanner-mode-banner" style="display: none;"></div>
+
+        <!-- Loading State -->
+        <div id="scanner-loading" class="scanner-loading" style="display: none;">
+          <span class="scanner-spinner">⏳</span> Analyse des matchs et scan des cotes Bet365 en cours...
         </div>
-      </div>
+
+        <!-- Match Cards Grid -->
+        <div id="scanner-grid" class="scanner-grid">
+          <!-- Injected via JavaScript -->
+        </div>
+      </section>
     </div>
 
-    <!-- Main Match Form Card -->
+    <!-- ============================================================
+         PAGE 2 : ANALYSE MANUELLE & PERSONNALISÉE
+         ============================================================ -->
+    <div id="page-manual" class="page-view" style="display: none;">
     <main class="card">
       <div class="card-title">
         <span>⚔️</span> Affiche du Match
@@ -408,6 +407,52 @@
       <div id="history-roi-bar" class="history-roi-bar" style="display:none;"></div>
       <div id="history-list" class="history-list"></div>
     </section>
+    </div><!-- End #page-manual -->
+
+    <!-- ============================================================
+         MODAL 1 : RAPPORT DE MATCH DÉTAILLÉ (POP-UP EN GRAND)
+         ============================================================ -->
+    <div id="match-detail-modal" class="custom-modal modal-large" style="display: none;">
+      <div class="modal-backdrop" onclick="closeMatchDetailModal()"></div>
+      <div class="modal-content modal-content-large">
+        <div class="modal-header">
+          <div class="modal-match-meta" id="modal-match-meta">
+            <!-- Injected via JS: 🏆 Tournament • Surface • Best-of -->
+          </div>
+          <button type="button" class="modal-close" onclick="closeMatchDetailModal()">✕</button>
+        </div>
+        <div class="modal-body" id="modal-match-body">
+          <!-- Dynamic full analytical report injected via JavaScript -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         MODAL 2 : CONFIGURATION CLÉ THE ODDS API
+         ============================================================ -->
+    <div id="api-key-modal" class="custom-modal" style="display: none;">
+      <div class="modal-backdrop" onclick="closeApiKeyModal()"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>⚙️ Configuration The Odds API (Gratuit)</h3>
+          <button type="button" class="modal-close" onclick="closeApiKeyModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px;">
+            The Odds API offre <b>500 requêtes gratuites par mois</b> pour récupérer les cotes réelles de <b>Bet365</b>, Pinnacle, Unibet et Betclic. Grâce à notre système de cache (30 min), vous n'utiliserez que ~40 requêtes/mois.
+          </p>
+          <label class="input-label" for="odds-api-key-input">Votre clé API The Odds API :</label>
+          <input type="text" id="odds-api-key-input" class="text-input" placeholder="ex: 1a2b3c4d5e6f7g8h9i0j..." autocomplete="off">
+          <div style="margin-top: 8px; font-size: 11.5px; color: var(--text-dim);">
+            👉 Vous n'avez pas de clé ? Obtenez-la gratuitement en 30 secondes sur <a href="https://the-odds-api.com/#get-access" target="_blank" style="color: #60a5fa; text-decoration: underline;">the-odds-api.com</a>.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" onclick="closeApiKeyModal()">Annuler</button>
+          <button type="button" class="btn-save-key" onclick="saveApiKeyAndRefresh()">💾 Enregistrer et Scanner</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Footer -->
     <footer class="app-footer">

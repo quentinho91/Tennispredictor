@@ -1010,19 +1010,16 @@ from src.odds_scanner import scan_daily_matches
 
 @app.get("/api/scanner")
 def get_daily_scanner(
-    circuit: str = "atp",
+    circuit: str = "all",
     bookmaker: str = "bet365",
     api_key: Optional[str] = Query(None),
     refresh: bool = False
 ):
     """
-    Scan quotidien des matchs avec cotes Bet365 / The Odds API,
+    Scan quotidien des matchs avec cotes Bet365 / The Odds API (Hommes + Femmes combinés),
     résolution automatique des contextes et détection instantanée des Value Bets.
     """
     c_lower = circuit.lower()
-    res = get_cached_resources(c_lower)
-    state = res["state"]
-    known = res["players"]
 
     return scan_daily_matches(
         circuit=c_lower,
@@ -1030,8 +1027,7 @@ def get_daily_scanner(
         api_key=api_key,
         force_refresh=refresh,
         predict_func=predict_match,
-        known_players=known,
-        player_state=state,
+        get_resources_func=get_cached_resources,
         smart_resolve_func=smart_resolve_name
     )
 

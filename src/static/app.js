@@ -1511,35 +1511,55 @@ function setupHistory() {
 }
 
 // ============================================================
-// DAILY MATCHES SCANNER & BET365 LIVE ODDS
+// PAGE TABS NAVIGATION (SCANNER vs ANALYSE MANUELLE)
+// ============================================================
+function switchPageTab(tabName) {
+  const pageScanner = document.getElementById('page-scanner');
+  const pageManual = document.getElementById('page-manual');
+  const btnScanner = document.getElementById('tab-btn-scanner');
+  const btnManual = document.getElementById('tab-btn-manual');
+
+  if (tabName === 'scanner') {
+    if (pageScanner) pageScanner.style.display = 'block';
+    if (pageManual) pageManual.style.display = 'none';
+    if (btnScanner) btnScanner.classList.add('active');
+    if (btnManual) btnManual.classList.remove('active');
+  } else {
+    if (pageScanner) pageScanner.style.display = 'none';
+    if (pageManual) pageManual.style.display = 'block';
+    if (btnManual) btnManual.classList.add('active');
+    if (btnScanner) btnScanner.classList.remove('active');
+  }
+}
+window.switchPageTab = switchPageTab;
+
+// ============================================================
+// DAILY MATCHES SCANNER & BET365 LIVE ODDS (ATP + WTA)
 // ============================================================
 const ODDS_API_KEY_STORAGE = 'tennis_odds_api_key';
 let currentScannerMatches = [];
-let currentScannerFilter = 'all'; // 'all' | 'vb'
+let currentScannerFilter = 'all'; // 'all' | 'atp' | 'wta' | 'vb'
 
 function setupDailyScanner() {
   const btnFilterAll = document.getElementById('btn-filter-all');
+  const btnFilterAtp = document.getElementById('btn-filter-atp');
+  const btnFilterWta = document.getElementById('btn-filter-wta');
   const btnFilterVb = document.getElementById('btn-filter-vb');
   const btnRefresh = document.getElementById('btn-refresh-scanner');
   const btnSettings = document.getElementById('btn-scanner-settings');
 
-  if (btnFilterAll) {
-    btnFilterAll.addEventListener('click', () => {
-      currentScannerFilter = 'all';
-      btnFilterAll.classList.add('active');
-      if (btnFilterVb) btnFilterVb.classList.remove('active');
-      renderScannerGrid();
-    });
-  }
+  const filterBtns = [btnFilterAll, btnFilterAtp, btnFilterWta, btnFilterVb];
 
-  if (btnFilterVb) {
-    btnFilterVb.addEventListener('click', () => {
-      currentScannerFilter = 'vb';
-      btnFilterVb.classList.add('active');
-      if (btnFilterAll) btnFilterAll.classList.remove('active');
-      renderScannerGrid();
-    });
-  }
+  filterBtns.forEach(btn => {
+    if (btn) {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => { if (b) b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentScannerFilter = btn.dataset.filter || 'all';
+        renderScannerGrid();
+      });
+    }
+  });
 
   if (btnRefresh) {
     btnRefresh.addEventListener('click', () => {
@@ -1558,7 +1578,7 @@ function setupDailyScanner() {
     keyInput.value = savedKey;
   }
 
-  // Initial load
+  // Initial load (Combined ATP + WTA)
   loadDailyScanner(false);
 }
 
@@ -1597,7 +1617,10 @@ async function loadDailyScanner(forceRefresh = false) {
   const loading = document.getElementById('scanner-loading');
   const banner = document.getElementById('scanner-mode-banner');
   const countAll = document.getElementById('count-all-matches');
+  const countAtp = document.getElementById('count-atp-matches');
+  const countWta = document.getElementById('count-wta-matches');
   const countVb = document.getElementById('count-vb-matches');
+  const tabScannerCount = document.getElementById('tab-scanner-count');
   const timeText = document.getElementById('scanner-time-text');
 
   if (loading) loading.style.display = 'block';
@@ -1608,7 +1631,7 @@ async function loadDailyScanner(forceRefresh = false) {
   const refreshParam = forceRefresh ? '&refresh=true' : '';
 
   try {
-    const res = await fetch(`/api/scanner?circuit=${currentCircuit}&bookmaker=bet365${keyParam}${refreshParam}`);
+    const res = await fetch(`/api/scanner?circuit=all&bookmaker=bet365${keyParam}${refreshParam}`);
     if (!res.ok) {
       throw new Error(`Erreur serveur HTTP ${res.status}`);
     }
@@ -1618,7 +1641,10 @@ async function loadDailyScanner(forceRefresh = false) {
       currentScannerMatches = data.matches;
 
       if (countAll) countAll.textContent = data.total_matches || currentScannerMatches.length;
+      if (countAtp) countAtp.textContent = data.atp_count || 0;
+      if (countWta) countWta.textContent = data.wta_count || 0;
       if (countVb) countVb.textContent = data.value_bets_count || 0;
+      if (tabScannerCount) tabScannerCount.textContent = data.total_matches || currentScannerMatches.length;
       if (timeText) timeText.textContent = `Actualisé ${data.last_update}`;
 
       // Mode banner
@@ -1660,15 +1686,20 @@ function renderScannerGrid() {
   const grid = document.getElementById('scanner-grid');
   if (!grid) return;
 
-  const matchesToShow = currentScannerFilter === 'vb'
-    ? currentScannerMatches.filter(m => m.has_value_bet)
-    : currentScannerMatches;
+  let matchesToShow = currentScannerMatches;
+  if (currentScannerFilter === 'vb') {
+    matchesToShow = currentScannerMatches.filter(m => m.has_value_bet);
+  } else if (currentScannerFilter === 'atp') {
+    matchesToShow = currentScannerMatches.filter(m => m.circuit === 'atp');
+  } else if (currentScannerFilter === 'wta') {
+    matchesToShow = currentScannerMatches.filter(m => m.circuit === 'wta');
+  }
 
   if (matchesToShow.length === 0) {
     if (currentScannerFilter === 'vb') {
       grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 30px; color: var(--text-dim);">🎯 Aucun Value Bet détecté sur les cotes actuelles avec les marges de sécurité requises.</div>`;
     } else {
-      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 30px; color: var(--text-dim);">Aucun match programmé pour le moment.</div>`;
+      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 30px; color: var(--text-dim);">Aucun match programmé dans cette catégorie pour le moment.</div>`;
     }
     return;
   }
@@ -1677,6 +1708,7 @@ function renderScannerGrid() {
   matchesToShow.forEach(m => {
     const hasVb = m.has_value_bet;
     const topVb = m.top_value_bet;
+    const isAtp = m.circuit === 'atp';
 
     const proba1 = m.prediction ? (m.prediction.proba_p1 * 100).toFixed(0) : '-';
     const proba2 = m.prediction ? (m.prediction.proba_p2 * 100).toFixed(0) : '-';
@@ -1707,11 +1739,15 @@ function renderScannerGrid() {
 
     const odds1Str = m.odds1 ? m.odds1.toFixed(2) : '-';
     const odds2Str = m.odds2 ? m.odds2.toFixed(2) : '-';
+    const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP</span>` : `<span class="circuit-pill-wta">👑 WTA</span>`;
 
     html += `
-      <div class="scan-match-card ${hasVb ? 'has-vb' : ''}" onclick="loadMatchFromScanner('${m.id}')" title="Cliquer pour analyser ce match en détail">
+      <div class="scan-match-card ${hasVb ? 'has-vb' : ''}" onclick="openMatchDetailModal('${m.id}')" title="Cliquer pour ouvrir le rapport d'analyse détaillé en grand">
         <div class="scan-card-top">
-          <span class="scan-tourney-tag">🏆 ${escapeHtml(m.tournament)} • ${escapeHtml(m.surface)}</span>
+          <div style="display:flex; align-items:center; gap:6px;">
+            ${circuitBadge}
+            <span class="scan-tourney-tag">🏆 ${escapeHtml(m.tournament)} • ${escapeHtml(m.surface)}</span>
+          </div>
           <span class="scan-time-tag">⏰ ${escapeHtml(m.time_display)}</span>
         </div>
 
@@ -1735,8 +1771,8 @@ function renderScannerGrid() {
 
         ${vbHtml}
 
-        <button type="button" class="scan-btn-load">
-          📊 Analyser le match & Gestion de mise
+        <button type="button" class="scan-btn-load" onclick="event.stopPropagation(); openMatchDetailModal('${m.id}')">
+          🔍 Voir le rapport complet en pop-up
         </button>
       </div>
     `;
@@ -1745,28 +1781,220 @@ function renderScannerGrid() {
   grid.innerHTML = html;
 }
 
+// ============================================================
+// POP-UP MODAL : RAPPORT DE MATCH DÉTAILLÉ EN GRAND
+// ============================================================
+function openMatchDetailModal(matchId) {
+  const match = currentScannerMatches.find(m => m.id === matchId);
+  const modal = document.getElementById('match-detail-modal');
+  const metaContainer = document.getElementById('modal-match-meta');
+  const bodyContainer = document.getElementById('modal-match-body');
+
+  if (!match || !modal || !bodyContainer) return;
+
+  const isAtp = match.circuit === 'atp';
+  const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP Hommes</span>` : `<span class="circuit-pill-wta">👑 WTA Femmes</span>`;
+
+  if (metaContainer) {
+    metaContainer.innerHTML = `
+      ${circuitBadge}
+      <span style="font-weight: 800; color: #ffffff; font-size: 15px;">🏆 ${escapeHtml(match.tournament)}</span>
+      <span>• Surface : <b>${escapeHtml(match.surface)}</b></span>
+      <span>• Format : <b>Best-of ${match.best_of}</b></span>
+      <span>• Heure : <b style="color:#60a5fa;">${escapeHtml(match.time_display)}</b></span>
+      <span class="bm-badge">Cotes Bet365</span>
+    `;
+  }
+
+  const p1 = match.p1;
+  const p2 = match.p2;
+  const p1Short = p1.split(' ').pop();
+  const p2Short = p2.split(' ').pop();
+
+  const pred = match.prediction || { proba_p1: 0.50, proba_p2: 0.50, fair_odds_p1: 2.0, fair_odds_p2: 2.0, match_confidence: 75, confidence_level: 'Moyenne' };
+  const proba1 = (pred.proba_p1 * 100).toFixed(1);
+  const proba2 = (pred.proba_p2 * 100).toFixed(1);
+  const isP1Fav = pred.proba_p1 >= pred.proba_p2;
+
+  // Value bets cards
+  let vbsHtml = '';
+  if (match.all_value_bets && match.all_value_bets.length > 0) {
+    let cardsHtml = '';
+    match.all_value_bets.forEach((vb, idx) => {
+      const conf = vb.confidence || { score: 85, label: 'Très haute', level: 'high', icon: '🔥' };
+      const kellyQuarter = vb.kelly_quarter_pct || 1.5;
+      const bankrollTotal = getBankrollTotal();
+      const betAmountEuro = ((bankrollTotal * kellyQuarter) / 100).toFixed(0);
+      const estGainEuro = (parseFloat(betAmountEuro) * (vb.offered_odds - 1.0)).toFixed(0);
+
+      cardsHtml += `
+        <div class="vb-card primary-vb" style="margin-bottom: 10px;">
+          <div class="vb-card-header">
+            <span class="vb-badge">⭐ PICK RECOMMANDÉ #${idx + 1}</span>
+            <span class="vb-conf-pill ${conf.level}">${conf.icon} Confiance : ${conf.score}% (${conf.label})</span>
+          </div>
+          <div class="vb-selection-title">${escapeHtml(vb.selection)}</div>
+          <div class="vb-details-grid">
+            <div class="vb-stat-box">
+              <span class="vb-stat-label">Cote Bet365</span>
+              <span class="vb-stat-val odd">@ ${vb.offered_odds.toFixed(2)}</span>
+            </div>
+            <div class="vb-stat-box">
+              <span class="vb-stat-label">Cote Équitable</span>
+              <span class="vb-stat-val">@ ${vb.fair_odds.toFixed(2)}</span>
+            </div>
+            <div class="vb-stat-box">
+              <span class="vb-stat-label">Espérance (EV)</span>
+              <span class="vb-stat-val ev">+${vb.ev_percent}%</span>
+            </div>
+            <div class="vb-stat-box">
+              <span class="vb-stat-label">Mise Conseillée</span>
+              <span class="vb-stat-val kelly">${kellyQuarter}% (${betAmountEuro} €)</span>
+            </div>
+          </div>
+          <div style="font-size: 11px; color: #fbbf24; margin-top: 6px; font-weight: 700;">
+            💰 Gain net estimé en cas de victoire : +${estGainEuro} €
+          </div>
+        </div>
+      `;
+    });
+    vbsHtml = `
+      <div style="margin-bottom: 20px;">
+        <h4 style="font-size: 14px; color: #34d399; margin-bottom: 8px; display:flex; align-items:center; gap:6px;">
+          <span>🎯</span> Opportunités de Value Bets Détectées (Bet365)
+        </h4>
+        ${cardsHtml}
+      </div>
+    `;
+  } else {
+    vbsHtml = `
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 20px; text-align: center; color: var(--text-muted); font-size: 12.5px;">
+        ⚖️ <b>Aucun Value Bet détecté sur ce match</b> : Les cotes proposées par Bet365 intègrent une marge normale et ne présentent pas d'avantage statistique suffisant.
+      </div>
+    `;
+  }
+
+  // Markets summary
+  const odds1Str = match.odds1 ? match.odds1.toFixed(2) : '-';
+  const odds2Str = match.odds2 ? match.odds2.toFixed(2) : '-';
+  const totLineStr = match.total_line ? `Total Jeux (${match.total_line})` : 'Total Jeux';
+  const oddsOvStr = match.odds_over ? match.odds_over.toFixed(2) : '-';
+  const oddsUnStr = match.odds_under ? match.odds_under.toFixed(2) : '-';
+  const hLineStr = match.handicap_line ? `Handicap (${match.handicap_line})` : 'Handicap';
+  const oddsH1Str = match.odds_h1 ? match.odds_h1.toFixed(2) : '-';
+  const oddsH2Str = match.odds_h2 ? match.odds_h2.toFixed(2) : '-';
+
+  bodyContainer.innerHTML = `
+    <!-- Top Clash Banner -->
+    <div class="prediction-header" style="margin-bottom: 20px;">
+      <div class="player-col ${isP1Fav ? 'winner' : ''}">
+        <div class="prob-percent ${isP1Fav ? 'fav' : ''}">${proba1}%</div>
+        <div class="prob-pname">${escapeHtml(p1)}</div>
+        <div class="prob-odds">Cote Bet365 : <b>@ ${odds1Str}</b> (Équitable: @ ${pred.fair_odds_p1})</div>
+      </div>
+
+      <div class="vs-badge">VS</div>
+
+      <div class="player-col ${!isP1Fav ? 'winner' : ''}">
+        <div class="prob-percent ${!isP1Fav ? 'fav' : ''}">${proba2}%</div>
+        <div class="prob-pname">${escapeHtml(p2)}</div>
+        <div class="prob-odds">Cote Bet365 : <b>@ ${odds2Str}</b> (Équitable: @ ${pred.fair_odds_p2})</div>
+      </div>
+    </div>
+
+    <!-- Value Bets -->
+    ${vbsHtml}
+
+    <!-- Scanned Odds Recap Table -->
+    <div style="margin-bottom: 20px;">
+      <h4 style="font-size: 13.5px; color: var(--text-main); margin-bottom: 8px;">📊 Cotes Scannées sur Bet365</h4>
+      <table class="stats-table">
+        <thead>
+          <tr>
+            <th>Marché</th>
+            <th>Sélection 1</th>
+            <th>Sélection 2</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Vainqueur du Match</b></td>
+            <td>${escapeHtml(p1Short)} @ <b>${odds1Str}</b></td>
+            <td>${escapeHtml(p2Short)} @ <b>${odds2Str}</b></td>
+          </tr>
+          <tr>
+            <td><b>${totLineStr}</b></td>
+            <td>Over @ <b>${oddsOvStr}</b></td>
+            <td>Under @ <b>${oddsUnStr}</b></td>
+          </tr>
+          <tr>
+            <td><b>${hLineStr}</b></td>
+            <td>${escapeHtml(p1Short)} @ <b>${oddsH1Str}</b></td>
+            <td>${escapeHtml(p2Short)} @ <b>${oddsH2Str}</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Modal Footer Actions -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border);">
+      <button type="button" class="btn-cancel" onclick="closeMatchDetailModal()">✕ Fermer</button>
+      <button type="button" class="btn-save-key" onclick="transferMatchToManual('${match.id}')" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);">
+        ⚔️ Ouvrir dans l'Analyseur Manuel & Modifier les Cotes
+      </button>
+    </div>
+  `;
+
+  modal.style.display = 'flex';
+}
+window.openMatchDetailModal = openMatchDetailModal;
+
+function closeMatchDetailModal() {
+  const modal = document.getElementById('match-detail-modal');
+  if (modal) modal.style.display = 'none';
+}
+window.closeMatchDetailModal = closeMatchDetailModal;
+
+function transferMatchToManual(matchId) {
+  closeMatchDetailModal();
+  switchPageTab('manual');
+  loadMatchFromScanner(matchId);
+}
+window.transferMatchToManual = transferMatchToManual;
+
 function loadMatchFromScanner(matchId) {
   const match = currentScannerMatches.find(m => m.id === matchId);
   if (!match) return;
 
-  // 1. Players
+  // 1. Switch circuit if needed
+  const targetCircuit = (match.circuit || 'atp').toLowerCase();
+  circuitBtns.forEach(b => {
+    if (b.dataset.circuit === targetCircuit) {
+      b.classList.add('active');
+    } else {
+      b.classList.remove('active');
+    }
+  });
+  currentCircuit = targetCircuit;
+
+  // 2. Players
   p1Input.value = match.p1 || match.p1_raw || '';
   p2Input.value = match.p2 || match.p2_raw || '';
   selectedP1 = match.p1 || match.p1_raw || '';
   selectedP2 = match.p2 || match.p2_raw || '';
 
-  // 2. Tournament & Surface Options
+  // 3. Tournament & Surface Options
   if (tournamentInput) tournamentInput.value = (match.tournament && match.tournament !== 'Tournoi') ? match.tournament : '';
   if (surfaceSelect && match.surface) surfaceSelect.value = match.surface;
   if (levelSelect && match.level) levelSelect.value = match.level;
   if (bestOfSelect && match.best_of) bestOfSelect.value = String(match.best_of);
   if (indoorSelect && match.indoor !== undefined) indoorSelect.value = String(match.indoor);
 
-  // 3. Main Odds
+  // 4. Main Odds
   if (odds1Input) odds1Input.value = (match.odds1 !== null && match.odds1 !== undefined) ? match.odds1 : '';
   if (odds2Input) odds2Input.value = (match.odds2 !== null && match.odds2 !== undefined) ? match.odds2 : '';
 
-  // 4. Secondary Markets (Totals, Handicap)
+  // 5. Secondary Markets (Totals, Handicap)
   const hasSec = Boolean(match.total_line || match.odds_over || match.odds_under || match.handicap_line || match.odds_h1 || match.odds_h2);
 
   if (totalLineInput) totalLineInput.value = match.total_line || '';
@@ -1776,14 +2004,6 @@ function loadMatchFromScanner(matchId) {
   if (handicapLineInput) handicapLineInput.value = match.handicap_line || '';
   if (oddsH1Input) oddsH1Input.value = match.odds_h1 || '';
   if (oddsH2Input) oddsH2Input.value = match.odds_h2 || '';
-
-  // Reset optional markets not in standard feed
-  if (oddsTbYesInput) oddsTbYesInput.value = '';
-  if (oddsTbNoInput) oddsTbNoInput.value = '';
-  if (oddsSet1P1Input) oddsSet1P1Input.value = '';
-  if (oddsSet1P2Input) oddsSet1P2Input.value = '';
-  if (oddsSetsOverInput) oddsSetsOverInput.value = '';
-  if (oddsSetsUnderInput) oddsSetsUnderInput.value = '';
 
   if (hasSec && secMarketsContent) {
     secMarketsContent.style.display = 'flex';
@@ -1804,5 +2024,6 @@ function loadMatchFromScanner(matchId) {
   }
 }
 window.loadMatchFromScanner = loadMatchFromScanner;
+
 
 
