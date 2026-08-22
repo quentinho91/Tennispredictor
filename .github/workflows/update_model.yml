@@ -60,5 +60,8 @@ jobs:
             data/processed/xgb_model_wta.json \
             data/processed/calibrator_wta.pkl \
             data/processed/feature_cols_wta.pkl \
+            data/processed/players_atp.json \
+            data/processed/players_wta.json \
+            data/processed/tournaments.json \
             --title "Derniers modèles XGBoost & données" \
             --notes "Mise à jour automatique du modèle XGBoost (ATP & WTA)"

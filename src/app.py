@@ -166,6 +166,9 @@ def search_tournaments(q: str = Query("", min_length=0), limit: int = 12):
     return [item[0] for item in scored[:limit]]
 
 
+import difflib
+
+
 @app.get("/api/players")
 def search_players(circuit: str = "atp", q: str = Query("", min_length=1), limit: int = 10):
     """Recherche intelligente et ultra-rapide de joueurs avec tri par pertinence, classement et Elo."""
@@ -199,6 +202,12 @@ def search_players(circuit: str = "atp", q: str = Query("", min_length=1), limit
         elif query in p_lower:
             matched = True
             prefix_score = 30
+        else:
+            # Correspondance floue pour tolérance aux fautes de frappe (ex: "Luc Pow" -> "Luca Pow")
+            ratio = difflib.SequenceMatcher(None, query, p_lower).ratio()
+            if ratio >= 0.70:
+                matched = True
+                prefix_score = int(ratio * 25)
 
         if matched:
             elo = p["elo"]
@@ -313,13 +322,76 @@ def evaluate_market_value(
     }
 
 
+def smart_resolve_name(name: str, known: List[str], state: Dict[str, Any]) -> str:
+    """Résolution intelligente et robuste du nom du joueur."""
+    if not name or not isinstance(name, str):
+        return name
+    clean_name = name.strip()
+    clean_lower = clean_name.lower()
+    if not clean_lower:
+        return name
+
+    # 1. Correspondance exacte
+    for p in known:
+        if p.lower() == clean_lower:
+            return p
+
+    q_tokens = clean_lower.split()
+    last_day = state.get("last_day", 9727)
+    candidates = []
+
+    for p in known:
+        p_lower = p.lower()
+        p_tokens = p_lower.split()
+
+        # Inversion des noms / correspondance de jetons (ex. 'Cobolli Flavio', 'Pow Luca')
+        if set(q_tokens) == set(p_tokens):
+            match_score = 1000
+        elif clean_lower in p_lower:
+            match_score = 500
+        elif all(any(pt.startswith(qt) or qt in pt for pt in p_tokens) for qt in q_tokens):
+            match_score = 400
+        elif any(pt.startswith(clean_lower) for pt in p_tokens) or p_lower.startswith(clean_lower):
+            match_score = 300
+        else:
+            ratio = difflib.SequenceMatcher(None, clean_lower, p_lower).ratio()
+            if ratio >= 0.70:
+                match_score = int(ratio * 250)
+            else:
+                continue
+
+        # Score de priorité du joueur (classement, Elo, activité récente)
+        rank = state.get("last_rank", {}).get(p)
+        rank_score = (1000 - rank) if (rank is not None and rank > 0) else 0
+        elo = state.get("elo", {}).get(p, 1500)
+        last_p_day = state.get("last_play_date", {}).get(p)
+        days_ago = (last_day - last_p_day) if last_p_day is not None else 9999
+        recency_score = 100 if days_ago <= 365 else (50 if days_ago <= 1095 else 0)
+
+        total_score = match_score * 10 + rank_score + (elo / 10.0) + recency_score
+        candidates.append((p, total_score))
+
+    if candidates:
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates[0][0]
+    return name
+
+
 @app.post("/api/update-data")
 def update_data():
-    """Lance la synchronisation des données de matchs récents et tournois en direct."""
+    """Lance la synchronisation complète : téléchargement, constitution du dataset et recalcul des stats."""
     import subprocess
     try:
-        cmd = [sys.executable, str(BASE_DIR / "src" / "00_download_data.py")]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        # 1. Télécharger les matchs récents
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "00_download_data.py")], check=True, timeout=120)
+        
+        # 2. Reconstruire le dataset pour ATP et WTA
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "atp"], check=True, timeout=120)
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "wta"], check=True, timeout=120)
+        
+        # 3. Recalculer le feature engineering et l'état des joueurs
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "atp"], check=True, timeout=400)
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "wta"], check=True, timeout=300)
 
         # Réinitialisation des caches pour prise en compte immédiate
         CACHE.clear()
@@ -328,9 +400,9 @@ def update_data():
         now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
         return {
             "success": True,
-            "message": "Données et statistiques actualisées avec succès !",
+            "message": "Données, tournois et statistiques des joueurs synchronisés avec succès !",
             "timestamp": now_str,
-            "output": result.stdout[:200] if result.stdout else ""
+            "output": ""
         }
     except Exception as e:
         return {
@@ -348,15 +420,8 @@ def predict_match(req: PredictionRequest):
     feature_cols = res["feature_cols"]
     known = res["players"]
 
-    def resolve_name(name):
-        exact = [p for p in known if p.lower() == name.lower()]
-        if exact: return exact[0]
-        contains = [p for p in known if name.lower() in p.lower()]
-        if contains: return contains[0]
-        return name
-
-    p1 = resolve_name(req.p1)
-    p2 = resolve_name(req.p2)
+    p1 = smart_resolve_name(req.p1, known, state)
+    p2 = smart_resolve_name(req.p2, known, state)
     if p1 == p2:
         raise HTTPException(status_code=400, detail="Les deux joueurs doivent être différents.")
 

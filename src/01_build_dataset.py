@@ -45,7 +45,7 @@ def load_raw(pattern=None):
     dfs = []
     for f in files:
         try:
-            d = pd.read_csv(f, low_memory=False)
+            d = pd.read_csv(f, low_memory=False, on_bad_lines="skip")
         except Exception as e:
             print(f"Ignoré (illisible): {f} ({e})")
             continue
@@ -57,40 +57,45 @@ def load_raw(pattern=None):
         raise ValueError("Aucun fichier valide (schéma matchs) trouvé après filtrage.")
     df = pd.concat(dfs, ignore_index=True)
 
-    # Garde-fou : ongoing_tourneys.csv (tournois en cours) peut en théorie
-    # se recouvrir avec le fichier annuel correspondant une fois le tournoi
-    # terminé et absorbé dans les archives (pas de garantie côté API que
-    # l'un ou l'autre soit vidé au bon moment). Un match en double gonfle
-    # artificiellement son poids dans l'entraînement -> on déduplique sur
-    # la clé naturelle d'un match.
+    # Garde-fou : ongoing_tourneys.csv / challenger_ongoing_tourneys.csv (tournois en cours)
+    # peuvent se recouvrir avec le fichier annuel correspondant une fois le tournoi
+    # terminé et absorbé dans les archives. On déduplique en gardant 'last' pour
+    # privilégier les données fraîches.
     n_before = len(df)
-    df = df.drop_duplicates(subset=["tourney_id", "winner_name", "loser_name", "tourney_date", "round"])
+    df = df.drop_duplicates(subset=["tourney_id", "winner_name", "loser_name", "tourney_date", "round"], keep="last")
     if len(df) < n_before:
-        print(f"Doublons retirés (chevauchement ongoing_tourneys / archive annuelle): {n_before - len(df)}")
+        print(f"Doublons retirés (chevauchement ongoing / archives): {n_before - len(df)}")
 
     return df
+
+
+ROUND_ORDER = {
+    "Q1": 1, "Q2": 2, "Q3": 3, "Qualifying": 3,
+    "R128": 4, "R64": 5, "R32": 6, "R16": 7,
+    "QF": 8, "SF": 9, "BR": 10, "F": 11, "Final": 11, "RR": 6
+}
 
 
 def basic_clean(df):
     # Dates
     df["tourney_date"] = pd.to_datetime(df["tourney_date"], format="%Y%m%d", errors="coerce")
-    # Normalisation des noms (fautes de frappe dans les bases brutes ATP)
+    
+    # Nettoyage des espaces
+    df["winner_name"] = df["winner_name"].astype(str).str.strip()
+    df["loser_name"] = df["loser_name"].astype(str).str.strip()
+    
+    # Normalisation des noms (fautes de frappe / variantes dans les bases brutes ATP)
     name_aliases = {
         "Aleksander Shevchenko": "Alexander Shevchenko",
         "Aleksandr Shevchenko": "Alexander Shevchenko",
+        "Luc Pow": "Luca Pow",
     }
     df["winner_name"] = df["winner_name"].replace(name_aliases)
     df["loser_name"] = df["loser_name"].replace(name_aliases)
 
     df = df.dropna(subset=["tourney_date", "winner_name", "loser_name"])
 
-    # Normalisation de tourney_level : ongoing_tourneys.csv (tournois en
-    # cours, pas encore absorbés dans l'archive annuelle) utilise parfois
-    # '1000' au lieu de 'M' pour les Masters -- même événement, code
-    # différent selon la source, ce qui fragmenterait artificiellement la
-    # feature en 2 catégories distinctes. NB: '250'/'500'/'D'(Davis Cup)/
-    # 'A'(United Cup, Laver Cup...) sont des catégories réellement
-    # distinctes dans TOUTES les sources, on n'y touche pas.
+    # Normalisation de tourney_level
     df["tourney_level"] = df["tourney_level"].astype(str)
     df["tourney_level"] = df["tourney_level"].replace({"1000": "M", "1000.0": "M", "nan": None})
     
@@ -104,13 +109,14 @@ def basic_clean(df):
     df = df[df["tourney_date"].dt.year >= MIN_YEAR]
     print(f"Filtre MIN_YEAR={MIN_YEAR}: {n_before} -> {len(df)} matchs")
 
-    # On garde uniquement les matchs simples terminés normalement
-    # (on retire les rétirements / walkovers du score si on veut être strict,
-    # mais on garde une colonne pour pouvoir filtrer plus tard)
+    # Détection des abandons / forfaits
     df["retirement"] = df["score"].astype(str).str.contains("RET|W/O|DEF|ABN", case=False, na=False)
 
-    # Tri chronologique : indispensable pour tout calcul "au fil de l'eau" (Elo, forme, etc.)
-    df = df.sort_values(["tourney_date", "match_num"]).reset_index(drop=True)
+    # Ordre chronologique strict : Date -> Ordre du Tour -> Numéro de match
+    df["_round_num"] = df["round"].map(lambda r: ROUND_ORDER.get(str(r), 5))
+    df["_match_num_clean"] = pd.to_numeric(df["match_num"], errors="coerce").fillna(999)
+    df = df.sort_values(["tourney_date", "_round_num", "_match_num_clean"]).reset_index(drop=True)
+    df = df.drop(columns=["_round_num", "_match_num_clean"])
     df["match_id"] = df.index
     return df
 

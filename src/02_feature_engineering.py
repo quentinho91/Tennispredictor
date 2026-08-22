@@ -1297,8 +1297,67 @@ if __name__ == "__main__":
 
     # Sauvegarde de l'état des joueurs pour 05_predict_match.py
     import pickle
+    import json
     state_path = PROCESSED_DIR / f"player_state_{args.circuit}.pkl"
     with open(state_path, "wb") as f:
         pickle.dump(player_state, f)
     print(f"Etat des joueurs sauvegarde -> {state_path}")
     print(f"  {len(player_state['elo'])} joueurs dans la base.")
+
+    # Export automatique de players_{circuit}.json pour l'autocomplétion Web/API
+    last_day_val = player_state.get("last_day", 0)
+    players_list = []
+    for p in sorted(player_state["elo"].keys()):
+        p_elo = round(player_state["elo"].get(p, 1500))
+        p_rank_val = player_state.get("last_rank", {}).get(p)
+        p_rank = int(p_rank_val) if (p_rank_val is not None and p_rank_val == p_rank_val) else None
+        p_hand = player_state.get("last_hand", {}).get(p, "R")
+        p_last_day = player_state.get("last_play_date", {}).get(p)
+        days_ago = int(last_day_val - p_last_day) if p_last_day is not None else 9999
+        players_list.append({
+            "name": p,
+            "elo": p_elo,
+            "rank": p_rank,
+            "hand": p_hand,
+            "days_ago": days_ago
+        })
+    players_json_path = PROCESSED_DIR / f"players_{args.circuit}.json"
+    with open(players_json_path, "w", encoding="utf-8") as f:
+        json.dump(players_list, f, indent=2)
+    print(f"Liste des joueurs ({len(players_list)}) exportee -> {players_json_path}")
+
+    # Mise à jour automatique de tournaments.json
+    tournaments_file = PROCESSED_DIR / "tournaments.json"
+    existing_tourneys = {}
+    if tournaments_file.exists():
+        try:
+            with open(tournaments_file, "r", encoding="utf-8") as f:
+                for t in json.load(f):
+                    existing_tourneys[t["name"]] = t
+        except Exception:
+            pass
+
+    t_groups = df.groupby("tourney_name").agg({
+        "surface": lambda x: x.dropna().mode().iloc[0] if len(x.dropna()) > 0 else "Hard",
+        "tourney_level": lambda x: x.dropna().mode().iloc[0] if len(x.dropna()) > 0 else "A",
+        "indoor": lambda x: int((x.dropna() == "I").mean() > 0.5) if len(x.dropna()) > 0 else 0,
+        "best_of": lambda x: int(x.dropna().mode().iloc[0]) if len(x.dropna()) > 0 else 3
+    }).reset_index()
+
+    for _, row in t_groups.iterrows():
+        t_name = str(row["tourney_name"]).strip()
+        if not t_name or t_name.lower() in ("nan", "none", "unknown"):
+            continue
+        existing_tourneys[t_name] = {
+            "name": t_name,
+            "surface": str(row["surface"]),
+            "level": str(row["tourney_level"]),
+            "indoor": int(row["indoor"]),
+            "best_of": int(row["best_of"])
+        }
+
+    tourneys_list = sorted(existing_tourneys.values(), key=lambda x: x["name"])
+    with open(tournaments_file, "w", encoding="utf-8") as f:
+        json.dump(tourneys_list, f, indent=2)
+    print(f"Tournois ({len(tourneys_list)}) mis a jour -> {tournaments_file}")
+
