@@ -140,20 +140,6 @@
     "best_of": 3
   },
   {
-    "name": "Adelaide-1",
-    "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Adelaide-2",
-    "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
     "name": "Agri",
     "surface": "Hard",
     "level": "C",
@@ -170,20 +156,6 @@
   {
     "name": "Ahmedabad",
     "surface": "Hard",
-    "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Aix En Provence",
-    "surface": "Clay",
-    "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Aix en Provence",
-    "surface": "Clay",
     "level": "C",
     "indoor": 0,
     "best_of": 3
@@ -387,7 +359,7 @@
   {
     "name": "Astana",
     "surface": "Hard",
-    "level": "C",
+    "level": "A",
     "indoor": 1,
     "best_of": 3
   },
@@ -400,20 +372,6 @@
   },
   {
     "name": "Astana II",
-    "surface": "Hard",
-    "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Astana Open",
-    "surface": "Hard",
-    "level": "A",
-    "indoor": 1,
-    "best_of": 3
-  },
-  {
-    "name": "Astana-2",
     "surface": "Hard",
     "level": "C",
     "indoor": 0,
@@ -443,13 +401,6 @@
   {
     "name": "Atlanta",
     "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Atlanta Open",
-    "surface": "Hard",
     "level": "A",
     "indoor": 0,
     "best_of": 3
@@ -458,13 +409,6 @@
     "name": "Atlantic City",
     "surface": "Hard",
     "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Atp Cup",
-    "surface": "Hard",
-    "level": "A",
     "indoor": 0,
     "best_of": 3
   },
@@ -2772,13 +2716,6 @@
     "best_of": 3
   },
   {
-    "name": "Buenoa Aires",
-    "surface": "Clay",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
     "name": "Buenos Aires",
     "surface": "Clay",
     "level": "250",
@@ -2962,13 +2899,6 @@
   },
   {
     "name": "Canada Masters",
-    "surface": "Hard",
-    "level": "M",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Canada Masters (Montr\u00e9al / Toronto)",
     "surface": "Hard",
     "level": "M",
     "indoor": 0,
@@ -3166,13 +3096,6 @@
   {
     "name": "Chengdu",
     "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Chengdu Open",
-    "surface": "Hard",
     "level": "A",
     "indoor": 0,
     "best_of": 3
@@ -3251,13 +3174,6 @@
     "name": "Chuncheon",
     "surface": "Hard",
     "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Cincinnati",
-    "surface": "Hard",
-    "level": "P5",
     "indoor": 0,
     "best_of": 3
   },
@@ -17026,13 +16942,6 @@
   {
     "name": "Delray Beach",
     "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Delray Beach Open",
-    "surface": "Hard",
     "level": "A",
     "indoor": 0,
     "best_of": 3
@@ -17214,13 +17123,6 @@
   },
   {
     "name": "Estoril",
-    "surface": "Clay",
-    "level": "T4",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Estoril Open",
     "surface": "Clay",
     "level": "A",
     "indoor": 0,
@@ -33875,13 +33777,6 @@
   {
     "name": "Geneva",
     "surface": "Clay",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Geneva Open",
-    "surface": "Clay",
     "level": "A",
     "indoor": 0,
     "best_of": 3
@@ -34380,13 +34275,6 @@
     "name": "Ilkley",
     "surface": "Grass",
     "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Indian Wells",
-    "surface": "Hard",
-    "level": "PM",
     "indoor": 0,
     "best_of": 3
   },
@@ -34988,13 +34876,6 @@
   {
     "name": "Los Cabos",
     "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Los Cabos Open",
-    "surface": "Hard",
     "level": "A",
     "indoor": 0,
     "best_of": 3
@@ -35081,13 +34962,6 @@
     "surface": "Hard",
     "level": "C",
     "indoor": 1,
-    "best_of": 3
-  },
-  {
-    "name": "Madrid",
-    "surface": "Clay",
-    "level": "PM",
-    "indoor": 0,
     "best_of": 3
   },
   {
@@ -35427,13 +35301,6 @@
     "best_of": 3
   },
   {
-    "name": "Miami",
-    "surface": "Hard",
-    "level": "PM",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
     "name": "Miami Masters",
     "surface": "Hard",
     "level": "M",
@@ -35514,13 +35381,6 @@
     "name": "Montauban",
     "surface": "Clay",
     "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Monte Carlo",
-    "surface": "Clay",
-    "level": "M",
     "indoor": 0,
     "best_of": 3
   },
@@ -35617,20 +35477,6 @@
   },
   {
     "name": "Mouilleron Le Captif",
-    "surface": "Hard",
-    "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Mouilleron le Captif",
-    "surface": "Hard",
-    "level": "C",
-    "indoor": 1,
-    "best_of": 3
-  },
-  {
-    "name": "Mouilleron-Le-Captif",
     "surface": "Hard",
     "level": "C",
     "indoor": 0,
@@ -35896,13 +35742,6 @@
     "best_of": 3
   },
   {
-    "name": "Nur-Sultan",
-    "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
     "name": "Nur-Sultan 1",
     "surface": "Hard",
     "level": "C",
@@ -36088,13 +35927,6 @@
     "name": "Panama City",
     "surface": "Clay",
     "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Paris",
-    "surface": "Carpet",
-    "level": "T2",
     "indoor": 0,
     "best_of": 3
   },
@@ -36568,13 +36400,6 @@
     "best_of": 3
   },
   {
-    "name": "Rio De Janeiro",
-    "surface": "Clay",
-    "level": "500",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
     "name": "Rio Olympics",
     "surface": "Hard",
     "level": "O",
@@ -36583,13 +36408,6 @@
   },
   {
     "name": "Rio Quente",
-    "surface": "Hard",
-    "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Rio de  Janeiro",
     "surface": "Hard",
     "level": "C",
     "indoor": 0,
@@ -36605,7 +36423,7 @@
   {
     "name": "Rio de Janeiro",
     "surface": "Clay",
-    "level": "I",
+    "level": "500",
     "indoor": 0,
     "best_of": 3
   },
@@ -36655,13 +36473,6 @@
     "name": "Roland Garros",
     "surface": "Clay",
     "level": "G",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Rome",
-    "surface": "Clay",
-    "level": "P5",
     "indoor": 0,
     "best_of": 3
   },
@@ -36925,13 +36736,6 @@
     "best_of": 3
   },
   {
-    "name": "Santa Cruz de la Sierra",
-    "surface": "Clay",
-    "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
     "name": "Santa Fe",
     "surface": "Clay",
     "level": "C",
@@ -37004,13 +36808,6 @@
   {
     "name": "Sao Paulo-1",
     "surface": "Hard",
-    "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Sao Paulo-2",
-    "surface": "Clay",
     "level": "C",
     "indoor": 0,
     "best_of": 3
@@ -37110,13 +36907,6 @@
     "name": "Seville",
     "surface": "Clay",
     "level": "C",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Shanghai",
-    "surface": "Hard",
-    "level": "T4",
     "indoor": 0,
     "best_of": 3
   },
@@ -38024,13 +37814,6 @@
     "best_of": 3
   },
   {
-    "name": "Vina del Mar",
-    "surface": "Clay",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
     "name": "WTA Championships",
     "surface": "Hard",
     "level": "F",
@@ -38129,21 +37912,7 @@
     "best_of": 3
   },
   {
-    "name": "Winston Salem",
-    "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
     "name": "Winston-Salem",
-    "surface": "Hard",
-    "level": "250",
-    "indoor": 0,
-    "best_of": 3
-  },
-  {
-    "name": "Winston-Salem Open",
     "surface": "Hard",
     "level": "A",
     "indoor": 0,

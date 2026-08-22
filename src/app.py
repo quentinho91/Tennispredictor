@@ -125,13 +125,83 @@ def get_tournaments() -> List[Dict[str, Any]]:
     return TOURNAMENTS_DATA
 
 
+TOURNAMENT_CANONICAL = {
+    "cincinnati": "Cincinnati Masters",
+    "cincinnati masters": "Cincinnati Masters",
+    "indian wells": "Indian Wells Masters",
+    "indian wells masters": "Indian Wells Masters",
+    "miami": "Miami Masters",
+    "miami masters": "Miami Masters",
+    "madrid": "Madrid Masters",
+    "madrid masters": "Madrid Masters",
+    "rome": "Rome Masters",
+    "rome masters": "Rome Masters",
+    "monte carlo": "Monte Carlo Masters",
+    "monte carlo masters": "Monte Carlo Masters",
+    "paris": "Paris Masters",
+    "paris masters": "Paris Masters",
+    "montreal masters": "Canada Masters",
+    "toronto masters": "Canada Masters",
+    "canada masters": "Canada Masters",
+    "shanghai": "Shanghai Masters",
+    "shanghai masters": "Shanghai Masters",
+    "winston salem": "Winston-Salem",
+    "winston-salem": "Winston-Salem",
+    "winston-salem open": "Winston-Salem",
+    "astana": "Astana",
+    "astana open": "Astana",
+    "atlanta": "Atlanta",
+    "atlanta open": "Atlanta",
+    "chengdu": "Chengdu",
+    "chengdu open": "Chengdu",
+    "delray beach": "Delray Beach",
+    "delray beach open": "Delray Beach",
+    "estoril": "Estoril",
+    "estoril open": "Estoril",
+    "geneva": "Geneva",
+    "geneva open": "Geneva",
+    "los cabos": "Los Cabos",
+    "los cabos open": "Los Cabos",
+    "rio de  janeiro": "Rio de Janeiro",
+    "rio de janeiro": "Rio de Janeiro",
+    "aix en provence": "Aix-en-Provence",
+    "aix-en-provence": "Aix-en-Provence",
+    "us open": "US Open",
+    "u.s. open": "US Open",
+    "roland garros": "Roland Garros",
+    "wimbledon": "Wimbledon",
+    "australian open": "Australian Open",
+}
+
+
+def canonical_tourney_key(name: str) -> str:
+    import re
+    lower = name.lower().strip()
+    if lower in TOURNAMENT_CANONICAL:
+        return TOURNAMENT_CANONICAL[lower].lower()
+    clean = re.sub(r'[\-_]', ' ', lower)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    if clean in TOURNAMENT_CANONICAL:
+        return TOURNAMENT_CANONICAL[clean].lower()
+    return clean
+
+
 @app.get("/api/tournaments")
 def search_tournaments(q: str = Query("", min_length=0), limit: int = 12):
-    """Recherche intelligente de tournois avec autocomplétion et métadonnées (surface, niveau, indoor)."""
+    """Recherche intelligente de tournois avec autocomplétion, déduplication et métadonnées (surface, niveau, indoor)."""
     tourneys = get_tournaments()
     query = q.lower().strip()
     if not query:
-        return tourneys[:limit]
+        seen = set()
+        out = []
+        for t in tourneys:
+            ck = canonical_tourney_key(t["name"])
+            if ck not in seen:
+                seen.add(ck)
+                out.append(t)
+                if len(out) >= limit:
+                    break
+        return out
 
     q_tokens = query.split()
     scored = []
@@ -163,7 +233,18 @@ def search_tournaments(q: str = Query("", min_length=0), limit: int = 12):
             scored.append((t, score + level_boost))
 
     scored.sort(key=lambda x: x[1], reverse=True)
-    return [item[0] for item in scored[:limit]]
+    
+    seen = set()
+    unique_results = []
+    for item in scored:
+        t = item[0]
+        ck = canonical_tourney_key(t["name"])
+        if ck not in seen:
+            seen.add(ck)
+            unique_results.append(t)
+            if len(unique_results) >= limit:
+                break
+    return unique_results
 
 
 import difflib
