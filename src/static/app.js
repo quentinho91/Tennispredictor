@@ -1716,16 +1716,19 @@ function renderScannerGrid() {
 
     let vbHtml = '';
     if (hasVb && topVb) {
-      const confScore = topVb.confidence ? `${topVb.confidence.score}%` : '80%';
+      const confScore = (topVb.confidence && topVb.confidence.score !== undefined) ? `${topVb.confidence.score}%` : '80%';
+      const evVal = (topVb.ev_pct !== undefined) ? topVb.ev_pct : ((topVb.ev_percent !== undefined) ? topVb.ev_percent : 0);
+      const edgeVal = (topVb.edge_pct !== undefined) ? topVb.edge_pct : ((topVb.edge_percent !== undefined) ? topVb.edge_percent : 0);
+
       vbHtml = `
         <div class="scan-vb-banner">
           <div class="scan-vb-title">
             <span>🎯 ${escapeHtml(topVb.selection)} @ ${topVb.offered_odds.toFixed(2)}</span>
-            <span style="color:#fbbf24; font-size:11px;">+${topVb.ev_percent}% EV</span>
+            <span style="color:#fbbf24; font-size:11px; font-weight:800;">+${evVal}% EV</span>
           </div>
           <div class="scan-vb-meta">
             <span>🔥 Confiance : ${confScore}</span>
-            <span>• Edge : +${topVb.edge_percent}%</span>
+            <span>• Edge : +${edgeVal}%</span>
           </div>
         </div>
       `;
@@ -1822,10 +1825,11 @@ function openMatchDetailModal(matchId) {
     let cardsHtml = '';
     match.all_value_bets.forEach((vb, idx) => {
       const conf = vb.confidence || { score: 85, label: 'Très haute', level: 'high', icon: '🔥' };
-      const kellyQuarter = vb.kelly_quarter_pct || 1.5;
-      const bankrollTotal = getBankrollTotal();
+      const kellyQuarter = vb.kelly_quarter_pct || vb.kelly_pct || 1.5;
+      const bankrollTotal = parseFloat(bankrollInput ? bankrollInput.value : 1000) || 1000;
       const betAmountEuro = ((bankrollTotal * kellyQuarter) / 100).toFixed(0);
       const estGainEuro = (parseFloat(betAmountEuro) * (vb.offered_odds - 1.0)).toFixed(0);
+      const evVal = (vb.ev_pct !== undefined) ? vb.ev_pct : ((vb.ev_percent !== undefined) ? vb.ev_percent : 0);
 
       cardsHtml += `
         <div class="vb-card primary-vb" style="margin-bottom: 10px;">
@@ -1845,7 +1849,7 @@ function openMatchDetailModal(matchId) {
             </div>
             <div class="vb-stat-box">
               <span class="vb-stat-label">Espérance (EV)</span>
-              <span class="vb-stat-val ev">+${vb.ev_percent}%</span>
+              <span class="vb-stat-val ev">+${evVal}%</span>
             </div>
             <div class="vb-stat-box">
               <span class="vb-stat-label">Mise Conseillée</span>
