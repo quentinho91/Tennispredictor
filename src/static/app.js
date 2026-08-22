@@ -1745,7 +1745,7 @@ function renderScannerGrid() {
     const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP</span>` : `<span class="circuit-pill-wta">👑 WTA</span>`;
 
     html += `
-      <div class="scan-match-card ${hasVb ? 'has-vb' : ''}" onclick="openMatchDetailModal('${m.id}')" title="Cliquer pour ouvrir le rapport d'analyse détaillé en grand">
+      <div class="scan-match-card ${hasVb ? 'has-vb' : ''}" onclick="openMatchDetailModal('${m.id}')" style="cursor: pointer;" title="Cliquer pour ouvrir le rapport d'analyse détaillé en grand">
         <div class="scan-card-top">
           <div style="display:flex; align-items:center; gap:6px;">
             ${circuitBadge}
@@ -1774,9 +1774,9 @@ function renderScannerGrid() {
 
         ${vbHtml}
 
-        <button type="button" class="scan-btn-load" onclick="event.stopPropagation(); openMatchDetailModal('${m.id}')">
-          🔍 Voir le rapport complet en pop-up
-        </button>
+        <div class="scan-btn-load" style="pointer-events: none; text-align: center; margin-top: 4px;">
+          🔍 Voir le rapport complet en grand
+        </div>
       </div>
     `;
   });
@@ -1788,80 +1788,85 @@ function renderScannerGrid() {
 // POP-UP MODAL : RAPPORT DE MATCH DÉTAILLÉ EN GRAND
 // ============================================================
 function openMatchDetailModal(matchId) {
-  const match = currentScannerMatches.find(m => String(m.id) === String(matchId));
-  const modal = document.getElementById('match-detail-modal');
-  const metaContainer = document.getElementById('modal-match-meta');
-  const bodyContainer = document.getElementById('modal-match-body');
+  try {
+    const match = currentScannerMatches.find(m => String(m.id) === String(matchId));
+    const modal = document.getElementById('match-detail-modal');
+    const metaContainer = document.getElementById('modal-match-meta');
+    const bodyContainer = document.getElementById('modal-match-body');
 
-  if (!match || !modal || !bodyContainer) return;
+    if (!match || !modal || !bodyContainer) {
+      console.warn('Match ou éléments modaux introuvables pour ID:', matchId);
+      return;
+    }
 
-  const isAtp = match.circuit === 'atp';
-  const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP Hommes</span>` : `<span class="circuit-pill-wta">👑 WTA Femmes</span>`;
+    const isAtp = match.circuit === 'atp';
+    const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP Hommes</span>` : `<span class="circuit-pill-wta">👑 WTA Femmes</span>`;
 
-  if (metaContainer) {
-    metaContainer.innerHTML = `
-      ${circuitBadge}
-      <span style="font-weight: 800; color: #ffffff; font-size: 15px;">🏆 ${escapeHtml(match.tournament)}</span>
-      <span>• Surface : <b>${escapeHtml(match.surface)}</b></span>
-      <span>• Format : <b>Best-of ${match.best_of}</b></span>
-      <span>• Heure : <b style="color:#60a5fa;">${escapeHtml(match.time_display)}</b></span>
-      <span class="bm-badge">Cotes Bet365</span>
-    `;
-  }
-
-  const p1 = match.p1;
-  const p2 = match.p2;
-  const p1Short = p1.split(' ').pop();
-  const p2Short = p2.split(' ').pop();
-
-  const pred = match.prediction || { proba_p1: 0.50, proba_p2: 0.50, fair_odds_p1: 2.0, fair_odds_p2: 2.0, match_confidence: 75, confidence_level: 'Moyenne' };
-  const proba1 = (pred.proba_p1 * 100).toFixed(1);
-  const proba2 = (pred.proba_p2 * 100).toFixed(1);
-  const isP1Fav = pred.proba_p1 >= pred.proba_p2;
-
-  // Value bets cards
-  let vbsHtml = '';
-  if (match.all_value_bets && match.all_value_bets.length > 0) {
-    let cardsHtml = '';
-    match.all_value_bets.forEach((vb, idx) => {
-      const conf = vb.confidence || { score: 85, label: 'Très haute', level: 'high', icon: '🔥' };
-      const kellyQuarter = vb.kelly_quarter_pct || vb.kelly_pct || 1.5;
-      const bankrollTotal = parseFloat(bankrollInput ? bankrollInput.value : 1000) || 1000;
-      const betAmountEuro = ((bankrollTotal * kellyQuarter) / 100).toFixed(0);
-      const estGainEuro = (parseFloat(betAmountEuro) * (vb.offered_odds - 1.0)).toFixed(0);
-      const evVal = (vb.ev_pct !== undefined) ? vb.ev_pct : ((vb.ev_percent !== undefined) ? vb.ev_percent : 0);
-
-      cardsHtml += `
-        <div class="vb-card primary-vb" style="margin-bottom: 10px;">
-          <div class="vb-card-header">
-            <span class="vb-badge">⭐ PICK RECOMMANDÉ #${idx + 1}</span>
-            <span class="vb-conf-pill ${conf.level}">${conf.icon} Confiance : ${conf.score}% (${conf.label})</span>
-          </div>
-          <div class="vb-selection-title">${escapeHtml(vb.selection)}</div>
-          <div class="vb-details-grid">
-            <div class="vb-stat-box">
-              <span class="vb-stat-label">Cote Bet365</span>
-              <span class="vb-stat-val odd">@ ${vb.offered_odds.toFixed(2)}</span>
-            </div>
-            <div class="vb-stat-box">
-              <span class="vb-stat-label">Cote Équitable</span>
-              <span class="vb-stat-val">@ ${vb.fair_odds.toFixed(2)}</span>
-            </div>
-            <div class="vb-stat-box">
-              <span class="vb-stat-label">Espérance (EV)</span>
-              <span class="vb-stat-val ev">+${evVal}%</span>
-            </div>
-            <div class="vb-stat-box">
-              <span class="vb-stat-label">Mise Conseillée</span>
-              <span class="vb-stat-val kelly">${kellyQuarter}% (${betAmountEuro} €)</span>
-            </div>
-          </div>
-          <div style="font-size: 11px; color: #fbbf24; margin-top: 6px; font-weight: 700;">
-            💰 Gain net estimé en cas de victoire : +${estGainEuro} €
-          </div>
-        </div>
+    if (metaContainer) {
+      metaContainer.innerHTML = `
+        ${circuitBadge}
+        <span style="font-weight: 800; color: #ffffff; font-size: 15px;">🏆 ${escapeHtml(match.tournament)}</span>
+        <span>• Surface : <b>${escapeHtml(match.surface)}</b></span>
+        <span>• Format : <b>Best-of ${match.best_of}</b></span>
+        <span>• Heure : <b style="color:#60a5fa;">${escapeHtml(match.time_display)}</b></span>
+        <span class="bm-badge">Cotes Bet365</span>
       `;
-    });
+    }
+
+    const p1 = match.p1;
+    const p2 = match.p2;
+    const p1Short = p1.split(' ').pop();
+    const p2Short = p2.split(' ').pop();
+
+    const pred = match.prediction || { proba_p1: 0.50, proba_p2: 0.50, fair_odds_p1: 2.0, fair_odds_p2: 2.0, match_confidence: 75, confidence_level: 'Moyenne' };
+    const proba1 = (pred.proba_p1 * 100).toFixed(1);
+    const proba2 = (pred.proba_p2 * 100).toFixed(1);
+    const isP1Fav = pred.proba_p1 >= pred.proba_p2;
+
+    // Value bets cards
+    let vbsHtml = '';
+    if (match.all_value_bets && match.all_value_bets.length > 0) {
+      let cardsHtml = '';
+      match.all_value_bets.forEach((vb, idx) => {
+        const conf = vb.confidence || { score: 85, label: 'Très haute', level: 'high', icon: '🔥' };
+        const kellyQuarter = vb.kelly_quarter_pct || vb.kelly_pct || 1.5;
+        const bEl = document.getElementById('bankroll-input');
+        const bankrollTotal = (bEl && parseFloat(bEl.value)) ? parseFloat(bEl.value) : 1000.0;
+        const betAmountEuro = ((bankrollTotal * kellyQuarter) / 100).toFixed(0);
+        const estGainEuro = (parseFloat(betAmountEuro) * (vb.offered_odds - 1.0)).toFixed(0);
+        const evVal = (vb.ev_pct !== undefined) ? vb.ev_pct : ((vb.ev_percent !== undefined) ? vb.ev_percent : 0);
+
+        cardsHtml += `
+          <div class="vb-card primary-vb" style="margin-bottom: 10px;">
+            <div class="vb-card-header">
+              <span class="vb-badge">⭐ PICK RECOMMANDÉ #${idx + 1}</span>
+              <span class="vb-conf-pill ${conf.level}">${conf.icon} Confiance : ${conf.score}% (${conf.label})</span>
+            </div>
+            <div class="vb-selection-title">${escapeHtml(vb.selection)}</div>
+            <div class="vb-details-grid">
+              <div class="vb-stat-box">
+                <span class="vb-stat-label">Cote Bet365</span>
+                <span class="vb-stat-val odd">@ ${vb.offered_odds.toFixed(2)}</span>
+              </div>
+              <div class="vb-stat-box">
+                <span class="vb-stat-label">Cote Équitable</span>
+                <span class="vb-stat-val">@ ${vb.fair_odds.toFixed(2)}</span>
+              </div>
+              <div class="vb-stat-box">
+                <span class="vb-stat-label">Espérance (EV)</span>
+                <span class="vb-stat-val ev">+${evVal}%</span>
+              </div>
+              <div class="vb-stat-box">
+                <span class="vb-stat-label">Mise Conseillée</span>
+                <span class="vb-stat-val kelly">${kellyQuarter}% (${betAmountEuro} €)</span>
+              </div>
+            </div>
+            <div style="font-size: 11px; color: #fbbf24; margin-top: 6px; font-weight: 700;">
+              💰 Gain net estimé en cas de victoire : +${estGainEuro} €
+            </div>
+          </div>
+        `;
+      });
     vbsHtml = `
       <div style="margin-bottom: 20px;">
         <h4 style="font-size: 14px; color: #34d399; margin-bottom: 8px; display:flex; align-items:center; gap:6px;">
@@ -1949,7 +1954,12 @@ function openMatchDetailModal(matchId) {
     </div>
   `;
 
-  modal.style.display = 'flex';
+    modal.style.display = 'flex';
+  } catch (err) {
+    console.error('Erreur lors de l ouverture de la modale de match:', err);
+    // Fallback: transfert vers l'analyseur
+    transferMatchToManual(matchId);
+  }
 }
 window.openMatchDetailModal = openMatchDetailModal;
 
