@@ -1609,6 +1609,9 @@ async function loadDailyScanner(forceRefresh = false) {
 
   try {
     const res = await fetch(`/api/scanner?circuit=${currentCircuit}&bookmaker=bet365${keyParam}${refreshParam}`);
+    if (!res.ok) {
+      throw new Error(`Erreur serveur HTTP ${res.status}`);
+    }
     const data = await res.json();
 
     if (data.success && data.matches) {
@@ -1646,7 +1649,7 @@ async function loadDailyScanner(forceRefresh = false) {
     }
   } catch (err) {
     console.error('Erreur scanner cotes', err);
-    if (grid) grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 20px; color: #f87171;">⚠️ Impossible de charger les cotes en direct. Vérifiez votre connexion.</div>`;
+    if (grid) grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 25px; color: #f87171;">⚠️ Connexion au serveur en cours... Cliquez sur <b>🔄 Actualiser</b> dans quelques secondes.</div>`;
   } finally {
     if (loading) loading.style.display = 'none';
     if (grid) grid.style.opacity = '1';
