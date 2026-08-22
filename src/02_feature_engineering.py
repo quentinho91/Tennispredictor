@@ -1295,12 +1295,44 @@ if __name__ == "__main__":
     feats.to_parquet(out_path, index=False)
     print(f"{len(feats)} lignes, {feats.shape[1]} colonnes -> {out_path}")
 
+    # Optimisation de la mémoire : suppression des structures inutilisées à l'inférence
+    # et élagage des listes glissantes pour respecter la limite de 512 Mo de RAM sur Render
+    for k in ["serve_return_hist", "h2h_history"]:
+        if k in player_state:
+            del player_state[k]
+
+    last_day_val = player_state.get("last_day", 0)
+    active_players = {p for p, d in player_state.get("last_play_date", {}).items() if (last_day_val - d) <= 365 * 6}
+
+    heavy_keys = [
+        "recent_results", "fast_results", "medium_results", "slow_results",
+        "high_altitude_results", "vs_lefty_results", "rank_history", "elo_history",
+        "game_dominance_hist"
+    ]
+    for k in heavy_keys:
+        if k in player_state:
+            player_state[k] = {
+                p: (v[-25:] if len(v) > 25 else v)
+                for p, v in player_state[k].items()
+                if p in active_players and len(v) > 0
+            }
+
+    for k in ["h2h", "h2h_surface", "last_h2h_day", "last_h2h_result"]:
+        if k in player_state:
+            new_d = {}
+            for p1, inner in player_state[k].items():
+                if p1 in active_players:
+                    filtered_inner = {p2: v for p2, v in inner.items() if p2 in active_players}
+                    if filtered_inner:
+                        new_d[p1] = filtered_inner
+            player_state[k] = new_d
+
     # Sauvegarde de l'état des joueurs pour 05_predict_match.py
     import pickle
     import json
     state_path = PROCESSED_DIR / f"player_state_{args.circuit}.pkl"
     with open(state_path, "wb") as f:
-        pickle.dump(player_state, f)
+        pickle.dump(player_state, f, protocol=pickle.HIGHEST_PROTOCOL)
     print(f"Etat des joueurs sauvegarde -> {state_path}")
     print(f"  {len(player_state['elo'])} joueurs dans la base.")
 

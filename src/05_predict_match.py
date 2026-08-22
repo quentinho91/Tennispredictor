@@ -353,10 +353,10 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     last_ret    = state["last_retirement"]
     h2h         = state["h2h"]
     h2h_surf    = state["h2h_surface"]
-    h2h_hist    = state["h2h_history"]
-    last_h2h_d  = state["last_h2h_day"]
-    last_h2h_r  = state["last_h2h_result"]
-    srv_hist    = state["serve_return_hist"]
+    h2h_hist    = state.get("h2h_history", {})
+    last_h2h_d  = state.get("last_h2h_day", {})
+    last_h2h_r  = state.get("last_h2h_result", {})
+    srv_hist    = state.get("serve_return_hist", {})
 
     tourney_cpi_yearly = state.get("tourney_cpi_yearly", {})
     fast_results = state.get("fast_results", {})
