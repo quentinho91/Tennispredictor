@@ -797,15 +797,21 @@ def predict_match(req: PredictionRequest):
     if vb_over and vb_over["is_value_bet"]: detected_value_bets.append(vb_over)
     if vb_under and vb_under["is_value_bet"]: detected_value_bets.append(vb_under)
 
-    # 4. Marché Handicap de Jeux (Format bookmaker : J1 -X.5 vs J2 +X.5 - Distribution exacte)
+    # 4. Marché Handicap de Jeux (Format bookmaker : Favori -X.5 vs Underdog +X.5)
     exp_game_diff = float(m_r.get("expected_game_diff", 0.0))
     raw_h = req.handicap_line if (req.handicap_line is not None and req.handicap_line != 0) else (round(abs(exp_game_diff)) + 0.5 if round(abs(exp_game_diff)) > 0 else 1.5)
     h_val = abs(raw_h)
     sigma_diff = 4.0 if req.best_of == 3 else 7.2
-    p_h1, p_h2 = price_game_handicap(exp_game_diff, h_val, sigma=sigma_diff, match_games_dist=match_games_dist)
+    p1_is_fav = bool(p_p1 >= p_p2)
+    p_h1, p_h2 = price_game_handicap(exp_game_diff, h_val, sigma=sigma_diff, match_games_dist=match_games_dist, p1_is_fav=p1_is_fav)
 
-    label_h1 = f"{p1} (-{h_val:.1f})"
-    label_h2 = f"{p2} (+{h_val:.1f})"
+    if p1_is_fav:
+        label_h1 = f"{p1} (-{h_val:.1f})"
+        label_h2 = f"{p2} (+{h_val:.1f})"
+    else:
+        label_h1 = f"{p1} (+{h_val:.1f})"
+        label_h2 = f"{p2} (-{h_val:.1f})"
+
     vb_h1 = evaluate_market_value(p_h1, req.odds_h1, req.odds_h2, f"Handicap ({h_val:.1f})", label_h1)
     vb_h2 = evaluate_market_value(p_h2, req.odds_h2, req.odds_h1, f"Handicap ({h_val:.1f})", label_h2)
     if vb_h1 and vb_h1["is_value_bet"]: detected_value_bets.append(vb_h1)

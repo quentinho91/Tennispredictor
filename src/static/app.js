@@ -1788,7 +1788,7 @@ function renderScannerGrid() {
 // POP-UP MODAL : RAPPORT DE MATCH DÉTAILLÉ EN GRAND
 // ============================================================
 function openMatchDetailModal(matchId) {
-  const match = currentScannerMatches.find(m => m.id === matchId);
+  const match = currentScannerMatches.find(m => String(m.id) === String(matchId));
   const modal = document.getElementById('match-detail-modal');
   const metaContainer = document.getElementById('modal-match-meta');
   const bodyContainer = document.getElementById('modal-match-body');
@@ -1967,7 +1967,7 @@ function transferMatchToManual(matchId) {
 window.transferMatchToManual = transferMatchToManual;
 
 function loadMatchFromScanner(matchId) {
-  const match = currentScannerMatches.find(m => m.id === matchId);
+  const match = currentScannerMatches.find(m => String(m.id) === String(matchId));
   if (!match) return;
 
   // 1. Switch circuit if needed

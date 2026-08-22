@@ -418,21 +418,35 @@ def price_game_handicap(
     expected_diff: float,
     line: float,
     sigma: float = 4.0,
-    match_games_dist: Optional[Dict[Tuple[int, int], float]] = None
+    match_games_dist: Optional[Dict[Tuple[int, int], float]] = None,
+    p1_is_fav: bool = True
 ) -> Tuple[float, float]:
     """
-    Évalue la probabilité de couvrir un handicap de jeux H : P(Games_A - Games_B > H).
-    Utilise la distribution exacte Markov par convolution (ou distribution Normale de secours).
+    Évalue la probabilité de couvrir un handicap de jeux H :
+    - Si P1 est favori : P1 (-line) vs P2 (+line)
+    - Si P2 est favori : P1 (+line) vs P2 (-line)
     """
+    h_val = abs(line)
     if match_games_dist:
-        p_cover_a = sum(p for (tg, diff), p in match_games_dist.items() if diff > line)
+        if p1_is_fav:
+            p_cover_1 = sum(p for (tg, diff), p in match_games_dist.items() if diff > h_val)
+            p_cover_2 = 1.0 - p_cover_1
+        else:
+            p_cover_2 = sum(p for (tg, diff), p in match_games_dist.items() if diff < -h_val)
+            p_cover_1 = 1.0 - p_cover_2
     else:
-        z = (expected_diff - line) / (sigma * math.sqrt(2.0))
-        p_cover_a = 0.5 * (1.0 + math.erf(z))
+        if p1_is_fav:
+            z = (expected_diff - h_val) / (sigma * math.sqrt(2.0))
+            p_cover_1 = 0.5 * (1.0 + math.erf(z))
+            p_cover_2 = 1.0 - p_cover_1
+        else:
+            z = (-expected_diff - h_val) / (sigma * math.sqrt(2.0))
+            p_cover_2 = 0.5 * (1.0 + math.erf(z))
+            p_cover_1 = 1.0 - p_cover_2
 
-    p_cover_a = float(np.clip(p_cover_a, 0.01, 0.99))
-    p_cover_b = 1.0 - p_cover_a
-    return round(p_cover_a, 4), round(p_cover_b, 4)
+    p_cover_1 = float(np.clip(p_cover_1, 0.01, 0.99))
+    p_cover_2 = float(np.clip(p_cover_2, 0.01, 0.99))
+    return round(p_cover_1, 4), round(p_cover_2, 4)
 
 
 def price_total_games(
