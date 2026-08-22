@@ -1927,10 +1927,74 @@ function openMatchDetailModal(matchId) {
     // Ranks / Elos
     const r1 = stats.rank_p1 ? `#${stats.rank_p1}` : '-';
     const r2 = stats.rank_p2 ? `#${stats.rank_p2}` : '-';
-    const elo1 = stats.elo_p1 ? stats.elo_p1 : '-';
-    const elo2 = stats.elo_p2 ? stats.elo_p2 : '-';
-    const hold1 = stats.hold_p1 ? `${(stats.hold_p1 * 100).toFixed(0)}%` : '-';
-    const hold2 = stats.hold_p2 ? `${(stats.hold_p2 * 100).toFixed(0)}%` : '-';
+    const det = rep.detailed_analytics || {};
+    const enClair = det.summary_en_clair || '';
+    const p1Det = det.p1 || {};
+    const p2Det = det.p2 || {};
+    const h2hDet = det.h2h || {};
+    const compMetrics = det.comparative_metrics || [];
+
+    const enClairHtml = enClair ? `
+      <div class="en-clair-box">
+        <div class="en-clair-tag">💡 EN CLAIR</div>
+        <div class="en-clair-text">${enClair}</div>
+      </div>
+    ` : '';
+
+    let compRowsHtml = '';
+    if (compMetrics && compMetrics.length > 0) {
+      compMetrics.forEach(cm => {
+        const v1 = parseFloat(cm.val1) || 0;
+        const v2 = parseFloat(cm.val2) || 0;
+        const tot = (v1 + v2) || 1;
+        const pct1 = Math.max(15, Math.min(85, (v1 / tot) * 100));
+        const pct2 = 100 - pct1;
+        compRowsHtml += `
+          <div class="comp-meter-row">
+            <div class="comp-val-left">${escapeHtml(cm.val1_display || '')}</div>
+            <div class="comp-meter-center">
+              <div class="comp-meter-label">${escapeHtml(cm.label)}</div>
+              <div class="comp-dual-track">
+                <div class="comp-fill-p1" style="width: ${pct1}%;"></div>
+                <div class="comp-fill-p2" style="width: ${pct2}%;"></div>
+              </div>
+            </div>
+            <div class="comp-val-right">${escapeHtml(cm.val2_display || '')}</div>
+          </div>
+        `;
+      });
+    }
+
+    const p1StreakHtml = (p1Det.streak_badges || []).map(b => `<span class="wl-pill ${b.toLowerCase()}">${b}</span>`).join('');
+    const p2StreakHtml = (p2Det.streak_badges || []).map(b => `<span class="wl-pill ${b.toLowerCase()}">${b}</span>`).join('');
+
+    const p1MatchesHtml = (p1Det.recent_matches || []).slice(0, 5).map(m => `
+      <div class="match-history-row">
+        <div class="match-history-opp">
+          <span class="wl-pill ${m.is_win ? 'w' : 'l'}" style="width:16px;height:16px;font-size:9px;">${m.is_win ? 'W' : 'L'}</span>
+          <span>vs ${escapeHtml(m.opponent)}</span>
+        </div>
+        <div class="match-history-score">${escapeHtml(m.score)}</div>
+        <div class="match-history-meta">
+          <span class="surf-tag">${escapeHtml(m.surface)}</span>
+          <span>${escapeHtml(m.date)}</span>
+        </div>
+      </div>
+    `).join('');
+
+    const p2MatchesHtml = (p2Det.recent_matches || []).slice(0, 5).map(m => `
+      <div class="match-history-row">
+        <div class="match-history-opp">
+          <span class="wl-pill ${m.is_win ? 'w' : 'l'}" style="width:16px;height:16px;font-size:9px;">${m.is_win ? 'W' : 'L'}</span>
+          <span>vs ${escapeHtml(m.opponent)}</span>
+        </div>
+        <div class="match-history-score">${escapeHtml(m.score)}</div>
+        <div class="match-history-meta">
+          <span class="surf-tag">${escapeHtml(m.surface)}</span>
+          <span>${escapeHtml(m.date)}</span>
+        </div>
+      </div>
+    `).join('');
 
     bodyContainer.innerHTML = `
       <!-- 1. FACE-A-FACE ARENA -->
@@ -1947,7 +2011,7 @@ function openMatchDetailModal(matchId) {
               <span>• Hold Service : <b>${hold1}</b></span>
             </div>
             <div style="font-size:12px; margin-top:4px;">
-              Cote Bookmaker : <b style="color:#38bdf8;">@ ${odds1Str}</b>
+              Cote Betclic : <b style="color:#38bdf8;">@ ${odds1Str}</b>
               <span style="color:#94a3b8; font-size:11px;">(Fair IA: @ ${pred.fair_odds_p1})</span>
             </div>
           </div>
@@ -1966,7 +2030,7 @@ function openMatchDetailModal(matchId) {
             </div>
             <div style="font-size:12px; margin-top:4px;">
               <span style="color:#94a3b8; font-size:11px;">(Fair IA: @ ${pred.fair_odds_p2})</span>
-              Cote Bookmaker : <b style="color:#38bdf8;">@ ${odds2Str}</b>
+              Cote Betclic : <b style="color:#38bdf8;">@ ${odds2Str}</b>
             </div>
           </div>
         </div>
@@ -1983,13 +2047,87 @@ function openMatchDetailModal(matchId) {
         </div>
       </div>
 
-      <!-- 2. VALUE BETS RECOMMENDATIONS -->
+      <!-- 2. BANDEAU EN CLAIR -->
+      ${enClairHtml}
+
+      <!-- 3. VALUE BETS RECOMMENDATIONS -->
       ${vbsHtml}
 
-      <!-- 3. TOUS LES MARCHES & COTES EQUITABLES MARKOV -->
+      <!-- 4. COMPARATIF DES FACTEURS CLES -->
       <div class="modal-section-box">
         <div class="modal-section-title">
-          <span>📊 Comparatif de Tous les Marchés (Cotes Réelles vs Cotes Équitables IA)</span>
+          <span>📊 Comparatif des Facteurs Clés du Match</span>
+          <span style="font-size: 11px; color: #94a3b8; font-weight: normal;">Bilans &amp; Statistiques calculés par le modèle</span>
+        </div>
+        ${compRowsHtml}
+      </div>
+
+      <!-- 5. FORME RECENTE & DERNIERS MATCHS -->
+      <div class="modal-section-box">
+        <div class="modal-section-title">
+          <span>📈 Forme Récente &amp; 5 Derniers Matchs Joués</span>
+        </div>
+        <div class="recent-duo-grid">
+          <!-- P1 -->
+          <div class="player-recent-card">
+            <div class="player-recent-header">
+              <span class="player-recent-name">${escapeHtml(p1)}</span>
+              <span class="player-form-badge">⚡ ${p1Det.form_pct || 60}% Forme</span>
+            </div>
+            <div class="streak-badges-wrap">
+              ${p1StreakHtml}
+            </div>
+            <div class="match-history-list">
+              ${p1MatchesHtml}
+            </div>
+          </div>
+
+          <!-- P2 -->
+          <div class="player-recent-card">
+            <div class="player-recent-header">
+              <span class="player-recent-name">${escapeHtml(p2)}</span>
+              <span class="player-form-badge">⚡ ${p2Det.form_pct || 60}% Forme</span>
+            </div>
+            <div class="streak-badges-wrap">
+              ${p2StreakHtml}
+            </div>
+            <div class="match-history-list">
+              ${p2MatchesHtml}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. HEAD-TO-HEAD GLOBAL -->
+      <div class="modal-section-box">
+        <div class="modal-section-title">
+          <span>🤝 Head-to-Head Global</span>
+          <span style="font-size:11px; color:#34d399; font-weight:700;">${(h2hDet.total_matches > 0) ? `${h2hDet.p1_wins} - ${h2hDet.p2_wins}` : '0 - 0'}</span>
+        </div>
+        <div class="h2h-kpi-grid">
+          <div class="h2h-kpi-box">
+            <div class="h2h-kpi-num">${h2hDet.p1_wins || 0} - ${h2hDet.p2_wins || 0}</div>
+            <div class="h2h-kpi-lbl">Score Total</div>
+          </div>
+          <div class="h2h-kpi-box">
+            <div class="h2h-kpi-num">${h2hDet.total_matches || 0}</div>
+            <div class="h2h-kpi-lbl">Matchs Joués</div>
+          </div>
+          <div class="h2h-kpi-box">
+            <div class="h2h-kpi-num">${h2hDet.surface_p1_wins || 0} - ${h2hDet.surface_p2_wins || 0}</div>
+            <div class="h2h-kpi-lbl">Sur ${escapeHtml(h2hDet.surface_name || match.surface || 'cette surface')}</div>
+          </div>
+          <div class="h2h-kpi-box">
+            <div class="h2h-kpi-num">${h2hDet.p1_wins || 0} - ${h2hDet.p2_wins || 0}</div>
+            <div class="h2h-kpi-lbl">3 derniers duels</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. MARCHES & COTES EQUITABLES MARKOV -->
+      <div class="modal-section-box">
+        <div class="modal-section-title">
+          <span>📋 Cotes Réelles Betclic vs Cotes Équitables IA</span>
         </div>
 
         <div class="modal-markets-grid">
@@ -1999,14 +2137,14 @@ function openMatchDetailModal(matchId) {
             <div class="modal-market-row">
               <span>${escapeHtml(p1Short)}</span>
               <div>
-                <span class="modal-bookie-badge">Book: @ ${odds1Str}</span>
+                <span class="modal-bookie-badge">Betclic: @ ${odds1Str}</span>
                 <span class="modal-fair-badge">Fair: @ ${pred.fair_odds_p1}</span>
               </div>
             </div>
             <div class="modal-market-row">
               <span>${escapeHtml(p2Short)}</span>
               <div>
-                <span class="modal-bookie-badge">Book: @ ${odds2Str}</span>
+                <span class="modal-bookie-badge">Betclic: @ ${odds2Str}</span>
                 <span class="modal-fair-badge">Fair: @ ${pred.fair_odds_p2}</span>
               </div>
             </div>
@@ -2025,45 +2163,7 @@ function openMatchDetailModal(matchId) {
             </div>
           </div>
 
-          <!-- Marché 3 : Total Jeux -->
-          <div class="modal-market-cell">
-            <div class="modal-market-name">🔢 Total de Jeux (Ligne : ${totLine})</div>
-            <div class="modal-market-row">
-              <span>Over ${totLine}</span>
-              <div>
-                <span class="modal-bookie-badge">Book: @ ${oddsOvStr}</span>
-                <span class="modal-fair-badge">Fair: @ ${(totalM.fair_odds_over || 1.90)}</span>
-              </div>
-            </div>
-            <div class="modal-market-row">
-              <span>Under ${totLine}</span>
-              <div>
-                <span class="modal-bookie-badge">Book: @ ${oddsUnStr}</span>
-                <span class="modal-fair-badge">Fair: @ ${(totalM.fair_odds_under || 1.90)}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Marché 4 : Handicap de Jeux -->
-          <div class="modal-market-cell">
-            <div class="modal-market-name">⚖️ Handicap de Jeux (${hcapM.line ? hcapM.line : hLine})</div>
-            <div class="modal-market-row">
-              <span>${hcapM.label_h1 ? escapeHtml(hcapM.label_h1) : `${p1Short} (${isP1Fav ? `-${hLine}` : `+${hLine}`})`}</span>
-              <div>
-                <span class="modal-bookie-badge">Book: @ ${oddsH1Str}</span>
-                <span class="modal-fair-badge">Fair: @ ${(hcapM.fair_odds_h1 || 1.90)}</span>
-              </div>
-            </div>
-            <div class="modal-market-row">
-              <span>${hcapM.label_h2 ? escapeHtml(hcapM.label_h2) : `${p2Short} (${!isP1Fav ? `-${hLine}` : `+${hLine}`})`}</span>
-              <div>
-                <span class="modal-bookie-badge">Book: @ ${oddsH2Str}</span>
-                <span class="modal-fair-badge">Fair: @ ${(hcapM.fair_odds_h2 || 1.90)}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Marché 5 : Nombre de Sets -->
+          <!-- Marché 3 : Nombre de Sets -->
           <div class="modal-market-cell">
             <div class="modal-market-name">🎾 Nombre de Sets</div>
             <div class="modal-market-row">
@@ -2076,7 +2176,7 @@ function openMatchDetailModal(matchId) {
             </div>
           </div>
 
-          <!-- Marché 6 : Tie-Break -->
+          <!-- Marché 4 : Tie-Break -->
           <div class="modal-market-cell">
             <div class="modal-market-name">⚡ Tie-Break dans le match (Proba: ${probaTbYes})</div>
             <div class="modal-market-row">
@@ -2091,7 +2191,7 @@ function openMatchDetailModal(matchId) {
         </div>
       </div>
 
-      <!-- 4. MODAL FOOTER ACTIONS -->
+      <!-- 8. MODAL FOOTER ACTIONS -->
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border);">
         <button type="button" class="btn-cancel" onclick="closeMatchDetailModal()" style="font-size: 13px; padding: 8px 18px;">
           ✕ Fermer

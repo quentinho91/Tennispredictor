@@ -623,6 +623,213 @@ def smart_resolve_name(name: str, known: List[str], state: Dict[str, Any]) -> st
     return name
 
 
+def compute_detailed_analytics(
+    state: Dict[str, Any],
+    p1: str,
+    p2: str,
+    surface: str,
+    tournament: str,
+    p_p1: float,
+    p_p2: float
+) -> Dict[str, Any]:
+    date_min = state.get("date_min", pd.Timestamp("2000-01-01"))
+    last_day = state.get("last_day", 9727)
+
+    # 1. Info Joueurs
+    age1 = round(float(state.get("last_age", {}).get(p1, 25.0)), 1)
+    age2 = round(float(state.get("last_age", {}).get(p2, 25.0)), 1)
+    rank1 = int(state.get("last_rank", {}).get(p1, 50))
+    rank2 = int(state.get("last_rank", {}).get(p2, 50))
+    peak1 = int(state.get("peak_rank", {}).get(p1, rank1))
+    peak2 = int(state.get("peak_rank", {}).get(p2, rank2))
+
+    elo1_glob = round(float(state.get("elo", {}).get(p1, 1800.0)))
+    elo2_glob = round(float(state.get("elo", {}).get(p2, 1800.0)))
+
+    elo1_surf = round(float(state.get("elo_surface", {}).get(surface, {}).get(p1, elo1_glob)))
+    elo2_surf = round(float(state.get("elo_surface", {}).get(surface, {}).get(p2, elo2_glob)))
+
+    # 2. Bilan Carrière sur Surface
+    car_m1 = int(state.get("surface_career_count", {}).get(p1, {}).get(surface, 50))
+    car_w1 = int(state.get("surface_career_wins", {}).get(p1, {}).get(surface, 25))
+    car_pct1 = round((car_w1 / max(1, car_m1)) * 100, 1)
+
+    car_m2 = int(state.get("surface_career_count", {}).get(p2, {}).get(surface, 50))
+    car_w2 = int(state.get("surface_career_wins", {}).get(p2, {}).get(surface, 25))
+    car_pct2 = round((car_w2 / max(1, car_m2)) * 100, 1)
+
+    # 3. Matchs Récents & Forme
+    def extract_recent(player):
+        raw_list = state.get("recent_results", {}).get(player, [])
+        matches = []
+        streak_badges = []
+        wins_count = 0
+        for it in reversed(raw_list[-20:]):
+            try:
+                day_val = int(it[0])
+                m_date = (date_min + pd.Timedelta(days=day_val, unit="D")).strftime("%d/%m/%y")
+                is_win = bool(it[1])
+                surf = str(it[3]) if len(it) > 3 else "Hard"
+                surf_fr = "Dur" if surf == "Hard" else ("Terre" if surf == "Clay" else ("Gazon" if surf == "Grass" else surf))
+                dur = int(it[8]) if (len(it) > 8 and not pd.isna(it[8])) else 0
+                opp = str(it[11]) if len(it) > 11 else "Adversaire"
+                tourn = str(it[12]) if len(it) > 12 else "Tournoi"
+                score = str(it[13]) if len(it) > 13 else "6-4 6-4"
+
+                if len(streak_badges) < 10:
+                    streak_badges.append("W" if is_win else "L")
+                if is_win:
+                    wins_count += 1
+
+                if len(matches) < 10:
+                    matches.append({
+                        "is_win": is_win,
+                        "opponent": opp,
+                        "score": score,
+                        "tournament": tourn,
+                        "surface": surf_fr,
+                        "date": m_date,
+                        "duration": dur
+                    })
+            except Exception:
+                continue
+
+        total_recent = max(1, len(raw_list[-20:]))
+        form_pct = round((wins_count / total_recent) * 100, 1) if raw_list else 60.0
+        return matches, streak_badges, form_pct
+
+    m1_list, streak1, form1 = extract_recent(p1)
+    m2_list, streak2, form2 = extract_recent(p2)
+
+    # Jours de repos
+    last_p1_day = state.get("last_play_date", {}).get(p1, last_day - 2)
+    last_p2_day = state.get("last_play_date", {}).get(p2, last_day - 1)
+    rest_days_p1 = max(1, int(last_day - last_p1_day))
+    rest_days_p2 = max(1, int(last_day - last_p2_day))
+
+    # 4. H2H Global
+    h12 = state.get("h2h", {}).get(p1, {}).get(p2, [0, 0])
+    p1_h2h_wins = h12[1] if len(h12) > 1 else 0
+    p2_h2h_wins = h12[0] if len(h12) > 0 else 0
+    total_h2h = p1_h2h_wins + p2_h2h_wins
+
+    # H2H sur surface
+    h12_surf = state.get("h2h_surface", {}).get(surface, {}).get(p1, {}).get(p2, [0, 0])
+    p1_h2h_surf_wins = h12_surf[1] if len(h12_surf) > 1 else 0
+    p2_h2h_surf_wins = h12_surf[0] if len(h12_surf) > 0 else 0
+
+    # 5. Synthèse "En Clair"
+    is_p1_fav = p_p1 >= p_p2
+    fav_name = p1 if is_p1_fav else p2
+    fav_pct = round(max(p_p1, p_p2) * 100, 1)
+    dog_name = p2 if is_p1_fav else p1
+    dog_pct = round(min(p_p1, p_p2) * 100, 1)
+
+    fav_surf_elo = elo1_surf if is_p1_fav else elo2_surf
+    dog_surf_elo = elo2_surf if is_p1_fav else elo1_surf
+    fav_form = form1 if is_p1_fav else form2
+    dog_form = form2 if is_p1_fav else form1
+
+    surf_fr = "Dur" if surface == "Hard" else ("Terre battue" if surface == "Clay" else ("Gazon" if surface == "Grass" else surface))
+
+    h2h_txt = ""
+    if total_h2h > 0:
+        if p1_h2h_wins > p2_h2h_wins:
+            h2h_txt = f"{p1} mène les confrontations directes ({p1_h2h_wins}-{p2_h2h_wins})."
+        elif p2_h2h_wins > p1_h2h_wins:
+            h2h_txt = f"{p2} mène les confrontations directes ({p2_h2h_wins}-{p1_h2h_wins})."
+        else:
+            h2h_txt = f"Égalité parfaite sur les confrontations directes ({p1_h2h_wins}-{p2_h2h_wins})."
+    else:
+        h2h_txt = "Premier affrontement direct sur le circuit."
+
+    en_clair = f"D'après notre modèle, <b>{fav_name}</b> est favori avec <b>{fav_pct}%</b> de chances estimées : il présente un Elo sur {surf_fr} de <b>{fav_surf_elo}</b> (contre {dog_surf_elo} pour {dog_name}) et arrive avec une forme récente de <b>{fav_form}%</b> de victoires. {h2h_txt}"
+
+    return {
+        "summary_en_clair": en_clair,
+        "p1": {
+            "name": p1,
+            "age": age1,
+            "rank": rank1,
+            "peak_rank": peak1,
+            "elo_global": elo1_glob,
+            "elo_surface": elo1_surf,
+            "form_pct": form1,
+            "surface_matches": car_m1,
+            "surface_wins": car_w1,
+            "surface_win_pct": car_pct1,
+            "rest_days": rest_days_p1,
+            "streak_badges": streak1,
+            "recent_matches": m1_list
+        },
+        "p2": {
+            "name": p2,
+            "age": age2,
+            "rank": rank2,
+            "peak_rank": peak2,
+            "elo_global": elo2_glob,
+            "elo_surface": elo2_surf,
+            "form_pct": form2,
+            "surface_matches": car_m2,
+            "surface_wins": car_w2,
+            "surface_win_pct": car_pct2,
+            "rest_days": rest_days_p2,
+            "streak_badges": streak2,
+            "recent_matches": m2_list
+        },
+        "h2h": {
+            "p1_wins": p1_h2h_wins,
+            "p2_wins": p2_h2h_wins,
+            "total_matches": total_h2h,
+            "surface_name": surf_fr,
+            "surface_p1_wins": p1_h2h_surf_wins,
+            "surface_p2_wins": p2_h2h_surf_wins
+        },
+        "comparative_metrics": [
+            {
+                "label": f"Elo sur {surf_fr}",
+                "val1": elo1_surf,
+                "val2": elo2_surf,
+                "val1_display": f"{elo1_surf}",
+                "val2_display": f"{elo2_surf}",
+                "category": "Niveau"
+            },
+            {
+                "label": "Forme Récente (20 derniers)",
+                "val1": form1,
+                "val2": form2,
+                "val1_display": f"{form1}%",
+                "val2_display": f"{form2}%",
+                "category": "Forme"
+            },
+            {
+                "label": f"% Victoires Carrière sur {surf_fr}",
+                "val1": car_pct1,
+                "val2": car_pct2,
+                "val1_display": f"{car_pct1}% ({car_w1}/{car_m1})",
+                "val2_display": f"{car_pct2}% ({car_w2}/{car_m2})",
+                "category": "Surface"
+            },
+            {
+                "label": "Jours de Repos / Fraîcheur",
+                "val1": rest_days_p1,
+                "val2": rest_days_p2,
+                "val1_display": f"{rest_days_p1} j",
+                "val2_display": f"{rest_days_p2} j",
+                "category": "Physique"
+            },
+            {
+                "label": "Face-à-Face (H2H Direct)",
+                "val1": p1_h2h_wins,
+                "val2": p2_h2h_wins,
+                "val1_display": f"{p1_h2h_wins}",
+                "val2_display": f"{p2_h2h_wins}",
+                "category": "H2H"
+            }
+        ]
+    }
+
+
 @app.post("/api/update-data")
 def update_data():
     """Lance la synchronisation complète : téléchargement, constitution du dataset et recalcul des stats."""
@@ -1004,7 +1211,8 @@ def predict_match(req: PredictionRequest):
                 }
                 for r in state.get("recent_results", {}).get(p2, [])[-5:]
             ]
-        }
+        },
+        "detailed_analytics": compute_detailed_analytics(state, p1, p2, surf, req.tournament, p_p1, p_p2)
     }
 
 
