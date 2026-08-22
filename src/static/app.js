@@ -1282,6 +1282,20 @@ function updateHistoryResult(id, newResult) {
 }
 window.updateHistoryResult = updateHistoryResult;
 
+function deleteHistoryItem(id, event) {
+  if (event) event.stopPropagation();
+  let history = getHistory();
+  const item = history.find(h => h.id === id);
+  const matchName = item ? `${item.p1} vs ${item.p2}` : 'ce match';
+
+  if (confirm(`Supprimer ${matchName} de l'historique ?`)) {
+    history = history.filter(h => h.id !== id);
+    saveHistory(history);
+    renderHistory();
+  }
+}
+window.deleteHistoryItem = deleteHistoryItem;
+
 function loadPredictionFromHistory(id) {
   const history = getHistory();
   const item = history.find(h => h.id === id);
@@ -1374,7 +1388,7 @@ function loadPredictionFromHistory(id) {
 window.loadPredictionFromHistory = loadPredictionFromHistory;
 
 function clearHistory() {
-  if (confirm('Voulez-vous vraiment effacer les 10 dernières prédictions ?')) {
+  if (confirm('Voulez-vous vraiment effacer TOUT l\'historique des prédictions ?')) {
     localStorage.removeItem(HISTORY_STORAGE_KEY);
     renderHistory();
   }
@@ -1476,6 +1490,7 @@ function renderHistory() {
           <div class="hist-outcome-btns" onclick="event.stopPropagation();">
             <button class="hist-btn win-btn ${isWon ? 'active' : ''}" title="Marquer Gagné" onclick="updateHistoryResult('${item.id}', 'won')">✅</button>
             <button class="hist-btn loss-btn ${isLost ? 'active' : ''}" title="Marquer Perdu" onclick="updateHistoryResult('${item.id}', 'lost')">❌</button>
+            <button class="hist-btn del-btn" title="Supprimer ce match de l'historique" onclick="deleteHistoryItem('${item.id}', event)">🗑️</button>
           </div>
         </div>
       </div>
