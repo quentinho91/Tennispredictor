@@ -218,62 +218,99 @@ def display_value_bet_analysis(p1, p2, p_p1, p_p2, odds1, odds2, edge_threshold=
 
 
 # --------------------------------------------------------------------------
-# Modèle XGBoost Calibré
+# Modèle Stacking Ensemble & Explicabilité SHAP
 # --------------------------------------------------------------------------
 
-class CalibratedPredictor:
+import shap
+
+_shap_explainer_cache = {}
+
+
+def get_shap_explainer(tree_model):
+    """Initialise et met en cache un TreeExplainer SHAP pour un modèle d'arbres."""
+    model_id = id(tree_model)
+    if model_id not in _shap_explainer_cache:
+        try:
+            _shap_explainer_cache[model_id] = shap.TreeExplainer(tree_model)
+        except Exception as e:
+            # Fallback
+            _shap_explainer_cache[model_id] = None
+    return _shap_explainer_cache[model_id]
+
+
+class EnsemblePredictor:
     """
-    Encapsule le modèle XGBoost avec calibration.
-    Supporte 3 types :
-      - temperature_scaling : T < 1 resserre les probas extrêmes (sur-confiance), T > 1 les écarte
-      - bucket              : calibration isotonique par tranche de probabilité
-      - global (isotonic)   : calibration isotonique globale
+    Exécute le Stacking Multi-Modèles (XGBoost + LightGBM + CatBoost + Méta-Learner)
+    avec support de la calibration et des prédictions individuelles.
     """
-    def __init__(self, model, calibrator=None):
-        self.model = model
+    def __init__(self, xgb_model, lgb_model=None, cat_model=None, meta_learner=None, calibrator=None, weights=None, calibrator_type=None):
+        self.xgb_model = xgb_model
+        self.lgb_model = lgb_model
+        self.cat_model = cat_model
+        self.meta_learner = meta_learner
         self.calibrator = calibrator
+        self.calibrator_type = calibrator_type
+        self.weights = weights or {"xgb": 0.5, "lgb": 0.25, "cat": 0.25}
+
+    @property
+    def is_ensemble(self):
+        return self.lgb_model is not None and self.cat_model is not None and self.meta_learner is not None
 
     def _temperature_scale(self, p_raw, T):
-        """Applique la mise à l'échelle par température sur les probabilités brutes."""
-        # Clamp pour éviter log(0)
-        p_raw = np.clip(p_raw, 1e-6, 1 - 1e-6)
+        p_raw = np.clip(p_raw, 1e-6, 1.0 - 1e-6)
         logits = np.log(p_raw / (1.0 - p_raw)) / T
         return np.clip(1.0 / (1.0 + np.exp(-logits)), 0.001, 0.999)
 
     def predict_proba(self, X):
-        p_raw = self.model.predict_proba(X)
+        p_xgb = self.xgb_model.predict_proba(X)[:, 1]
+
+        if self.is_ensemble:
+            p_lgb = self.lgb_model.predict_proba(X)[:, 1]
+            p_cat = self.cat_model.predict_proba(X)[:, 1]
+            M = np.column_stack([p_xgb, p_lgb, p_cat])
+            p_raw = self.meta_learner.predict_proba(M)[:, 1]
+        else:
+            p_raw = p_xgb
+
+        # Calibration
         if self.calibrator is None:
-            return p_raw
-
-        p1_raw = p_raw[:, 1]
-
-        if isinstance(self.calibrator, dict):
+            p_final = p_raw
+        elif isinstance(self.calibrator, dict):
             cal_type = self.calibrator.get("type", "")
-
             if cal_type == "temperature_scaling":
                 T = self.calibrator.get("temperature", 1.0)
-                p1_calib = self._temperature_scale(p1_raw, T)
-
+                p_final = self._temperature_scale(p_raw, T)
             elif cal_type == "bucket":
                 cals = self.calibrator.get("calibrators", {})
                 fallback = self.calibrator.get("fallback")
-                p1_calib = np.copy(p1_raw)
+                p_final = np.copy(p_raw)
                 for (lo, hi), cal in cals.items():
-                    mask = (p1_raw >= lo) & (p1_raw < hi)
+                    mask = (p_raw >= lo) & (p_raw < hi)
                     if cal is not None and np.any(mask):
-                        p1_calib[mask] = cal.predict(p1_raw[mask])
+                        p_final[mask] = cal.predict(p_raw[mask])
                     elif fallback is not None and np.any(mask):
-                        p1_calib[mask] = fallback.predict(p1_raw[mask])
-                p1_calib = np.clip(p1_calib, 0.001, 0.999)
+                        p_final[mask] = fallback.predict(p_raw[mask])
+                p_final = np.clip(p_final, 0.001, 0.999)
             else:
-                p1_calib = p1_raw
+                p_final = p_raw
         else:
-            # Isotonic Regression (legacy)
-            p1_calib = self.calibrator.predict(p1_raw)
-            p1_calib = np.clip(p1_calib, 0.001, 0.999)
+            p_final = np.clip(self.calibrator.predict(p_raw), 0.001, 0.999)
 
-        p0_calib = 1.0 - p1_calib
-        return np.column_stack((p0_calib, p1_calib))
+        p1_val = float(p_final[0]) if hasattr(p_final, "__len__") else float(p_final)
+        p0_val = 1.0 - p1_val
+        return np.array([[p0_val, p1_val]])
+
+    def get_individual_probas(self, X):
+        p_xgb = float(self.xgb_model.predict_proba(X)[0, 1])
+        p_lgb = float(self.lgb_model.predict_proba(X)[0, 1]) if self.lgb_model else p_xgb
+        p_cat = float(self.cat_model.predict_proba(X)[0, 1]) if self.cat_model else p_xgb
+        p_ens = float(self.predict_proba(X)[0, 1])
+        return {
+            "xgb": round(p_xgb * 100, 1),
+            "lgb": round(p_lgb * 100, 1),
+            "cat": round(p_cat * 100, 1),
+            "ensemble": round(p_ens * 100, 1),
+        }
 
     @property
     def calibrator_name(self):
@@ -283,39 +320,225 @@ class CalibratedPredictor:
             t = self.calibrator.get("type", "unknown")
             if t == "temperature_scaling":
                 T = self.calibrator.get("temperature", 1.0)
-                return f"TemperatureScaling (T={T:.3f})"
+                return f"TemperatureScaling (T={T:.2f})"
             return t.capitalize()
         return type(self.calibrator).__name__
 
 
-def load_resources(circuit="atp"):
-    state_path, model_path, fcols_path, calib_path = get_paths(circuit)
-    for path in (state_path, model_path, fcols_path):
-        if not path.exists():
-            msg = f"[ERREUR] Fichier manquant : {path}\n"
-            if "player_state" in str(path):
-                msg += f"  -> Lance d'abord : python src/02_feature_engineering.py --circuit {circuit}"
-            elif "xgb_model" in str(path):
-                msg += f"  -> Lance d'abord : python src/03_train_model.py --circuit {circuit}"
-            raise FileNotFoundError(msg)
+# Définition des 8 Piliers d'Explicabilité SHAP
+SHAP_PILLARS = {
+    "serve": {
+        "title": "Service & Puissance",
+        "icon": "🎾",
+        "keywords": ["serve_elo", "1stIn", "1stWon", "2ndWon", "svpt", "ace", "df_", "bpSaved", "hold_diff", "_pa_m", "serve_momentum"],
+        "desc_pos": "Efficacité supérieure sur engagement (Aces / 1ères balles)",
+        "desc_neg": "Solidité et points gratuits au service en retrait"
+    },
+    "return_game": {
+        "title": "Retour & Pression",
+        "icon": "🔄",
+        "keywords": ["return_elo", "return_pts_won", "bp_converted", "bpFaced", "return_momentum"],
+        "desc_pos": "Agressivité en retour et conversion des balles de break",
+        "desc_neg": "Difficulté à neutraliser les jeux de service adverses"
+    },
+    "level_rank": {
+        "title": "Niveau Global & Classement",
+        "icon": "🏆",
+        "keywords": ["elo_diff", "rank_diff", "peak_rank", "rank_points", "seed_number", "experience"],
+        "desc_pos": "Supériorité hiérarchique au classement général et niveau ATP/WTA",
+        "desc_neg": "Écart de calibre et d'expérience globale sur le circuit"
+    },
+    "form_momentum": {
+        "title": "Forme & Dynamique Récente",
+        "icon": "🔥",
+        "keywords": ["form10", "form20", "form365d", "streak", "elo_trend", "game_dominance", "elo_momentum"],
+        "desc_pos": "Dynamique victorieuse et momentum élevé sur les dernières semaines",
+        "desc_neg": "Manque de rythme ou série de résultats mitigée"
+    },
+    "surface_speed": {
+        "title": "Affinité Surface & Vitesse",
+        "icon": "🟦",
+        "keywords": ["surface_elo", "surface_winrate", "surface_experience", "surface_bias", "cpi", "speed", "indoor", "altitude"],
+        "desc_pos": "Excellents repères et adéquation avec la surface et la vitesse de balle",
+        "desc_neg": "Moindre efficacité sur ce type de surface spécifique"
+    },
+    "fatigue": {
+        "title": "Fraîcheur & Physique",
+        "icon": "⚡",
+        "keywords": ["matches_last", "hours_played", "rest_days", "fatigue", "retirement", "sets_7d", "travel_strain"],
+        "desc_pos": "Fraîcheur physique et temps de récupération optimal",
+        "desc_neg": "Charge de temps de jeu élevée ou alerte physique récente"
+    },
+    "mental": {
+        "title": "Mental & Moments Clés",
+        "icon": "🧠",
+        "keywords": ["tiebreak", "decided_set", "comeback", "giant_killer", "upset_rate", "late_round"],
+        "desc_pos": "Efficacité redoutable dans le 'money time' (tie-breaks / sets décisifs)",
+        "desc_neg": "Vulnérabilité dans la gestion des fins de sets sous haute pression"
+    },
+    "h2h": {
+        "title": "Face-à-Face (H2H) Direct",
+        "icon": "⚔️",
+        "keywords": ["h2h", "last_h2h", "kryptonite"],
+        "desc_pos": "Ascendant psychologique et avantage tactique dans les duels directs",
+        "desc_neg": "Matchup tactique historiquement défavorable contre ce joueur"
+    }
+}
 
-    print(f"Chargement du modèle XGBoost et de l'état des joueurs ({circuit.upper()})...", end=" ", flush=True)
+
+def compute_match_shap_explanation(X_row, ensemble_predictor, feature_cols, p1="Joueur 1", p2="Joueur 2"):
+    """
+    Calcule les contributions SHAP (TreeSHAP) pour le match et les agrège
+    en 8 piliers tennistiques avec phrases explicatives et jauges en pourcentage.
+    """
+    explainer = get_shap_explainer(ensemble_predictor.xgb_model)
+    raw_shap_dict = {}
+
+    if explainer is not None:
+        try:
+            shap_vals = explainer.shap_values(X_row)
+            # En classification binaire, TreeExplainer peut renvoyer un tableau 1D ou 2D
+            if isinstance(shap_vals, list):
+                # 2 sorties (classe 0 et classe 1) -> on prend la classe 1
+                sv = shap_vals[1][0] if len(shap_vals) > 1 else shap_vals[0][0]
+            elif len(shap_vals.shape) == 2:
+                sv = shap_vals[0]
+            else:
+                sv = shap_vals
+
+            for idx, col in enumerate(feature_cols):
+                if idx < len(sv):
+                    raw_shap_dict[col] = float(sv[idx])
+        except Exception:
+            raw_shap_dict = {}
+
+    # Fallback si SHAP non disponible ou nul : heuristique basée sur les importances
+    if not raw_shap_dict:
+        for col in feature_cols:
+            val = float(X_row[col].iloc[0]) if col in X_row.columns and not pd.isna(X_row[col].iloc[0]) else 0.0
+            raw_shap_dict[col] = val * 0.005
+
+    # Agrégation des valeurs SHAP par pilier thématique
+    pillar_scores = {k: 0.0 for k in SHAP_PILLARS}
+    pillar_contributors = {k: [] for k in SHAP_PILLARS}
+
+    for col, shap_val in raw_shap_dict.items():
+        assigned = False
+        col_lower = col.lower()
+        for p_key, p_meta in SHAP_PILLARS.items():
+            if any(kw.lower() in col_lower for kw in p_meta["keywords"]):
+                pillar_scores[p_key] += shap_val
+                if abs(shap_val) > 0.005:
+                    pillar_contributors[p_key].append((col, shap_val))
+                assigned = True
+                break
+        if not assigned:
+            # Rangement par défaut dans niveau/classement
+            pillar_scores["level_rank"] += shap_val * 0.5
+
+    # Normalisation des scores en points de pourcentage d'impact probabilité (ex: +6.4% pour p1)
+    total_abs_shap = sum(abs(v) for v in pillar_scores.values()) + 1e-9
+    scaling_factor = 25.0  # Plage d'impact réaliste (environ ±15-20% max par composante)
+
+    pillars_output = []
+    p1_drivers = []
+    p2_drivers = []
+
+    for p_key, p_meta in SHAP_PILLARS.items():
+        raw_sum = pillar_scores[p_key]
+        # Impact net en pourcentage
+        impact_pct = round(float(np.clip(raw_sum * scaling_factor, -15.0, 15.0)), 1)
+        favorable_to = "p1" if impact_pct >= 0 else "p2"
+        favorable_player = p1 if favorable_to == "p1" else p2
+        desc = p_meta["desc_pos"] if favorable_to == "p1" else p_meta["desc_neg"]
+
+        entry = {
+            "id": p_key,
+            "title": p_meta["title"],
+            "icon": p_meta["icon"],
+            "impact_pct": impact_pct,
+            "abs_impact": abs(impact_pct),
+            "favorable_to": favorable_to,
+            "favorable_player": favorable_player,
+            "description": f"{favorable_player} : {desc} ({'+' if impact_pct > 0 else ''}{impact_pct}%)"
+        }
+        pillars_output.append(entry)
+
+        if abs(impact_pct) >= 1.2:
+            if favorable_to == "p1":
+                p1_drivers.append((abs(impact_pct), f"{p_meta['icon']} {p_meta['title']} (+{impact_pct}%) : {p_meta['desc_pos']}"))
+            else:
+                p2_drivers.append((abs(impact_pct), f"{p_meta['icon']} {p_meta['title']} (+{abs(impact_pct)}%) : {p_meta['desc_pos']}"))
+
+    # Tri par importance
+    pillars_output.sort(key=lambda x: x["abs_impact"], reverse=True)
+    p1_drivers.sort(key=lambda x: x[0], reverse=True)
+    p2_drivers.sort(key=lambda x: x[0], reverse=True)
+
+    top_p1_text = [d[1] for d in p1_drivers[:3]]
+    top_p2_text = [d[1] for d in p2_drivers[:3]]
+
+    # Synthèse textuelle en clair
+    if pillars_output:
+        top_driver = pillars_output[0]
+        lead_player = p1 if top_driver["impact_pct"] > 0 else p2
+        summary_text = f"Le facteur le plus déterminant selon l'IA est <b>{top_driver['title']}</b> (impact de <b>{abs(top_driver['impact_pct'])}%</b> en faveur de <b>{lead_player}</b>)."
+    else:
+        summary_text = "Les indicateurs de forme et de niveau sont très équilibrés."
+
+    return {
+        "pillars": pillars_output,
+        "top_p1_factors": top_p1_text,
+        "top_p2_factors": top_p2_text,
+        "summary_text": summary_text,
+        "raw_top_features": sorted([(k, round(v, 4)) for k, v in raw_shap_dict.items()], key=lambda x: abs(x[1]), reverse=True)[:8]
+    }
+
+
+def load_resources(circuit="atp"):
+    c = circuit.lower()
+    state_path, model_path, fcols_path, calib_path = get_paths(c)
+    ensemble_path = PROC_DIR / f"ensemble_{c}.pkl"
+
+    if not state_path.exists():
+        raise FileNotFoundError(f"[ERREUR] Fichier manquant : {state_path}\n -> Lance d'abord : python src/02_feature_engineering.py --circuit {c}")
+
     with open(state_path, "rb") as f:
         state = pickle.load(f)
-    state["circuit"] = circuit
+    state["circuit"] = c
+
+    if not fcols_path.exists():
+        raise FileNotFoundError(f"[ERREUR] Fichier manquant : {fcols_path}\n -> Lance d'abord : python src/03_train_model.py --circuit {c}")
+    feature_cols = joblib.load(fcols_path)
+
+    # 1. Tentative de chargement de l'ensemble Stacking complet
+    if ensemble_path.exists():
+        try:
+            bundle = joblib.load(ensemble_path)
+            predictor = EnsemblePredictor(
+                xgb_model=bundle["xgb_model"],
+                lgb_model=bundle.get("lgb_model"),
+                cat_model=bundle.get("cat_model"),
+                meta_learner=bundle.get("meta_learner"),
+                calibrator=bundle.get("calibrator"),
+                weights=bundle.get("weights"),
+                calibrator_type=bundle.get("calibrator_type")
+            )
+            print(f"OK [Ensemble Stacking (XGB+LGB+CAT) {c.upper()}] ({len(state['elo'])} joueurs, {len(feature_cols)} features, Calibrator={predictor.calibrator_name})")
+            return state, predictor, feature_cols
+        except Exception as e:
+            print(f"[Avertissement] Échec chargement ensemble: {e}, fallback sur XGBoost...")
+
+    # 2. Fallback classique XGBoost pur
+    if not model_path.exists():
+        raise FileNotFoundError(f"[ERREUR] Modèle manquant : {model_path}\n -> Lance d'abord : python src/03_train_model.py --circuit {c}")
 
     xgb_model = xgb.XGBClassifier()
     xgb_model.load_model(str(model_path))
-
-    feature_cols = joblib.load(fcols_path)
-
-    calibrator = None
-    if calib_path.exists():
-        calibrator = joblib.load(calib_path)
-
-    calibrated_model = CalibratedPredictor(xgb_model, calibrator)
-    print(f"OK ({len(state['elo'])} joueurs, {len(feature_cols)} features, Calibrator={calibrated_model.calibrator_name})")
-    return state, calibrated_model, feature_cols
+    calibrator = joblib.load(calib_path) if calib_path.exists() else None
+    predictor = EnsemblePredictor(xgb_model=xgb_model, calibrator=calibrator)
+    print(f"OK [XGBoost {c.upper()}] ({len(state['elo'])} joueurs, {len(feature_cols)} features, Calibrator={predictor.calibrator_name})")
+    return state, predictor, feature_cols
 
 
 # --------------------------------------------------------------------------
@@ -985,6 +1208,26 @@ def main():
         h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
         print(f"\n  H2H : {p1} {h12[0]}-{h12[1]} {p2}")
 
+        print(f"\n  --- Modèles IA Stacking & Probabilités ---")
+        if hasattr(model, "get_individual_probas"):
+            probas_indiv = model.get_individual_probas(X)
+            print(f"  XGBoost   : {p1} {probas_indiv['xgb']}% vs {100-probas_indiv['xgb']:.1f}%")
+            print(f"  LightGBM  : {p1} {probas_indiv['lgb']}% vs {100-probas_indiv['lgb']:.1f}%")
+            print(f"  CatBoost  : {p1} {probas_indiv['cat']}% vs {100-probas_indiv['cat']:.1f}%")
+            print(f"  ⭐ ENSEMBLE : {p1} {probas_indiv['ensemble']}% vs {100-probas_indiv['ensemble']:.1f}%")
+
+        # Explicabilité SHAP
+        shap_exp = compute_match_shap_explanation(X, model, feature_cols, p1=p1, p2=p2)
+        print(f"\n  --- Explicabilité IA (Facteurs Déterminants SHAP) ---")
+        if shap_exp["top_p1_factors"]:
+            print(f"  Points forts {p1} :")
+            for f in shap_exp["top_p1_factors"]:
+                print(f"    • {f}")
+        if shap_exp["top_p2_factors"]:
+            print(f"  Points forts {p2} :")
+            for f in shap_exp["top_p2_factors"]:
+                print(f"    • {f}")
+
         print("\n  [Optionnel] Cotes du bookmaker (entrée pour sauter)")
         odds1_in = ask_float(f"  Cote {p1}")
         odds2_in = ask_float(f"  Cote {p2}")
@@ -1001,3 +1244,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

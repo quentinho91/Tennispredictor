@@ -31,6 +31,7 @@ load_resources = pm.load_resources
 compute_features = pm.compute_features
 build_row = pm.build_row
 remove_overround = pm.remove_overround
+compute_match_shap_explanation = pm.compute_match_shap_explanation
 SURFACES = pm.SURFACES
 LEVELS = pm.LEVELS
 ROUNDS = pm.ROUNDS
@@ -1338,6 +1339,11 @@ def predict_match(req: PredictionRequest):
                 for r in state.get("recent_results", {}).get(p2, [])[-5:]
             ]
         },
+        "individual_probas": model.get_individual_probas(X) if hasattr(model, "get_individual_probas") else {
+            "xgb": round(p_p1 * 100, 1),
+            "ensemble": round(p_p1 * 100, 1)
+        },
+        "shap_explanation": compute_match_shap_explanation(X, model, feature_cols, p1=p1, p2=p2),
         "detailed_analytics": compute_detailed_analytics(state, p1, p2, surf, req.tournament, p_p1, p_p2)
     }
 

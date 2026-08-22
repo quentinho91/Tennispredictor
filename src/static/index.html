@@ -23,11 +23,27 @@
       <div class="brand">
         <span class="brand-icon">🎾</span>
         <h1 class="brand-title">TENNIS PREDICTOR</h1>
-        <span class="brand-badge">XGBoost Pure</span>
+        <span class="brand-badge">Stacking &amp; SHAP AI</span>
       </div>
 
-      <!-- Header Actions: Circuit Switcher + Update Data Button -->
+      <!-- Header Actions: Bankroll Persistent Controller + Circuit Switcher + Update Data -->
       <div class="header-controls">
+        <!-- Persistent Bankroll Controller -->
+        <div class="header-bankroll-wrap" title="Votre bankroll globale - sauvegardée automatiquement">
+          <label class="bankroll-label" for="header-bankroll-input">💶 Bankroll :</label>
+          <div class="bankroll-input-box">
+            <input type="number" id="header-bankroll-input" class="header-bk-input" value="500" min="10" step="50">
+            <span class="bk-currency">€</span>
+          </div>
+          <select id="header-strategy-select" class="header-bk-select" title="Stratégie de mise Kelly">
+            <option value="quarter">1/4 Kelly (Conseillé)</option>
+            <option value="half">1/2 Kelly (Modéré)</option>
+            <option value="full">Kelly Plein (Agressif)</option>
+            <option value="flat1">Mise Fixe 1%</option>
+            <option value="flat2">Mise Fixe 2%</option>
+          </select>
+        </div>
+
         <div class="circuit-switcher">
           <button class="circuit-btn active" data-circuit="atp">
             <span>🏆</span> ATP (Hommes)
@@ -355,6 +371,38 @@
 
         <!-- Multi-Market Value Bets Summary Box -->
         <div id="valuebet-container" class="valuebet-card no-vb" style="display: none;"></div>
+      </div>
+
+      <!-- SHAP Explainability & Stacking Multi-Models Section -->
+      <div class="card shap-card" id="shap-section">
+        <div class="card-title">
+          <span>🤖</span> Explicabilité de l'IA (Facteurs Déterminants SHAP &amp; Stacking)
+          <span class="shap-subtitle-badge">TreeSHAP &bull; 8 Piliers</span>
+        </div>
+
+        <!-- Ensemble Models Comparison Bar -->
+        <div id="ensemble-models-bar" class="ensemble-models-bar">
+          <!-- Injected via JS: XGBoost vs LightGBM vs CatBoost vs Stacking Ensemble -->
+        </div>
+
+        <div id="shap-summary-text" class="shap-summary-text">
+          <!-- Injected via JS: Summary sentence -->
+        </div>
+
+        <!-- SHAP 8 Pillars Horizontal Visual Breakdown -->
+        <div id="shap-pillars-container" class="shap-pillars-container">
+          <!-- Injected via JS -->
+        </div>
+
+        <!-- Top Strengths Duel (P1 vs P2) -->
+        <div class="shap-drivers-grid">
+          <div class="shap-driver-col p1" id="shap-p1-drivers-box">
+            <!-- P1 top drivers -->
+          </div>
+          <div class="shap-driver-col p2" id="shap-p2-drivers-box">
+            <!-- P2 top drivers -->
+          </div>
+        </div>
       </div>
 
       <!-- Multi-Market Pricing Grid -->

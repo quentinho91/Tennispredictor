@@ -16,8 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copie du code source et des données précalculées
 COPY . .
 
-# Port standard Hugging Face Spaces
+# Port standard Hugging Face Spaces & Render
 EXPOSE 7860
 
-# Lancement du serveur FastAPI
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+# Lancement du serveur FastAPI (lit $PORT de manière dynamique)
+CMD ["python", "app.py"]
+

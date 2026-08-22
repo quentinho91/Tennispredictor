@@ -584,6 +584,8 @@ def scan_daily_matches(
                     "fair_odds_p2": pred_res.get("fair_odds_p2"),
                     "match_confidence": pred_res.get("confidence", {}).get("score", 75),
                     "confidence_level": pred_res.get("confidence", {}).get("level", "Moyenne"),
+                    "individual_probas": pred_res.get("individual_probas"),
+                    "shap_explanation": pred_res.get("shap_explanation")
                 }
                 # Garder le rapport complet pour affichage instantané dans la popup modale
                 m_item["full_report"] = pred_res

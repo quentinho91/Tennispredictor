@@ -56,6 +56,7 @@ const updateStatusMsg = document.getElementById('update-status-msg');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   setupCircuitSwitcher();
+  setupBankrollManager();
   setupPlayerAutocomplete(p1Input, p1Dropdown, (name) => { selectedP1 = name; updateDynamicLabels(); });
   setupPlayerAutocomplete(p2Input, p2Dropdown, (name) => { selectedP2 = name; updateDynamicLabels(); });
   setupTournamentAutocomplete(tournamentInput, tournamentDropdown);
@@ -67,6 +68,98 @@ document.addEventListener('DOMContentLoaded', () => {
   setupHistory();
   setupDailyScanner();
 });
+
+// ==========================================================================
+// GESTIONNAIRE DE BANKROLL PERSISTANT & CALCULATEUR DE MISES
+// ==========================================================================
+function getUserBankroll() {
+  const val = parseFloat(localStorage.getItem('tp_user_bankroll') || '500');
+  return (isNaN(val) || val <= 0) ? 500 : val;
+}
+
+function getUserStrategy() {
+  return localStorage.getItem('tp_user_strategy') || 'quarter';
+}
+
+function setupBankrollManager() {
+  const headerBkInput = document.getElementById('header-bankroll-input');
+  const headerStratSelect = document.getElementById('header-strategy-select');
+
+  const currentBk = getUserBankroll();
+  const currentStrat = getUserStrategy();
+
+  if (headerBkInput) {
+    headerBkInput.value = currentBk;
+    headerBkInput.addEventListener('input', () => {
+      let val = parseFloat(headerBkInput.value);
+      if (!isNaN(val) && val > 0) {
+        localStorage.setItem('tp_user_bankroll', String(val));
+        const cardBkInput = document.getElementById('user-bankroll-input');
+        if (cardBkInput && cardBkInput !== document.activeElement) {
+          cardBkInput.value = val;
+        }
+        updateAllStakeAmounts();
+      }
+    });
+  }
+
+  if (headerStratSelect) {
+    headerStratSelect.value = currentStrat;
+    headerStratSelect.addEventListener('change', () => {
+      localStorage.setItem('tp_user_strategy', headerStratSelect.value);
+      const cardStratSelect = document.getElementById('user-strategy-select');
+      if (cardStratSelect) {
+        cardStratSelect.value = headerStratSelect.value;
+      }
+      updateAllStakeAmounts();
+    });
+  }
+}
+
+function calculateStake(bankroll, strategy, vbObj) {
+  if (!vbObj) return { stakePct: 2.0, stakeEuros: '10.00', netProfit: '10.00' };
+  let stakePct = vbObj.kelly_quarter_pct || vbObj.kelly_pct || 2.0;
+  if (strategy === 'half') {
+    stakePct = vbObj.kelly_half_pct || (stakePct * 2.0);
+  } else if (strategy === 'full') {
+    stakePct = vbObj.kelly_full_pct || (stakePct * 4.0);
+  } else if (strategy === 'flat1') {
+    stakePct = 1.0;
+  } else if (strategy === 'flat2') {
+    stakePct = 2.0;
+  }
+  stakePct = Math.min(Math.max(stakePct, 0.5), 15.0);
+  const stakeEuros = (bankroll * stakePct / 100).toFixed(2);
+  const offeredOdds = parseFloat(vbObj.offered_odds) || 2.0;
+  const netProfit = (parseFloat(stakeEuros) * (offeredOdds - 1.0)).toFixed(2);
+  return { stakePct, stakeEuros, netProfit };
+}
+
+function updateAllStakeAmounts() {
+  // 1. Mettre à jour la grille du scanner
+  renderScannerGrid();
+
+  // 2. Mettre à jour le container value bets de l'analyse manuelle s'il est visible
+  const cardBkInput = document.getElementById('user-bankroll-input');
+  if (cardBkInput && typeof window._lastManualData === 'object' && window._lastManualData) {
+    const data = window._lastManualData;
+    renderValueBetsContainer(
+      data.all_value_bets || [],
+      data.scanned_markets || [],
+      data.recommended_value_bets || [],
+      data.correlated_masked_bets || [],
+      data.has_correlated_bets || false,
+      data.filter_note || ''
+    );
+  }
+
+  // 3. Mettre à jour la modale si ouverte
+  const modal = document.getElementById('match-detail-modal');
+  if (modal && modal.style.display !== 'none' && window._lastActiveModalMatchId) {
+    openMatchDetailModal(window._lastActiveModalMatchId);
+  }
+}
+
 
 // Dynamic Labels for Handicap and Set 1
 function updateDynamicLabels() {
@@ -667,6 +760,12 @@ function renderResults(data, payload = {}) {
   }
 
   // ------------------------------------------------------------------------
+  // Explicabilité SHAP & Stacking Multi-Modèles
+  // ------------------------------------------------------------------------
+  window._lastManualData = data;
+  renderShapExplainability(data.shap_explanation, data.p1, data.p2, data.individual_probas);
+
+  // ------------------------------------------------------------------------
   // Confidence Badge & Indicators
   // ------------------------------------------------------------------------
   const conf = data.confidence;
@@ -899,6 +998,103 @@ function renderResults(data, payload = {}) {
     </tr>
     <tr><td>Total Jeux Prévu</td><td colspan="2" style="text-align:center; color:#f59e0b;">${data.markov.expected_total_games} jeux</td></tr>
   `;
+// --------------------------------------------------------------------------
+// Explicabilité SHAP & Multi-Modèles Stacking
+// --------------------------------------------------------------------------
+function renderShapExplainability(shapData, p1, p2, indivProbas = null) {
+  const shapSection = document.getElementById('shap-section');
+  if (!shapSection) return;
+
+  if (!shapData || !shapData.pillars || shapData.pillars.length === 0) {
+    shapSection.style.display = 'none';
+    return;
+  }
+  shapSection.style.display = 'block';
+
+  // 1. Multi-Model Ensemble Breakdown Bar
+  const modelsBar = document.getElementById('ensemble-models-bar');
+  if (modelsBar && indivProbas) {
+    const p1Short = (typeof p1 === 'string' && p1.includes(' ')) ? p1.split(' ').pop() : p1;
+    modelsBar.innerHTML = `
+      <div class="model-stat-pill" title="Modèle XGBoost (arbres depth-wise régularisés)">
+        <span class="m-name">XGBoost</span>
+        <span class="m-val">${indivProbas.xgb || 50}%</span>
+      </div>
+      <div class="model-stat-pill" title="Modèle LightGBM (arbres leaf-wise rapides)">
+        <span class="m-name">LightGBM</span>
+        <span class="m-val">${indivProbas.lgb || 50}%</span>
+      </div>
+      <div class="model-stat-pill" title="Modèle CatBoost (optimisé relations complexes)">
+        <span class="m-name">CatBoost</span>
+        <span class="m-val">${indivProbas.cat || 50}%</span>
+      </div>
+      <div class="model-stat-pill ensemble-star" title="Méta-Learner Stacking (Régression Logistique Blending calibrée)">
+        <span class="m-name">⭐ Stacking Final</span>
+        <span class="m-val">${indivProbas.ensemble || 50}%</span>
+      </div>
+    `;
+  }
+
+  // 2. Summary text
+  const summaryEl = document.getElementById('shap-summary-text');
+  if (summaryEl) {
+    summaryEl.innerHTML = `💡 ${shapData.summary_text || 'Analyse des facteurs clés calculée par TreeSHAP.'}`;
+  }
+
+  // 3. Pillars Visual Horizontal Bars
+  const pillarsCont = document.getElementById('shap-pillars-container');
+  if (pillarsCont) {
+    let pillarsHtml = '';
+    shapData.pillars.forEach(p => {
+      const isP1 = p.favorable_to === 'p1';
+      const absImpact = Math.abs(p.impact_pct);
+      const barWidth = Math.min(absImpact * 6.0, 100);
+      const impactSign = isP1 ? `+${absImpact}% ${escapeHtml(p1)}` : `+${absImpact}% ${escapeHtml(p2)}`;
+      const barClass = isP1 ? 'fav-p1' : 'fav-p2';
+
+      pillarsHtml += `
+        <div class="shap-pillar-row">
+          <div class="shap-pillar-header">
+            <span class="shap-pillar-name">${p.icon} ${escapeHtml(p.title)}</span>
+            <span class="shap-pillar-impact ${barClass}">${impactSign}</span>
+          </div>
+          <div class="shap-dual-track">
+            <div class="shap-track-half left">
+              ${isP1 ? `<div class="shap-fill left" style="width: ${barWidth}%;"></div>` : ''}
+            </div>
+            <div class="shap-track-center-line"></div>
+            <div class="shap-track-half right">
+              ${!isP1 ? `<div class="shap-fill right" style="width: ${barWidth}%;"></div>` : ''}
+            </div>
+          </div>
+          <div class="shap-pillar-desc">${escapeHtml(p.description)}</div>
+        </div>
+      `;
+    });
+    pillarsCont.innerHTML = pillarsHtml;
+  }
+
+  // 4. Drivers Duel Boxes
+  const p1DriversBox = document.getElementById('shap-p1-drivers-box');
+  const p2DriversBox = document.getElementById('shap-p2-drivers-box');
+
+  if (p1DriversBox) {
+    let items = (shapData.top_p1_factors || []).map(f => `<li>${escapeHtml(f)}</li>`).join('');
+    if (!items) items = '<li style="color:var(--text-dim);">Indicateurs de jeu homogènes</li>';
+    p1DriversBox.innerHTML = `
+      <div class="shap-box-title p1">🏆 Atouts Majeurs • ${escapeHtml(p1)}</div>
+      <ul class="shap-box-list">${items}</ul>
+    `;
+  }
+
+  if (p2DriversBox) {
+    let items = (shapData.top_p2_factors || []).map(f => `<li>${escapeHtml(f)}</li>`).join('');
+    if (!items) items = '<li style="color:var(--text-dim);">Indicateurs de jeu homogènes</li>';
+    p2DriversBox.innerHTML = `
+      <div class="shap-box-title p2">🛡️ Atouts Majeurs • ${escapeHtml(p2)}</div>
+      <ul class="shap-box-list">${items}</ul>
+    `;
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -1719,8 +1915,12 @@ function renderScannerGrid() {
       const confScore = (topVb.confidence && topVb.confidence.score !== undefined) ? `${topVb.confidence.score}%` : '80%';
       const evVal = (topVb.ev_pct !== undefined) ? topVb.ev_pct : ((topVb.ev_percent !== undefined) ? topVb.ev_percent : 0);
       const edgeVal = (topVb.edge_pct !== undefined) ? topVb.edge_pct : ((topVb.edge_percent !== undefined) ? topVb.edge_percent : 0);
-
       const offeredOddsVal = (topVb.offered_odds && !isNaN(parseFloat(topVb.offered_odds))) ? parseFloat(topVb.offered_odds).toFixed(2) : '2.00';
+
+      const userBk = getUserBankroll();
+      const userStrat = getUserStrategy();
+      const stakeInfo = calculateStake(userBk, userStrat, topVb);
+
       vbHtml = `
         <div class="scan-vb-banner">
           <div class="scan-vb-title">
@@ -1730,6 +1930,9 @@ function renderScannerGrid() {
           <div class="scan-vb-meta">
             <span>🔥 Confiance : ${confScore}</span>
             <span>• Edge : +${edgeVal}%</span>
+          </div>
+          <div class="scan-vb-stake-tag">
+            💶 Mise conseillée : <b>${stakeInfo.stakeEuros} €</b> (${stakeInfo.stakePct.toFixed(1)}%) &bull; Gain net : <b>+${stakeInfo.netProfit} €</b>
           </div>
         </div>
       `;
@@ -1844,6 +2047,10 @@ function openMatchDetailModal(matchId) {
     const confLevel = (rep.confidence && rep.confidence.level) ? rep.confidence.level : (pred.confidence_level || 'Moyenne');
     const confBadgeClass = confScore >= 78 ? 'high' : (confScore >= 65 ? 'medium' : 'low');
 
+    window._lastActiveModalMatchId = matchId;
+    const userBk = getUserBankroll();
+    const userStrat = getUserStrategy();
+
     // Value bets cards
     let vbsHtml = '';
     const vbsList = match.all_value_bets || (rep.all_value_bets || []);
@@ -1851,13 +2058,9 @@ function openMatchDetailModal(matchId) {
       let cardsHtml = '';
       vbsList.forEach((vb, idx) => {
         const conf = vb.confidence || { score: 85, label: 'Très haute', level: 'high', icon: '🔥' };
-        const kellyQuarter = vb.kelly_quarter_pct || vb.kelly_pct || 1.5;
-        const bEl = document.getElementById('bankroll-input');
-        const bankrollTotal = (bEl && parseFloat(bEl.value)) ? parseFloat(bEl.value) : 1000.0;
-        const betAmountEuro = ((bankrollTotal * kellyQuarter) / 100).toFixed(0);
+        const stakeInfo = calculateStake(userBk, userStrat, vb);
         const offeredOddsNum = parseFloat(vb.offered_odds) || 2.0;
         const fairOddsNum = parseFloat(vb.fair_odds) || 2.0;
-        const estGainEuro = (parseFloat(betAmountEuro) * (offeredOddsNum - 1.0)).toFixed(0);
         const evVal = (vb.ev_pct !== undefined) ? vb.ev_pct : ((vb.ev_percent !== undefined) ? vb.ev_percent : 0);
         const edgeVal = (vb.edge_pct !== undefined) ? vb.edge_pct : ((vb.edge_percent !== undefined) ? vb.edge_percent : 0);
 
@@ -1885,12 +2088,12 @@ function openMatchDetailModal(matchId) {
               </div>
               <div class="vb-stat-box" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; text-align: center;">
                 <span class="vb-stat-label" style="font-size: 10.5px; color: #94a3b8; display: block;">Mise Conseillée</span>
-                <span class="vb-stat-val kelly" style="font-size: 15px; font-weight: 900; color: #fbbf24;">${kellyQuarter}% (${betAmountEuro} €)</span>
+                <span class="vb-stat-val kelly" style="font-size: 15px; font-weight: 900; color: #fbbf24;">${stakeInfo.stakeEuros} € (${stakeInfo.stakePct.toFixed(1)}%)</span>
               </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; font-size: 11.5px; color: #94a3b8; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.06);">
-              <span>Edge net sur le marché : <b style="color:#34d399;">+${edgeVal}%</b></span>
-              <span style="color:#fbbf24; font-weight:700;">💰 Gain net estimé : +${estGainEuro} €</span>
+              <span>Edge net sur le marché : <b style="color:#34d399;">+${edgeVal}%</b> (Bankroll : ${userBk} €)</span>
+              <span style="color:#fbbf24; font-weight:700;">💰 Gain net estimé : +${stakeInfo.netProfit} €</span>
             </div>
           </div>
         `;
@@ -2016,6 +2219,67 @@ function openMatchDetailModal(matchId) {
       </div>
     `).join('');
 
+    // SHAP Explainability in Modal
+    const shap = rep.shap_explanation || pred.shap_explanation || null;
+    const indivProbas = rep.individual_probas || pred.individual_probas || null;
+    let modalShapHtml = '';
+    if (shap && shap.pillars && shap.pillars.length > 0) {
+      let pillarsHtml = '';
+      shap.pillars.forEach(p => {
+        const isP1 = p.favorable_to === 'p1';
+        const absImpact = Math.abs(p.impact_pct);
+        const barWidth = Math.min(absImpact * 6.0, 100);
+        const impactSign = isP1 ? `+${absImpact}% ${escapeHtml(p1Short)}` : `+${absImpact}% ${escapeHtml(p2Short)}`;
+        const barClass = isP1 ? 'fav-p1' : 'fav-p2';
+
+        pillarsHtml += `
+          <div class="shap-pillar-row" style="margin-bottom: 8px;">
+            <div class="shap-pillar-header" style="font-size: 12px;">
+              <span class="shap-pillar-name">${p.icon} ${escapeHtml(p.title)}</span>
+              <span class="shap-pillar-impact ${barClass}">${impactSign}</span>
+            </div>
+            <div class="shap-dual-track" style="height: 6px;">
+              <div class="shap-track-half left">
+                ${isP1 ? `<div class="shap-fill left" style="width: ${barWidth}%;"></div>` : ''}
+              </div>
+              <div class="shap-track-center-line"></div>
+              <div class="shap-track-half right">
+                ${!isP1 ? `<div class="shap-fill right" style="width: ${barWidth}%;"></div>` : ''}
+              </div>
+            </div>
+            <div class="shap-pillar-desc" style="font-size: 11px;">${escapeHtml(p.description)}</div>
+          </div>
+        `;
+      });
+
+      let modelsPillHtml = '';
+      if (indivProbas) {
+        modelsPillHtml = `
+          <div class="ensemble-models-bar" style="margin-bottom: 12px;">
+            <div class="model-stat-pill"><span class="m-name">XGBoost</span><span class="m-val">${indivProbas.xgb || 50}%</span></div>
+            <div class="model-stat-pill"><span class="m-name">LightGBM</span><span class="m-val">${indivProbas.lgb || 50}%</span></div>
+            <div class="model-stat-pill"><span class="m-name">CatBoost</span><span class="m-val">${indivProbas.cat || 50}%</span></div>
+            <div class="model-stat-pill ensemble-star"><span class="m-name">⭐ Stacking Final</span><span class="m-val">${indivProbas.ensemble || 50}%</span></div>
+          </div>
+        `;
+      }
+
+      modalShapHtml = `
+        <div class="modal-section-box" style="border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(15, 23, 42, 0.75);">
+          <div class="modal-section-title" style="color: #38bdf8;">
+            <span>🤖 Explicabilité de l'IA (TreeSHAP &amp; Stacking Multi-Modèles)</span>
+          </div>
+          ${modelsPillHtml}
+          <div class="shap-summary-text" style="margin-bottom: 12px; font-size: 12.5px;">
+            💡 ${shap.summary_text || ''}
+          </div>
+          <div class="shap-pillars-container">
+            ${pillarsHtml}
+          </div>
+        </div>
+      `;
+    }
+
     bodyContainer.innerHTML = `
       <!-- 1. FACE-A-FACE ARENA HEADER -->
       <div class="modal-duel-arena">
@@ -2076,6 +2340,7 @@ function openMatchDetailModal(matchId) {
       <!-- ==================== PANE 1: FACTEURS CLES ==================== -->
       <div id="modal-pane-facteurs" class="modal-tab-pane active">
         ${enClairHtml}
+        ${modalShapHtml}
         ${vbsHtml}
         <div class="modal-section-box">
           <div class="modal-section-title">

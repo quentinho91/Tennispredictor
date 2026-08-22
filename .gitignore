@@ -18,6 +18,8 @@ data/processed/*.db
 !data/processed/player_state_wta.pkl
 !data/processed/xgb_model_atp.json
 !data/processed/xgb_model_wta.json
+!data/processed/ensemble_atp.pkl
+!data/processed/ensemble_wta.pkl
 !data/processed/feature_cols_atp.pkl
 !data/processed/feature_cols_wta.pkl
 !data/processed/calibrator_atp.pkl
@@ -27,6 +29,9 @@ data/processed/*.db
 !data/processed/tournaments.json
 !data/processed/players_atp.json
 !data/processed/players_wta.json
+
+# CatBoost output
+catboost_info/
 
 # OS
 .DS_Store

@@ -54,14 +54,17 @@ jobs:
           gh release create latest_model \
             data/processed/player_state_atp.pkl \
             data/processed/xgb_model_atp.json \
+            data/processed/ensemble_atp.pkl \
             data/processed/calibrator_atp.pkl \
             data/processed/feature_cols_atp.pkl \
             data/processed/player_state_wta.pkl \
             data/processed/xgb_model_wta.json \
+            data/processed/ensemble_wta.pkl \
             data/processed/calibrator_wta.pkl \
             data/processed/feature_cols_wta.pkl \
             data/processed/players_atp.json \
             data/processed/players_wta.json \
             data/processed/tournaments.json \
-            --title "Derniers modèles XGBoost & données" \
-            --notes "Mise à jour automatique du modèle XGBoost (ATP & WTA)"
+            --title "Derniers modèles Stacking Ensemble & données" \
+            --notes "Mise à jour automatique des modèles Stacking Ensemble (XGBoost + LightGBM + CatBoost + SHAP) ATP & WTA"
+
