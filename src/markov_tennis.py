@@ -326,6 +326,39 @@ def p_match(p_a: float, p_b: float, best_of: int = 3) -> Dict[str, Any]:
     expected_total_games = expected_sets * exp_games_per_set
     expected_game_diff = expected_sets * exp_diff_per_set
 
+    # Convolutions exactes de la distribution des jeux et différentiels de jeux sur tout le match
+    target_wins = 2 if best_of == 3 else 3
+    states = {(0, 0): {(0, 0): 1.0}}
+    finished_dist = {}
+    max_steps = 3 if best_of == 3 else 5
+
+    for _ in range(max_steps):
+        next_states = {}
+        for (sa, sb), dist in states.items():
+            if sa == target_wins or sb == target_wins:
+                for (tg, diff), prob in dist.items():
+                    finished_dist[(tg, diff)] = finished_dist.get((tg, diff), 0.0) + prob
+                continue
+            for score_str, p_set_score in set_scores_dist.items():
+                ga, gb = map(int, score_str.split("-"))
+                w_a = ga > gb
+                nsa = sa + 1 if w_a else sa
+                nsb = sb if w_a else sb + 1
+                key = (nsa, nsb)
+                if key not in next_states:
+                    next_states[key] = {}
+                for (tg, diff), prob in dist.items():
+                    new_tg = tg + ga + gb
+                    new_diff = diff + ga - gb
+                    new_prob = prob * p_set_score
+                    next_states[key][(new_tg, new_diff)] = next_states[key].get((new_tg, new_diff), 0.0) + new_prob
+        states = next_states
+
+    for (sa, sb), dist in states.items():
+        if sa == target_wins or sb == target_wins:
+            for (tg, diff), prob in dist.items():
+                finished_dist[(tg, diff)] = finished_dist.get((tg, diff), 0.0) + prob
+
     return {
         "proba_a": round(float(p_match_a), 4),
         "proba_b": round(float(p_match_b), 4),
@@ -337,7 +370,8 @@ def p_match(p_a: float, p_b: float, best_of: int = 3) -> Dict[str, Any]:
         "expected_sets": round(float(expected_sets), 2),
         "expected_total_games": round(float(expected_total_games), 1),
         "expected_game_diff": round(float(expected_game_diff), 2),
-        "set_game_distribution": {k: round(v, 4) for k, v in set_scores_dist.items()}
+        "set_game_distribution": {k: round(v, 4) for k, v in set_scores_dist.items()},
+        "match_games_distribution": finished_dist
     }
 
 
@@ -380,25 +414,43 @@ def estimate_point_probabilities(
     return p_a, p_b
 
 
-def price_game_handicap(expected_diff: float, line: float, sigma: float = 4.0) -> Tuple[float, float]:
+def price_game_handicap(
+    expected_diff: float,
+    line: float,
+    sigma: float = 4.0,
+    match_games_dist: Optional[Dict[Tuple[int, int], float]] = None
+) -> Tuple[float, float]:
     """
     Évalue la probabilité de couvrir un handicap de jeux H : P(Games_A - Games_B > H).
-    Utilise la distribution Normale calibrée sur l'écart de jeux (sigma=4.0 en 3 sets, 7.0 en 5 sets).
+    Utilise la distribution exacte Markov par convolution (ou distribution Normale de secours).
     """
-    z = (expected_diff - line) / (sigma * math.sqrt(2.0))
-    p_cover_a = 0.5 * (1.0 + math.erf(z))
+    if match_games_dist:
+        p_cover_a = sum(p for (tg, diff), p in match_games_dist.items() if diff > line)
+    else:
+        z = (expected_diff - line) / (sigma * math.sqrt(2.0))
+        p_cover_a = 0.5 * (1.0 + math.erf(z))
+
     p_cover_a = float(np.clip(p_cover_a, 0.01, 0.99))
     p_cover_b = 1.0 - p_cover_a
     return round(p_cover_a, 4), round(p_cover_b, 4)
 
 
-def price_total_games(expected_total: float, line: float, sigma: float = 3.8) -> Tuple[float, float]:
+def price_total_games(
+    expected_total: float,
+    line: float,
+    sigma: float = 3.8,
+    match_games_dist: Optional[Dict[Tuple[int, int], float]] = None
+) -> Tuple[float, float]:
     """
     Évalue la probabilité Over / Under sur le total de jeux : P(Total > T).
-    Utilise la distribution Normale calibrée sur le total de jeux (sigma=3.8 en 3 sets, 6.8 en 5 sets).
+    Utilise la distribution bimodale exacte Markov par convolution (ou distribution Normale de secours).
     """
-    z = (expected_total - line) / (sigma * math.sqrt(2.0))
-    p_over = 0.5 * (1.0 + math.erf(z))
+    if match_games_dist:
+        p_over = sum(p for (tg, diff), p in match_games_dist.items() if tg > line)
+    else:
+        z = (expected_total - line) / (sigma * math.sqrt(2.0))
+        p_over = 0.5 * (1.0 + math.erf(z))
+
     p_over = float(np.clip(p_over, 0.01, 0.99))
     p_under = 1.0 - p_over
     return round(p_over, 4), round(p_under, 4)

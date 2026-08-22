@@ -784,24 +784,25 @@ def predict_match(req: PredictionRequest):
     if vb_set1_p1 and vb_set1_p1["is_value_bet"]: detected_value_bets.append(vb_set1_p1)
     if vb_set1_p2 and vb_set1_p2["is_value_bet"]: detected_value_bets.append(vb_set1_p2)
 
-    # 3. Marché Over / Under Jeux (Calibré sur l'écart-type réel du format)
+    # 3. Marché Over / Under Jeux (Calibré sur la convolution exacte des scores)
     exp_total_games = float(m_r.get("expected_total_games", 22.5))
     default_total_line = round(exp_total_games) - 0.5 if round(exp_total_games) - 0.5 > 15 else 22.5
     total_line = req.total_line if (req.total_line and req.total_line > 10) else default_total_line
     sigma_games = 3.8 if req.best_of == 3 else 6.8
-    p_over, p_under = price_total_games(exp_total_games, total_line, sigma=sigma_games)
+    match_games_dist = m_r.get("match_games_distribution")
+    p_over, p_under = price_total_games(exp_total_games, total_line, sigma=sigma_games, match_games_dist=match_games_dist)
 
     vb_over = evaluate_market_value(p_over, req.odds_over, req.odds_under, f"Total Jeux ({total_line})", f"Over {total_line} Jeux")
     vb_under = evaluate_market_value(p_under, req.odds_under, req.odds_over, f"Total Jeux ({total_line})", f"Under {total_line} Jeux")
     if vb_over and vb_over["is_value_bet"]: detected_value_bets.append(vb_over)
     if vb_under and vb_under["is_value_bet"]: detected_value_bets.append(vb_under)
 
-    # 4. Marché Handicap de Jeux (Format bookmaker : J1 -X.5 vs J2 +X.5)
+    # 4. Marché Handicap de Jeux (Format bookmaker : J1 -X.5 vs J2 +X.5 - Distribution exacte)
     exp_game_diff = float(m_r.get("expected_game_diff", 0.0))
     raw_h = req.handicap_line if (req.handicap_line is not None and req.handicap_line != 0) else (round(abs(exp_game_diff)) + 0.5 if round(abs(exp_game_diff)) > 0 else 1.5)
     h_val = abs(raw_h)
     sigma_diff = 4.0 if req.best_of == 3 else 7.2
-    p_h1, p_h2 = price_game_handicap(exp_game_diff, h_val, sigma=sigma_diff)
+    p_h1, p_h2 = price_game_handicap(exp_game_diff, h_val, sigma=sigma_diff, match_games_dist=match_games_dist)
 
     label_h1 = f"{p1} (-{h_val:.1f})"
     label_h2 = f"{p2} (+{h_val:.1f})"
