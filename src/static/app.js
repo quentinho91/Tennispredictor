@@ -1801,15 +1801,18 @@ function openMatchDetailModal(matchId) {
 
     const isAtp = match.circuit === 'atp';
     const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP Hommes</span>` : `<span class="circuit-pill-wta">👑 WTA Femmes</span>`;
+    const bookmakerName = match.bookmaker || 'Bet365';
 
     if (metaContainer) {
       metaContainer.innerHTML = `
-        ${circuitBadge}
-        <span style="font-weight: 800; color: #ffffff; font-size: 15px;">🏆 ${escapeHtml(match.tournament)}</span>
-        <span>• Surface : <b>${escapeHtml(match.surface)}</b></span>
-        <span>• Format : <b>Best-of ${match.best_of}</b></span>
-        <span>• Heure : <b style="color:#60a5fa;">${escapeHtml(match.time_display)}</b></span>
-        <span class="bm-badge">Cotes Bet365</span>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          ${circuitBadge}
+          <span style="font-weight: 900; color: #ffffff; font-size: 16px;">🏆 ${escapeHtml(match.tournament)}</span>
+          <span style="color: #94a3b8;">• Surface : <b style="color: #f1f5f9;">${escapeHtml(match.surface)}</b></span>
+          <span style="color: #94a3b8;">• Format : <b style="color: #f1f5f9;">Best-of ${match.best_of}</b></span>
+          <span style="color: #94a3b8;">• Heure : <b style="color:#60a5fa;">⏰ ${escapeHtml(match.time_display)}</b></span>
+          <span class="bm-badge" style="background: rgba(16, 185, 129, 0.18); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35);">Cotes en direct (${escapeHtml(bookmakerName)})</span>
+        </div>
       `;
     }
 
@@ -1818,10 +1821,25 @@ function openMatchDetailModal(matchId) {
     const p1Short = p1.split(' ').pop();
     const p2Short = p2.split(' ').pop();
 
+    const rep = match.full_report || {};
     const pred = match.prediction || { proba_p1: 0.50, proba_p2: 0.50, fair_odds_p1: 2.0, fair_odds_p2: 2.0, match_confidence: 75, confidence_level: 'Moyenne' };
     const proba1 = (pred.proba_p1 * 100).toFixed(1);
     const proba2 = (pred.proba_p2 * 100).toFixed(1);
     const isP1Fav = pred.proba_p1 >= pred.proba_p2;
+
+    const mkts = rep.markets || {};
+    const winnerM = mkts.winner || {};
+    const set1M = mkts.set1_winner || {};
+    const totalM = mkts.total_games || {};
+    const hcapM = mkts.handicap_games || {};
+    const tbM = mkts.tiebreak || {};
+    const setsCountM = mkts.sets_count || {};
+    const setScores = rep.set_scores || {};
+    const stats = rep.stats || {};
+
+    const confScore = (rep.confidence && rep.confidence.score !== undefined) ? rep.confidence.score : (pred.match_confidence || 75);
+    const confLevel = (rep.confidence && rep.confidence.level) ? rep.confidence.level : (pred.confidence_level || 'Moyenne');
+    const confBadgeClass = confScore >= 78 ? 'high' : (confScore >= 65 ? 'medium' : 'low');
 
     // Value bets cards
     let vbsHtml = '';
@@ -1835,132 +1853,262 @@ function openMatchDetailModal(matchId) {
         const betAmountEuro = ((bankrollTotal * kellyQuarter) / 100).toFixed(0);
         const estGainEuro = (parseFloat(betAmountEuro) * (vb.offered_odds - 1.0)).toFixed(0);
         const evVal = (vb.ev_pct !== undefined) ? vb.ev_pct : ((vb.ev_percent !== undefined) ? vb.ev_percent : 0);
+        const edgeVal = (vb.edge_pct !== undefined) ? vb.edge_pct : ((vb.edge_percent !== undefined) ? vb.edge_percent : 0);
 
         cardsHtml += `
-          <div class="vb-card primary-vb" style="margin-bottom: 10px;">
-            <div class="vb-card-header">
-              <span class="vb-badge">⭐ PICK RECOMMANDÉ #${idx + 1}</span>
-              <span class="vb-conf-pill ${conf.level}">${conf.icon} Confiance : ${conf.score}% (${conf.label})</span>
+          <div class="vb-card primary-vb" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid rgba(16, 185, 129, 0.45); border-radius: var(--radius-md); padding: 14px; margin-bottom: 12px;">
+            <div class="vb-card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span class="vb-badge" style="background: #10b981; color: #064e3b; font-weight: 900; font-size: 11px; padding: 3px 8px; border-radius: 4px;">⭐ VALUE BET RECOMMANDÉ #${idx + 1}</span>
+              <span class="vb-conf-pill ${conf.level}" style="font-size: 11.5px; font-weight: 700; color: #fbbf24;">${conf.icon} Confiance : ${conf.score}% (${conf.label})</span>
             </div>
-            <div class="vb-selection-title">${escapeHtml(vb.selection)}</div>
-            <div class="vb-details-grid">
-              <div class="vb-stat-box">
-                <span class="vb-stat-label">Cote Bet365</span>
-                <span class="vb-stat-val odd">@ ${vb.offered_odds.toFixed(2)}</span>
+            <div class="vb-selection-title" style="font-size: 16px; font-weight: 900; color: #ffffff; margin-bottom: 10px;">
+              🎯 ${escapeHtml(vb.selection)}
+            </div>
+            <div class="vb-details-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px;">
+              <div class="vb-stat-box" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; text-align: center;">
+                <span class="vb-stat-label" style="font-size: 10.5px; color: #94a3b8; display: block;">Cote Bookmaker</span>
+                <span class="vb-stat-val odd" style="font-size: 15px; font-weight: 900; color: #38bdf8;">@ ${vb.offered_odds.toFixed(2)}</span>
               </div>
-              <div class="vb-stat-box">
-                <span class="vb-stat-label">Cote Équitable</span>
-                <span class="vb-stat-val">@ ${vb.fair_odds.toFixed(2)}</span>
+              <div class="vb-stat-box" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; text-align: center;">
+                <span class="vb-stat-label" style="font-size: 10.5px; color: #94a3b8; display: block;">Cote Équitable IA</span>
+                <span class="vb-stat-val" style="font-size: 15px; font-weight: 800; color: #f1f5f9;">@ ${vb.fair_odds.toFixed(2)}</span>
               </div>
-              <div class="vb-stat-box">
-                <span class="vb-stat-label">Espérance (EV)</span>
-                <span class="vb-stat-val ev">+${evVal}%</span>
+              <div class="vb-stat-box" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; text-align: center;">
+                <span class="vb-stat-label" style="font-size: 10.5px; color: #94a3b8; display: block;">Espérance (EV)</span>
+                <span class="vb-stat-val ev" style="font-size: 15px; font-weight: 900; color: #34d399;">+${evVal}%</span>
               </div>
-              <div class="vb-stat-box">
-                <span class="vb-stat-label">Mise Conseillée</span>
-                <span class="vb-stat-val kelly">${kellyQuarter}% (${betAmountEuro} €)</span>
+              <div class="vb-stat-box" style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; text-align: center;">
+                <span class="vb-stat-label" style="font-size: 10.5px; color: #94a3b8; display: block;">Mise Conseillée</span>
+                <span class="vb-stat-val kelly" style="font-size: 15px; font-weight: 900; color: #fbbf24;">${kellyQuarter}% (${betAmountEuro} €)</span>
               </div>
             </div>
-            <div style="font-size: 11px; color: #fbbf24; margin-top: 6px; font-weight: 700;">
-              💰 Gain net estimé en cas de victoire : +${estGainEuro} €
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size: 11.5px; color: #94a3b8; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.06);">
+              <span>Edge net sur le marché : <b style="color:#34d399;">+${edgeVal}%</b></span>
+              <span style="color:#fbbf24; font-weight:700;">💰 Gain net estimé : +${estGainEuro} €</span>
             </div>
           </div>
         `;
       });
-    vbsHtml = `
-      <div style="margin-bottom: 20px;">
-        <h4 style="font-size: 14px; color: #34d399; margin-bottom: 8px; display:flex; align-items:center; gap:6px;">
-          <span>🎯</span> Opportunités de Value Bets Détectées (Bet365)
-        </h4>
-        ${cardsHtml}
+      vbsHtml = `
+        <div style="margin-bottom: 20px;">
+          <h4 style="font-size: 14px; font-weight: 800; color: #34d399; margin-bottom: 10px; display:flex; align-items:center; gap:6px;">
+            <span>🎯</span> Opportunités de Value Bets Détectées (${escapeHtml(bookmakerName)})
+          </h4>
+          ${cardsHtml}
+        </div>
+      `;
+    } else {
+      vbsHtml = `
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-bottom: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">
+          ⚖️ <b>Aucun Value Bet rentable détecté sur ce match</b> : Les cotes proposées par ${escapeHtml(bookmakerName)} intègrent une marge bookmaker normale sans avantage statistique suffisant.
+        </div>
+      `;
+    }
+
+    // Odds string fallbacks
+    const odds1Str = match.odds1 ? match.odds1.toFixed(2) : '-';
+    const odds2Str = match.odds2 ? match.odds2.toFixed(2) : '-';
+    const totLine = match.total_line || (totalM.line || 22.5);
+    const oddsOvStr = match.odds_over ? match.odds_over.toFixed(2) : '-';
+    const oddsUnStr = match.odds_under ? match.odds_under.toFixed(2) : '-';
+    const hLine = match.handicap_line || (hcapM.line || 3.5);
+    const oddsH1Str = match.odds_h1 ? match.odds_h1.toFixed(2) : '-';
+    const oddsH2Str = match.odds_h2 ? match.odds_h2.toFixed(2) : '-';
+
+    // Markov computed fair odds
+    const fairSet1P1 = set1M.fair_odds_p1 ? `@ ${set1M.fair_odds_p1.toFixed(2)}` : `@ ${(1.0 / (pred.proba_p1 || 0.5)).toFixed(2)}`;
+    const fairSet1P2 = set1M.fair_odds_p2 ? `@ ${set1M.fair_odds_p2.toFixed(2)}` : `@ ${(1.0 / (pred.proba_p2 || 0.5)).toFixed(2)}`;
+    const fairSets2 = setsCountM.fair_odds_2sets ? `@ ${setsCountM.fair_odds_2sets.toFixed(2)}` : '@ 1.65';
+    const fairSets3 = setsCountM.fair_odds_3sets ? `@ ${setsCountM.fair_odds_3sets.toFixed(2)}` : '@ 2.45';
+    const probaTbYes = tbM.proba_yes !== undefined ? `${tbM.proba_yes}%` : '38%';
+    const fairTbYes = tbM.fair_odds_yes ? `@ ${tbM.fair_odds_yes.toFixed(2)}` : '@ 2.60';
+    const fairTbNo = tbM.fair_odds_no ? `@ ${tbM.fair_odds_no.toFixed(2)}` : '@ 1.62';
+
+    // Ranks / Elos
+    const r1 = stats.rank_p1 ? `#${stats.rank_p1}` : '-';
+    const r2 = stats.rank_p2 ? `#${stats.rank_p2}` : '-';
+    const elo1 = stats.elo_p1 ? stats.elo_p1 : '-';
+    const elo2 = stats.elo_p2 ? stats.elo_p2 : '-';
+    const hold1 = stats.hold_p1 ? `${(stats.hold_p1 * 100).toFixed(0)}%` : '-';
+    const hold2 = stats.hold_p2 ? `${(stats.hold_p2 * 100).toFixed(0)}%` : '-';
+
+    bodyContainer.innerHTML = `
+      <!-- 1. FACE-A-FACE ARENA -->
+      <div class="modal-duel-arena">
+        <div class="modal-duel-players">
+          <div class="modal-player-card ${isP1Fav ? 'winner' : ''}">
+            <div class="modal-player-header">
+              <span class="modal-player-name">${escapeHtml(p1)}</span>
+              <span class="modal-player-pct">${proba1}%</span>
+            </div>
+            <div class="modal-player-sub">
+              <span>Rang : <b>${r1}</b></span>
+              <span>• Elo : <b>${elo1}</b></span>
+              <span>• Hold Service : <b>${hold1}</b></span>
+            </div>
+            <div style="font-size:12px; margin-top:4px;">
+              Cote Bookmaker : <b style="color:#38bdf8;">@ ${odds1Str}</b>
+              <span style="color:#94a3b8; font-size:11px;">(Fair IA: @ ${pred.fair_odds_p1})</span>
+            </div>
+          </div>
+
+          <div class="modal-vs-center">VS</div>
+
+          <div class="modal-player-card ${!isP1Fav ? 'winner' : ''}" style="text-align: right;">
+            <div class="modal-player-header" style="flex-direction: row-reverse;">
+              <span class="modal-player-name">${escapeHtml(p2)}</span>
+              <span class="modal-player-pct">${proba2}%</span>
+            </div>
+            <div class="modal-player-sub" style="justify-content: flex-end;">
+              <span>Hold Service : <b>${hold2}</b></span>
+              <span>• Elo : <b>${elo2}</b></span>
+              <span>• Rang : <b>${r2}</b></span>
+            </div>
+            <div style="font-size:12px; margin-top:4px;">
+              <span style="color:#94a3b8; font-size:11px;">(Fair IA: @ ${pred.fair_odds_p2})</span>
+              Cote Bookmaker : <b style="color:#38bdf8;">@ ${odds2Str}</b>
+            </div>
+          </div>
+        </div>
+
+        <!-- Split Progress Bar -->
+        <div class="modal-split-track">
+          <div class="modal-split-fill-p1" style="width: ${proba1}%;"></div>
+          <div class="modal-split-fill-p2" style="width: ${proba2}%;"></div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:#94a3b8;">
+          <span>🔥 Modèle ML Calibré : <b>XGBoost + Température (T=0.865)</b></span>
+          <span style="font-weight:700; color:#fbbf24;">Indice de confiance du match : ${confScore}% (${confLevel})</span>
+        </div>
+      </div>
+
+      <!-- 2. VALUE BETS RECOMMENDATIONS -->
+      ${vbsHtml}
+
+      <!-- 3. TOUS LES MARCHES & COTES EQUITABLES MARKOV -->
+      <div class="modal-section-box">
+        <div class="modal-section-title">
+          <span>📊 Comparatif de Tous les Marchés (Cotes Réelles vs Cotes Équitables IA)</span>
+        </div>
+
+        <div class="modal-markets-grid">
+          <!-- Marché 1 : Vainqueur -->
+          <div class="modal-market-cell">
+            <div class="modal-market-name">🏆 Vainqueur du Match (1 / 2)</div>
+            <div class="modal-market-row">
+              <span>${escapeHtml(p1Short)}</span>
+              <div>
+                <span class="modal-bookie-badge">Book: @ ${odds1Str}</span>
+                <span class="modal-fair-badge">Fair: @ ${pred.fair_odds_p1}</span>
+              </div>
+            </div>
+            <div class="modal-market-row">
+              <span>${escapeHtml(p2Short)}</span>
+              <div>
+                <span class="modal-bookie-badge">Book: @ ${odds2Str}</span>
+                <span class="modal-fair-badge">Fair: @ ${pred.fair_odds_p2}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Marché 2 : Set 1 -->
+          <div class="modal-market-cell">
+            <div class="modal-market-name">🥇 Vainqueur du 1er Set</div>
+            <div class="modal-market-row">
+              <span>${escapeHtml(p1Short)}</span>
+              <span class="modal-fair-badge">Fair IA: ${fairSet1P1}</span>
+            </div>
+            <div class="modal-market-row">
+              <span>${escapeHtml(p2Short)}</span>
+              <span class="modal-fair-badge">Fair IA: ${fairSet1P2}</span>
+            </div>
+          </div>
+
+          <!-- Marché 3 : Total Jeux -->
+          <div class="modal-market-cell">
+            <div class="modal-market-name">🔢 Total de Jeux (Ligne : ${totLine})</div>
+            <div class="modal-market-row">
+              <span>Over ${totLine}</span>
+              <div>
+                <span class="modal-bookie-badge">Book: @ ${oddsOvStr}</span>
+                <span class="modal-fair-badge">Fair: @ ${(totalM.fair_odds_over || 1.90)}</span>
+              </div>
+            </div>
+            <div class="modal-market-row">
+              <span>Under ${totLine}</span>
+              <div>
+                <span class="modal-bookie-badge">Book: @ ${oddsUnStr}</span>
+                <span class="modal-fair-badge">Fair: @ ${(totalM.fair_odds_under || 1.90)}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Marché 4 : Handicap de Jeux -->
+          <div class="modal-market-cell">
+            <div class="modal-market-name">⚖️ Handicap de Jeux (${hcapM.line ? hcapM.line : hLine})</div>
+            <div class="modal-market-row">
+              <span>${hcapM.label_h1 ? escapeHtml(hcapM.label_h1) : `${p1Short} (${isP1Fav ? `-${hLine}` : `+${hLine}`})`}</span>
+              <div>
+                <span class="modal-bookie-badge">Book: @ ${oddsH1Str}</span>
+                <span class="modal-fair-badge">Fair: @ ${(hcapM.fair_odds_h1 || 1.90)}</span>
+              </div>
+            </div>
+            <div class="modal-market-row">
+              <span>${hcapM.label_h2 ? escapeHtml(hcapM.label_h2) : `${p2Short} (${!isP1Fav ? `-${hLine}` : `+${hLine}`})`}</span>
+              <div>
+                <span class="modal-bookie-badge">Book: @ ${oddsH2Str}</span>
+                <span class="modal-fair-badge">Fair: @ ${(hcapM.fair_odds_h2 || 1.90)}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Marché 5 : Nombre de Sets -->
+          <div class="modal-market-cell">
+            <div class="modal-market-name">🎾 Nombre de Sets</div>
+            <div class="modal-market-row">
+              <span>2 Sets (2-0 sec)</span>
+              <span class="modal-fair-badge">Fair IA: ${fairSets2}</span>
+            </div>
+            <div class="modal-market-row">
+              <span>3 Sets (2-1 disputé)</span>
+              <span class="modal-fair-badge">Fair IA: ${fairSets3}</span>
+            </div>
+          </div>
+
+          <!-- Marché 6 : Tie-Break -->
+          <div class="modal-market-cell">
+            <div class="modal-market-name">⚡ Tie-Break dans le match (Proba: ${probaTbYes})</div>
+            <div class="modal-market-row">
+              <span>Au moins 1 TB (OUI)</span>
+              <span class="modal-fair-badge">Fair IA: ${fairTbYes}</span>
+            </div>
+            <div class="modal-market-row">
+              <span>Aucun TB (NON)</span>
+              <span class="modal-fair-badge">Fair IA: ${fairTbNo}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. MODAL FOOTER ACTIONS -->
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border);">
+        <button type="button" class="btn-cancel" onclick="closeMatchDetailModal()" style="font-size: 13px; padding: 8px 18px;">
+          ✕ Fermer
+        </button>
+        <button type="button" class="btn-save-key" onclick="transferMatchToManual('${match.id}')" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-size: 13.5px; padding: 8px 22px; font-weight: 800; display:flex; align-items:center; gap:6px;">
+          <span>⚔️</span> Personnaliser mes cotes dans l'Analyseur Manuel
+        </button>
       </div>
     `;
-  } else {
-    vbsHtml = `
-      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 20px; text-align: center; color: var(--text-muted); font-size: 12.5px;">
-        ⚖️ <b>Aucun Value Bet détecté sur ce match</b> : Les cotes proposées par Bet365 intègrent une marge normale et ne présentent pas d'avantage statistique suffisant.
-      </div>
-    `;
-  }
-
-  // Markets summary
-  const odds1Str = match.odds1 ? match.odds1.toFixed(2) : '-';
-  const odds2Str = match.odds2 ? match.odds2.toFixed(2) : '-';
-  const totLineStr = match.total_line ? `Total Jeux (${match.total_line})` : 'Total Jeux';
-  const oddsOvStr = match.odds_over ? match.odds_over.toFixed(2) : '-';
-  const oddsUnStr = match.odds_under ? match.odds_under.toFixed(2) : '-';
-  const hLineStr = match.handicap_line ? `Handicap (${match.handicap_line})` : 'Handicap';
-  const oddsH1Str = match.odds_h1 ? match.odds_h1.toFixed(2) : '-';
-  const oddsH2Str = match.odds_h2 ? match.odds_h2.toFixed(2) : '-';
-
-  bodyContainer.innerHTML = `
-    <!-- Top Clash Banner -->
-    <div class="prediction-header" style="margin-bottom: 20px;">
-      <div class="player-col ${isP1Fav ? 'winner' : ''}">
-        <div class="prob-percent ${isP1Fav ? 'fav' : ''}">${proba1}%</div>
-        <div class="prob-pname">${escapeHtml(p1)}</div>
-        <div class="prob-odds">Cote Bet365 : <b>@ ${odds1Str}</b> (Équitable: @ ${pred.fair_odds_p1})</div>
-      </div>
-
-      <div class="vs-badge">VS</div>
-
-      <div class="player-col ${!isP1Fav ? 'winner' : ''}">
-        <div class="prob-percent ${!isP1Fav ? 'fav' : ''}">${proba2}%</div>
-        <div class="prob-pname">${escapeHtml(p2)}</div>
-        <div class="prob-odds">Cote Bet365 : <b>@ ${odds2Str}</b> (Équitable: @ ${pred.fair_odds_p2})</div>
-      </div>
-    </div>
-
-    <!-- Value Bets -->
-    ${vbsHtml}
-
-    <!-- Scanned Odds Recap Table -->
-    <div style="margin-bottom: 20px;">
-      <h4 style="font-size: 13.5px; color: var(--text-main); margin-bottom: 8px;">📊 Cotes Scannées sur Bet365</h4>
-      <table class="stats-table">
-        <thead>
-          <tr>
-            <th>Marché</th>
-            <th>Sélection 1</th>
-            <th>Sélection 2</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><b>Vainqueur du Match</b></td>
-            <td>${escapeHtml(p1Short)} @ <b>${odds1Str}</b></td>
-            <td>${escapeHtml(p2Short)} @ <b>${odds2Str}</b></td>
-          </tr>
-          <tr>
-            <td><b>${totLineStr}</b></td>
-            <td>Over @ <b>${oddsOvStr}</b></td>
-            <td>Under @ <b>${oddsUnStr}</b></td>
-          </tr>
-          <tr>
-            <td><b>${hLineStr}</b></td>
-            <td>${escapeHtml(p1Short)} @ <b>${oddsH1Str}</b></td>
-            <td>${escapeHtml(p2Short)} @ <b>${oddsH2Str}</b></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Modal Footer Actions -->
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border);">
-      <button type="button" class="btn-cancel" onclick="closeMatchDetailModal()">✕ Fermer</button>
-      <button type="button" class="btn-save-key" onclick="transferMatchToManual('${match.id}')" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);">
-        ⚔️ Ouvrir dans l'Analyseur Manuel & Modifier les Cotes
-      </button>
-    </div>
-  `;
 
     modal.style.display = 'flex';
   } catch (err) {
     console.error('Erreur lors de l ouverture de la modale de match:', err);
-    // Fallback: transfert vers l'analyseur
     transferMatchToManual(matchId);
   }
 }
+window.openMatchDetailModal = openMatchDetailModal;
 window.openMatchDetailModal = openMatchDetailModal;
 
 function closeMatchDetailModal() {
