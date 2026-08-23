@@ -196,13 +196,15 @@ function setupSecondaryMarketsToggle() {
   });
 }
 
-// Data Update (Sync recent matches & tournaments)
+// Data Update (Async Sync recent matches & tournaments with live progress polling)
 function setupUpdateData() {
   if (!btnUpdateData) return;
+  let pollInterval = null;
+
   btnUpdateData.addEventListener('click', async () => {
     btnUpdateData.classList.add('loading');
     btnUpdateData.disabled = true;
-    updateStatusMsg.textContent = '⏳ Téléchargement et synchronisation des matchs récents...';
+    updateStatusMsg.textContent = '⏳ Initialisation de la synchronisation...';
     updateStatusMsg.style.color = '#38bdf8';
 
     try {
@@ -210,26 +212,53 @@ function setupUpdateData() {
       if (!res.ok) {
         throw new Error(`Le serveur a répondu avec le statut HTTP ${res.status}`);
       }
-      const data = await res.json();
-      if (data.success) {
-        updateStatusMsg.textContent = `✅ ${data.message} (${data.timestamp})`;
-        updateStatusMsg.style.color = '#34d399';
-      } else {
-        updateStatusMsg.textContent = `⚠️ ${data.message}`;
-        updateStatusMsg.style.color = '#f87171';
-      }
+      const initialData = await res.json();
+      updateStatusMsg.textContent = `⏳ ${initialData.message || 'Téléchargement en cours...'}`;
+
+      // Polling de l'état d'avancement toutes les 1.5 secondes
+      pollInterval = setInterval(async () => {
+        try {
+          const sRes = await fetch('/api/update-data/status');
+          if (!sRes.ok) return;
+          const status = await sRes.json();
+
+          if (status.running) {
+            updateStatusMsg.textContent = `⏳ ${status.message}`;
+            updateStatusMsg.style.color = '#38bdf8';
+          } else {
+            // Terminé
+            clearInterval(pollInterval);
+            pollInterval = null;
+            btnUpdateData.classList.remove('loading');
+            btnUpdateData.disabled = false;
+
+            if (status.success) {
+              updateStatusMsg.textContent = `✅ ${status.message} (${status.timestamp})`;
+              updateStatusMsg.style.color = '#34d399';
+              // Recharger la liste des joueurs
+              if (typeof loadPlayers === 'function') loadPlayers();
+            } else {
+              updateStatusMsg.textContent = `⚠️ ${status.message || status.error || 'Erreur inconnue'}`;
+              updateStatusMsg.style.color = '#f87171';
+            }
+
+            setTimeout(() => {
+              if (updateStatusMsg.textContent.startsWith('✅')) {
+                updateStatusMsg.textContent = '';
+              }
+            }, 10000);
+          }
+        } catch (pollErr) {
+          console.warn('Erreur polling status:', pollErr);
+        }
+      }, 1500);
+
     } catch (err) {
-      updateStatusMsg.textContent = `❌ Impossible de synchroniser (${err.message}). Si l'instance Render redémarre ou sort de veille, réessayez dans 30 secondes.`;
-      updateStatusMsg.style.color = '#f87171';
-    } finally {
+      if (pollInterval) clearInterval(pollInterval);
       btnUpdateData.classList.remove('loading');
       btnUpdateData.disabled = false;
-      setTimeout(() => {
-        // Clear status after 8 seconds
-        if (updateStatusMsg.textContent.startsWith('✅')) {
-          updateStatusMsg.textContent = '';
-        }
-      }, 8000);
+      updateStatusMsg.textContent = `❌ Impossible de lancer la synchronisation (${err.message}). Si l'instance Render sort de veille, réessayez dans quelques secondes.`;
+      updateStatusMsg.style.color = '#f87171';
     }
   });
 }

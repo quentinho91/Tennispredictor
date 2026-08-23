@@ -7,6 +7,7 @@ et détection de Value Bets avec calcul de mise Kelly.
 import os
 import sys
 import datetime
+import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -1016,12 +1017,30 @@ def compute_detailed_analytics(
     }
 
 
-@app.post("/api/update-data")
-def update_data():
-    """Lance la synchronisation complète : téléchargement, constitution du dataset et recalcul des stats."""
+# État global et verrou pour la synchronisation asynchrone en arrière-plan
+SYNC_STATE = {
+    "running": False,
+    "step": "idle",
+    "message": "Prêt",
+    "success": True,
+    "timestamp": "",
+    "error": None
+}
+SYNC_LOCK = threading.Lock()
+
+
+def _run_background_sync():
+    global SYNC_STATE
     import subprocess
     import gc
+
     try:
+        with SYNC_LOCK:
+            SYNC_STATE["running"] = True
+            SYNC_STATE["step"] = "download"
+            SYNC_STATE["message"] = "Téléchargement des matchs récents (1/3)..."
+            SYNC_STATE["error"] = None
+
         # Libérer le cache et la mémoire avant de lancer les sous-processus
         CACHE.clear()
         PLAYERS_CACHE.clear()
@@ -1029,11 +1048,19 @@ def update_data():
 
         # 1. Télécharger les matchs récents
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "00_download_data.py")], check=True, timeout=120)
-        
+
+        with SYNC_LOCK:
+            SYNC_STATE["step"] = "dataset"
+            SYNC_STATE["message"] = "Reconstruction des datasets ATP & WTA (2/3)..."
+
         # 2. Reconstruire le dataset pour ATP et WTA
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "atp"], check=True, timeout=120)
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "wta"], check=True, timeout=120)
-        
+
+        with SYNC_LOCK:
+            SYNC_STATE["step"] = "state"
+            SYNC_STATE["message"] = "Recalcul des classements et statistiques (3/3)..."
+
         # 3. Recalculer l'état des joueurs en mode ultra-léger (state-only)
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "atp", "--state-only"], check=True, timeout=300)
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "wta", "--state-only"], check=True, timeout=300)
@@ -1044,19 +1071,52 @@ def update_data():
         gc.collect()
 
         now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
-        return {
-            "success": True,
-            "message": "Données, tournois et statistiques des joueurs synchronisés avec succès !",
-            "timestamp": now_str,
-            "output": ""
-        }
+        with SYNC_LOCK:
+            SYNC_STATE["running"] = False
+            SYNC_STATE["step"] = "done"
+            SYNC_STATE["success"] = True
+            SYNC_STATE["message"] = "Données, tournois et statistiques des joueurs synchronisés avec succès !"
+            SYNC_STATE["timestamp"] = now_str
     except Exception as e:
         gc.collect()
-        return {
-            "success": False,
-            "message": f"Erreur lors de la synchronisation : {str(e)}",
-            "timestamp": datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
-        }
+        now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
+        with SYNC_LOCK:
+            SYNC_STATE["running"] = False
+            SYNC_STATE["step"] = "error"
+            SYNC_STATE["success"] = False
+            SYNC_STATE["error"] = str(e)
+            SYNC_STATE["message"] = f"Erreur lors de la synchronisation : {str(e)}"
+            SYNC_STATE["timestamp"] = now_str
+
+
+@app.post("/api/update-data")
+def update_data():
+    """Lance la synchronisation asynchrone en tâche de fond (réponse immédiate < 50ms, immunisé contre les timeouts HTTP 502 de Render)."""
+    with SYNC_LOCK:
+        if SYNC_STATE["running"]:
+            return {
+                "success": True,
+                "status": "already_running",
+                "message": SYNC_STATE["message"],
+                "step": SYNC_STATE["step"]
+            }
+
+    t = threading.Thread(target=_run_background_sync, daemon=True)
+    t.start()
+
+    return {
+        "success": True,
+        "status": "started",
+        "message": "Synchronisation lancée en arrière-plan...",
+        "step": "download"
+    }
+
+
+@app.get("/api/update-data/status")
+def get_update_status():
+    """Retourne l'état d'avancement en temps réel de la synchronisation."""
+    with SYNC_LOCK:
+        return dict(SYNC_STATE)
 
 
 @app.post("/api/predict")
