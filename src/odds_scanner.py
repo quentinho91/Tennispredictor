@@ -95,7 +95,7 @@ def resolve_tournament_context(sport_title: str, circuit: str = "atp") -> Dict[s
 
 
 def fetch_the_odds_api_sports(api_key: str) -> List[Dict[str, Any]]:
-    """Récupère la liste de tous les sports / tournois de tennis disponibles (en cours et à venir) sur The Odds API."""
+    """Récupère la liste des tournois de tennis avec des matchs à venir sur The Odds API (sans les marchés de vainqueur de tournoi/outrights)."""
     url = f"https://api.the-odds-api.com/v4/sports?apiKey={api_key}&all=true"
     req = urllib.request.Request(url, headers={"User-Agent": "TennisPredictor/1.0"})
     with urllib.request.urlopen(req, timeout=10) as resp:
@@ -103,6 +103,9 @@ def fetch_the_odds_api_sports(api_key: str) -> List[Dict[str, Any]]:
         return [
             s for s in data
             if (s.get("key", "").startswith("tennis_") or s.get("group", "").lower() == "tennis")
+            and not s.get("has_outrights", False)
+            and "winner" not in s.get("key", "").lower()
+            and "championship" not in s.get("key", "").lower()
         ]
 
 
@@ -483,8 +486,8 @@ def scan_daily_matches(
                 # All: ATP + WTA
                 target_sport_keys = [s["key"] for s in active_sports if (s.get("key", "").startswith("tennis_") or s.get("group", "").lower() == "tennis")]
 
-            # Récupérer tous les tournois actifs (jusqu'à 20 tournois simultanés)
-            for s_key in target_sport_keys[:20]:
+            # Récupérer les tournois actifs ciblés (jusqu'à 6 tournois pour préserver le quota d'appels API)
+            for s_key in target_sport_keys[:6]:
                 m_circuit = "wta" if ("wta" in s_key or "women" in s_key) else "atp"
                 try:
                     events, q_info = fetch_odds_for_sport(s_key, resolved_api_key)
