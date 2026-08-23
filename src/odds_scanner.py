@@ -478,15 +478,21 @@ def scan_daily_matches(
         try:
             active_sports = fetch_the_odds_api_sports(resolved_api_key)
 
+            # Prioriser impérativement les tournois actifs (en cours cette semaine)
+            # devant les compétitions hors saison / futures (Aus Open, Roland Garros...)
+            in_season = [s for s in active_sports if s.get("active", False)]
+            out_of_season = [s for s in active_sports if not s.get("active", False)]
+            sorted_sports = in_season + out_of_season
+
             if circuit_key == "atp":
-                target_sport_keys = [s["key"] for s in active_sports if "atp" in s["key"]][:8]
+                target_sport_keys = [s["key"] for s in sorted_sports if "atp" in s["key"]][:8]
             elif circuit_key == "wta":
-                target_sport_keys = [s["key"] for s in active_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())][:8]
+                target_sport_keys = [s["key"] for s in sorted_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())][:8]
             else:
                 # All: ATP + WTA équilibré
-                atp_keys = [s["key"] for s in active_sports if "atp" in s["key"]]
-                wta_keys = [s["key"] for s in active_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())]
-                other_keys = [s["key"] for s in active_sports if s["key"] not in atp_keys and s["key"] not in wta_keys]
+                atp_keys = [s["key"] for s in sorted_sports if "atp" in s["key"]]
+                wta_keys = [s["key"] for s in sorted_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())]
+                other_keys = [s["key"] for s in sorted_sports if s["key"] not in atp_keys and s["key"] not in wta_keys]
                 target_sport_keys = atp_keys[:5] + wta_keys[:5] + other_keys[:2]
 
             # Récupérer les tournois actifs (ATP et WTA garantis)
