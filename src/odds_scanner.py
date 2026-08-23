@@ -95,8 +95,8 @@ def resolve_tournament_context(sport_title: str, circuit: str = "atp") -> Dict[s
 
 
 def fetch_the_odds_api_sports(api_key: str) -> List[Dict[str, Any]]:
-    """Récupère la liste de tous les sports / tournois de tennis disponibles sur The Odds API."""
-    url = f"https://api.the-odds-api.com/v4/sports?apiKey={api_key}"
+    """Récupère la liste de tous les sports / tournois de tennis disponibles (en cours et à venir) sur The Odds API."""
+    url = f"https://api.the-odds-api.com/v4/sports?apiKey={api_key}&all=true"
     req = urllib.request.Request(url, headers={"User-Agent": "TennisPredictor/1.0"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode("utf-8"))
@@ -486,9 +486,13 @@ def scan_daily_matches(
             # Récupérer tous les tournois actifs (jusqu'à 20 tournois simultanés)
             for s_key in target_sport_keys[:20]:
                 m_circuit = "wta" if ("wta" in s_key or "women" in s_key) else "atp"
-                events, q_info = fetch_odds_for_sport(s_key, resolved_api_key)
-                if q_info.get("requests_remaining"):
-                    quota_info = q_info
+                try:
+                    events, q_info = fetch_odds_for_sport(s_key, resolved_api_key)
+                    if q_info.get("requests_remaining"):
+                        quota_info = q_info
+                except Exception as sport_err:
+                    logger.warning(f"Impossible de charger les cotes pour {s_key}: {sport_err}")
+                    continue
 
                 for ev in events:
                     odds = extract_match_odds(ev, target_bookmaker=bookmaker)
