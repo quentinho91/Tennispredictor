@@ -249,7 +249,11 @@ function setupUpdateData() {
             btnUpdateData.disabled = false;
 
             if (status.success) {
-              updateStatusMsg.innerHTML = `<span style="color: #34d399; font-size: 12.5px;">✅ Données synchronisées avec succès le : <b>${status.timestamp}</b></span>`;
+              const now = new Date();
+              const dateStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+              const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+              const displayTs = (status.timestamp && status.timestamp.trim().length > 3) ? status.timestamp : `${dateStr} à ${timeStr}`;
+              updateStatusMsg.innerHTML = `<span style="color: #34d399; font-size: 12.5px;">✅ Données synchronisées avec succès le : <b>${displayTs}</b></span>`;
               // Recharger la liste des joueurs
               if (typeof loadPlayers === 'function') loadPlayers();
             } else {

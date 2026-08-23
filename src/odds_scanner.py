@@ -95,28 +95,32 @@ def resolve_tournament_context(sport_title: str, circuit: str = "atp") -> Dict[s
 
 
 def fetch_the_odds_api_sports(api_key: str) -> List[Dict[str, Any]]:
-    """Récupère la liste des sports / tournois de tennis actifs sur The Odds API."""
+    """Récupère la liste de tous les sports / tournois de tennis disponibles sur The Odds API."""
     url = f"https://api.the-odds-api.com/v4/sports?apiKey={api_key}"
     req = urllib.request.Request(url, headers={"User-Agent": "TennisPredictor/1.0"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode("utf-8"))
-        return [s for s in data if s.get("key", "").startswith("tennis_") and s.get("active", False)]
+        return [
+            s for s in data
+            if (s.get("key", "").startswith("tennis_") or s.get("group", "").lower() == "tennis")
+        ]
 
 
 def fetch_odds_for_sport(
     sport_key: str,
     api_key: str,
-    bookmakers: str = "betclic_fr,betclic,winamax_fr,unibet_fr,unibet,bet365,pinnacle"
+    bookmakers: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Récupère les cotes du tournoi ciblées sur le marché Vainqueur (h2h) Betclic."""
+    """Récupère les cotes du tournoi sur tous les bookmakers mondiaux sans restriction restrictive."""
     base_url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
     params = {
         "apiKey": api_key,
         "regions": "eu,us,uk,au",
-        "markets": "h2h",
-        "oddsFormat": "decimal",
-        "bookmakers": bookmakers
+        "markets": "h2h,totals,spreads",
+        "oddsFormat": "decimal"
     }
+    if bookmakers:
+        params["bookmakers"] = bookmakers
     query_string = urllib.parse.urlencode(params)
     url = f"{base_url}?{query_string}"
 
@@ -173,14 +177,23 @@ def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "betclic")
                                 extracted["odds1"] = float(out.get("price")) if out.get("price") else None
                             elif out.get("name") == away_name:
                                 extracted["odds2"] = float(out.get("price")) if out.get("price") else None
-                        if extracted["odds1"] and extracted["odds2"]:
-                            found_bm_name = bm.get("title", "Betclic")
-                            extracted["bookmaker_key"] = bm_key
-                            break
+    # Si aucun des bookmakers prioritaires n'a été trouvé, prendre le premier bookmaker ayant les cotes H2H
+    if not (extracted["odds1"] and extracted["odds2"]):
+        for bm in bookmakers_list:
+            bm_key = bm.get("key", "").lower()
+            for market in bm.get("markets", []):
+                if market.get("key") == "h2h":
+                    for out in market.get("outcomes", []):
+                        if out.get("name") == home_name:
+                            extracted["odds1"] = float(out.get("price")) if out.get("price") else None
+                        elif out.get("name") == away_name:
+                            extracted["odds2"] = float(out.get("price")) if out.get("price") else None
+                    if extracted["odds1"] and extracted["odds2"]:
+                        found_bm_name = bm.get("title", "Bookmaker Direct")
+                        extracted["bookmaker_key"] = bm_key
+                        break
             if found_bm_name:
                 break
-        if found_bm_name:
-            break
 
     if found_bm_name:
         extracted["bookmaker_name"] = found_bm_name
@@ -425,10 +438,10 @@ def scan_daily_matches(
                 target_sport_keys = [s["key"] for s in active_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())]
             else:
                 # All: ATP + WTA
-                target_sport_keys = [s["key"] for s in active_sports if s.get("key", "").startswith("tennis_")]
+                target_sport_keys = [s["key"] for s in active_sports if (s.get("key", "").startswith("tennis_") or s.get("group", "").lower() == "tennis")]
 
-            # Récupérer tous les tournois actifs (jusqu'à 10 tournois simultanés)
-            for s_key in target_sport_keys[:10]:
+            # Récupérer tous les tournois actifs (jusqu'à 20 tournois simultanés)
+            for s_key in target_sport_keys[:20]:
                 m_circuit = "wta" if ("wta" in s_key or "women" in s_key) else "atp"
                 events, q_info = fetch_odds_for_sport(s_key, resolved_api_key)
                 if q_info.get("requests_remaining"):

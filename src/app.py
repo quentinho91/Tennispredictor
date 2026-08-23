@@ -1038,7 +1038,7 @@ SYNC_STATE = {
     "step": "idle",
     "message": "Prêt",
     "success": True,
-    "timestamp": "",
+    "timestamp": _get_last_data_update_str(),
     "error": None
 }
 SYNC_LOCK = threading.Lock()
@@ -1113,7 +1113,8 @@ def update_data():
                 "success": True,
                 "status": "already_running",
                 "message": SYNC_STATE["message"],
-                "step": SYNC_STATE["step"]
+                "step": SYNC_STATE["step"],
+                "timestamp": SYNC_STATE.get("timestamp") or _get_last_data_update_str()
             }
 
     t = threading.Thread(target=_run_background_sync, daemon=True)
@@ -1123,7 +1124,8 @@ def update_data():
         "success": True,
         "status": "started",
         "message": "Synchronisation lancée en arrière-plan...",
-        "step": "download"
+        "step": "download",
+        "timestamp": SYNC_STATE.get("timestamp") or _get_last_data_update_str()
     }
 
 
@@ -1131,7 +1133,10 @@ def update_data():
 def get_update_status():
     """Retourne l'état d'avancement en temps réel de la synchronisation."""
     with SYNC_LOCK:
-        return dict(SYNC_STATE)
+        res = dict(SYNC_STATE)
+        if not res.get("timestamp"):
+            res["timestamp"] = _get_last_data_update_str()
+        return res
 
 
 @app.post("/api/predict")
