@@ -148,8 +148,33 @@ def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "betclic")
     if not bookmakers_list:
         return {}
 
-    # Ordre de priorité pour le vainqueur (H2H) : Betclic > Winamax > Unibet > Bet365 > Pinnacle
-    h2h_priority = ["betclic_fr", "winamax_fr", "unibet_fr", "unibet", "bet365", "pinnacle", "betrivers", "bovada"]
+    # Ordre de priorité strict :
+    # 1. Bookmakers Français (ANJ) : Betclic > Winamax > Unibet FR > ParionsSport/FDJ > ZeBet > PMU > VBet > NetBet > Bwin FR
+    # 2. Bookmakers Européens proches (référence cotes) : Bet365 > William Hill > Unibet EU > Betway > Pinnacle > Betfair > MarathonBet
+    # 3. Bookmakers Internationaux / US : Bovada > BetRivers > DraftKings > FanDuel > MyBookie
+    h2h_priority = [
+        # --- 1. FRANCE (ANJ) ---
+        "betclic_fr", "betclic",
+        "winamax_fr", "winamax",
+        "unibet_fr",
+        "parionssport_fr", "parionssport", "fdj",
+        "zebet_fr", "zebet",
+        "pmu_fr", "pmu",
+        "vbet_fr", "vbet",
+        "netbet_fr", "netbet",
+        "bwin_fr", "bwin",
+        # --- 2. EUROPE / BENCHMARK PROCHE ---
+        "bet365",
+        "williamhill",
+        "unibet_eu", "unibet",
+        "betway",
+        "pinnacle",
+        "betfair", "betfair_ex_eu",
+        "marathonbet",
+        "1xbet",
+        # --- 3. US / INTERNATIONAL ---
+        "bovada", "betrivers", "draftkings", "fanduel", "mybookieag"
+    ]
 
     extracted = {
         "bookmaker_name": "Betclic",
@@ -164,39 +189,57 @@ def extract_match_odds(event: Dict[str, Any], target_bookmaker: str = "betclic")
         "odds_h2": None,
     }
 
-    # 1. Extraction du Vainqueur (H2H) selon la priorité
+    # 1. Extraction du Vainqueur (H2H) selon la priorité stricte (FR d'abord, puis proches)
     found_bm_name = None
+    found_bm_key = None
+
     for pref in h2h_priority:
         for bm in bookmakers_list:
             bm_key = bm.get("key", "").lower()
-            if pref in bm_key:
+            if pref == bm_key or pref in bm_key:
                 for market in bm.get("markets", []):
                     if market.get("key") == "h2h":
+                        o1, o2 = None, None
                         for out in market.get("outcomes", []):
                             if out.get("name") == home_name:
-                                extracted["odds1"] = float(out.get("price")) if out.get("price") else None
+                                o1 = float(out.get("price")) if out.get("price") else None
                             elif out.get("name") == away_name:
-                                extracted["odds2"] = float(out.get("price")) if out.get("price") else None
-    # Si aucun des bookmakers prioritaires n'a été trouvé, prendre le premier bookmaker ayant les cotes H2H
+                                o2 = float(out.get("price")) if out.get("price") else None
+                        if o1 and o2:
+                            extracted["odds1"] = o1
+                            extracted["odds2"] = o2
+                            found_bm_name = bm.get("title", pref.replace("_fr", "").capitalize())
+                            found_bm_key = bm_key
+                            break
+            if found_bm_name:
+                break
+        if found_bm_name:
+            break
+
+    # Si aucun des bookmakers de la liste prioritaire n'a été trouvé, prendre le premier bookmaker valide disponible
     if not (extracted["odds1"] and extracted["odds2"]):
         for bm in bookmakers_list:
             bm_key = bm.get("key", "").lower()
             for market in bm.get("markets", []):
                 if market.get("key") == "h2h":
+                    o1, o2 = None, None
                     for out in market.get("outcomes", []):
                         if out.get("name") == home_name:
-                            extracted["odds1"] = float(out.get("price")) if out.get("price") else None
+                            o1 = float(out.get("price")) if out.get("price") else None
                         elif out.get("name") == away_name:
-                            extracted["odds2"] = float(out.get("price")) if out.get("price") else None
-                    if extracted["odds1"] and extracted["odds2"]:
+                            o2 = float(out.get("price")) if out.get("price") else None
+                    if o1 and o2:
+                        extracted["odds1"] = o1
+                        extracted["odds2"] = o2
                         found_bm_name = bm.get("title", "Bookmaker Direct")
-                        extracted["bookmaker_key"] = bm_key
+                        found_bm_key = bm_key
                         break
             if found_bm_name:
                 break
 
     if found_bm_name:
         extracted["bookmaker_name"] = found_bm_name
+        extracted["bookmaker_key"] = found_bm_key or "direct"
     elif bookmakers_list:
         extracted["bookmaker_name"] = bookmakers_list[0].get("title", "Betclic")
 
