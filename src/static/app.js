@@ -67,7 +67,23 @@ document.addEventListener('DOMContentLoaded', () => {
   setupFormSubmit();
   setupHistory();
   setupDailyScanner();
+  loadInitialDataStatus();
 });
+
+async function loadInitialDataStatus() {
+  if (!updateStatusMsg) return;
+  try {
+    const res = await fetch('/api/status');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.last_data_update) {
+        updateStatusMsg.innerHTML = `<span style="color: #94a3b8; font-size: 12.5px;">📅 Données synchronisées le : <b style="color: #38bdf8;">${data.last_data_update}</b></span>`;
+      }
+    }
+  } catch (e) {
+    console.warn('Statut initial non disponible', e);
+  }
+}
 
 // ==========================================================================
 // GESTIONNAIRE DE BANKROLL PERSISTANT & CALCULATEUR DE MISES
@@ -233,20 +249,12 @@ function setupUpdateData() {
             btnUpdateData.disabled = false;
 
             if (status.success) {
-              updateStatusMsg.textContent = `✅ ${status.message} (${status.timestamp})`;
-              updateStatusMsg.style.color = '#34d399';
+              updateStatusMsg.innerHTML = `<span style="color: #34d399; font-size: 12.5px;">✅ Données synchronisées avec succès le : <b>${status.timestamp}</b></span>`;
               // Recharger la liste des joueurs
               if (typeof loadPlayers === 'function') loadPlayers();
             } else {
-              updateStatusMsg.textContent = `⚠️ ${status.message || status.error || 'Erreur inconnue'}`;
-              updateStatusMsg.style.color = '#f87171';
+              updateStatusMsg.innerHTML = `<span style="color: #f87171; font-size: 12.5px;">⚠️ ${status.message || status.error || 'Erreur inconnue'}</span>`;
             }
-
-            setTimeout(() => {
-              if (updateStatusMsg.textContent.startsWith('✅')) {
-                updateStatusMsg.textContent = '';
-              }
-            }, 10000);
           }
         } catch (pollErr) {
           console.warn('Erreur polling status:', pollErr);
@@ -1859,9 +1867,15 @@ async function loadDailyScanner(forceRefresh = false) {
   const countVb = document.getElementById('count-vb-matches');
   const tabScannerCount = document.getElementById('tab-scanner-count');
   const timeText = document.getElementById('scanner-time-text');
+  const btnRefresh = document.getElementById('btn-refresh-scanner');
 
   if (loading) loading.style.display = 'block';
   if (grid) grid.style.opacity = '0.4';
+  if (btnRefresh && forceRefresh) {
+    btnRefresh.classList.add('loading');
+    btnRefresh.disabled = true;
+    if (timeText) timeText.textContent = 'Actualisation...';
+  }
 
   const savedKey = localStorage.getItem(ODDS_API_KEY_STORAGE) || '';
   const keyParam = savedKey ? `&api_key=${encodeURIComponent(savedKey)}` : '';
@@ -1882,7 +1896,13 @@ async function loadDailyScanner(forceRefresh = false) {
       if (countWta) countWta.textContent = data.wta_count || 0;
       if (countVb) countVb.textContent = data.value_bets_count || 0;
       if (tabScannerCount) tabScannerCount.textContent = data.total_matches || currentScannerMatches.length;
-      if (timeText) timeText.textContent = `Actualisé ${data.last_update}`;
+
+      // Heure locale formatée depuis le navigateur (ex: 10:50)
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const localTimeStr = `${h}:${m}`;
+      if (timeText) timeText.textContent = `Actualisé ${localTimeStr}`;
 
       // Mode banner
       if (banner) {
@@ -1916,6 +1936,10 @@ async function loadDailyScanner(forceRefresh = false) {
   } finally {
     if (loading) loading.style.display = 'none';
     if (grid) grid.style.opacity = '1';
+    if (btnRefresh) {
+      btnRefresh.classList.remove('loading');
+      btnRefresh.disabled = false;
+    }
   }
 }
 

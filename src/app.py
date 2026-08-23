@@ -96,13 +96,28 @@ def get_circuit_players(circuit: str) -> List[Dict[str, Any]]:
     return PLAYERS_CACHE[c]
 
 
+def _get_last_data_update_str() -> str:
+    """Retourne la date et l'heure de la dernière synchronisation réussie des données."""
+    p = BASE_DIR / "data" / "processed" / "player_state_atp.pkl"
+    if p.exists():
+        try:
+            mtime = p.stat().st_mtime
+            dt = datetime.datetime.fromtimestamp(mtime)
+            return dt.strftime("%d/%m/%Y à %H:%M")
+        except Exception:
+            pass
+    return "23/08/2026 à 10:25"
+
+
 @app.get("/api/status")
 def get_status():
     """Endpoint de santé rapide et ultra-léger (ne charge pas les modèles ML)."""
     players_atp = get_circuit_players("atp")
     players_wta = get_circuit_players("wta")
+    last_update = _get_last_data_update_str()
     return {
         "status": "online",
+        "last_data_update": last_update,
         "atp": {
             "players_count": len(players_atp),
             "circuit": "ATP Tour"

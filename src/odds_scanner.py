@@ -391,6 +391,11 @@ def scan_daily_matches(
     circuit_key = circuit.lower()
     now_ts = time.time()
 
+    # Si rafraîchissement forcé demandé, vider le cache immédiatement
+    if force_refresh:
+        SCANNER_CACHE.pop(circuit_key, None)
+        SCANNER_CACHE.pop("all", None)
+
     # 1. Vérification du cache en mémoire
     if not force_refresh and circuit_key in SCANNER_CACHE:
         cached_entry = SCANNER_CACHE[circuit_key]
@@ -627,6 +632,7 @@ def scan_daily_matches(
         del player_state
         gc.collect()
 
+    now_utc = datetime.now(timezone.utc)
     now_datetime = datetime.now()
     last_update_str = f"{now_datetime.strftime('%H:%M')}"
 
@@ -637,6 +643,8 @@ def scan_daily_matches(
         "is_demo_mode": is_demo_mode,
         "cached": False,
         "cache_ttl_minutes": int(CACHE_TTL_SECONDS / 60),
+        "timestamp_epoch": now_ts,
+        "timestamp_iso": now_utc.isoformat(),
         "last_update": last_update_str,
         "total_matches": len(analyzed_matches),
         "atp_count": atp_count,
