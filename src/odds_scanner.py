@@ -422,8 +422,8 @@ def scan_daily_matches(
                 # All: ATP + WTA
                 target_sport_keys = [s["key"] for s in active_sports if s.get("key", "").startswith("tennis_")]
 
-            # Récupérer les tournois actifs
-            for s_key in target_sport_keys[:4]:
+            # Récupérer tous les tournois actifs (jusqu'à 10 tournois simultanés)
+            for s_key in target_sport_keys[:10]:
                 m_circuit = "wta" if ("wta" in s_key or "women" in s_key) else "atp"
                 events, q_info = fetch_odds_for_sport(s_key, resolved_api_key)
                 if q_info.get("requests_remaining"):
