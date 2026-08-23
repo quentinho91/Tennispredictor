@@ -72,11 +72,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadInitialDataStatus() {
   if (!updateStatusMsg) return;
+  const saved = localStorage.getItem('tp_last_data_sync_time');
+  if (saved) {
+    updateStatusMsg.innerHTML = `<span style="color: #94a3b8; font-size: 12.5px;">📅 Données synchronisées le : <b style="color: #38bdf8;">${saved}</b></span>`;
+  }
   try {
     const res = await fetch('/api/status');
     if (res.ok) {
       const data = await res.json();
-      if (data.last_data_update) {
+      if (data.last_data_update_iso) {
+        const dt = new Date(data.last_data_update_iso);
+        const dStr = dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const tStr = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const formatted = `${dStr} à ${tStr}`;
+        localStorage.setItem('tp_last_data_sync_time', formatted);
+        updateStatusMsg.innerHTML = `<span style="color: #94a3b8; font-size: 12.5px;">📅 Données synchronisées le : <b style="color: #38bdf8;">${formatted}</b></span>`;
+      } else if (!saved && data.last_data_update) {
         updateStatusMsg.innerHTML = `<span style="color: #94a3b8; font-size: 12.5px;">📅 Données synchronisées le : <b style="color: #38bdf8;">${data.last_data_update}</b></span>`;
       }
     }
@@ -252,7 +263,8 @@ function setupUpdateData() {
               const now = new Date();
               const dateStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
               const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-              const displayTs = (status.timestamp && status.timestamp.trim().length > 3) ? status.timestamp : `${dateStr} à ${timeStr}`;
+              const displayTs = `${dateStr} à ${timeStr}`;
+              localStorage.setItem('tp_last_data_sync_time', displayTs);
               updateStatusMsg.innerHTML = `<span style="color: #34d399; font-size: 12.5px;">✅ Données synchronisées avec succès le : <b>${displayTs}</b></span>`;
               // Recharger la liste des joueurs
               if (typeof loadPlayers === 'function') loadPlayers();
@@ -2017,6 +2029,16 @@ function renderScannerGrid() {
     const odds2Str = m.odds2 ? m.odds2.toFixed(2) : '-';
     const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP</span>` : `<span class="circuit-pill-wta">👑 WTA</span>`;
 
+    let matchTimeDisplay = m.time_display || 'Aujourd\'hui';
+    if (m.commence_time) {
+      try {
+        const dt = new Date(m.commence_time);
+        if (!isNaN(dt.getTime())) {
+          matchTimeDisplay = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        }
+      } catch (e) {}
+    }
+
     html += `
       <div class="scan-match-card ${hasVb ? 'has-vb' : ''}" onclick="openMatchDetailModal('${m.id}')" style="cursor: pointer;" title="Cliquer pour ouvrir le rapport d'analyse détaillé en grand">
         <div class="scan-card-top">
@@ -2024,7 +2046,7 @@ function renderScannerGrid() {
             ${circuitBadge}
             <span class="scan-tourney-tag">🏆 ${escapeHtml(m.tournament)} • ${escapeHtml(m.surface)}</span>
           </div>
-          <span class="scan-time-tag">⏰ ${escapeHtml(m.time_display)}</span>
+          <span class="scan-time-tag">⏰ ${escapeHtml(matchTimeDisplay)}</span>
         </div>
 
         <div class="scan-players-wrap">
