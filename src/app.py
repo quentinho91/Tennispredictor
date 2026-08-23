@@ -1020,7 +1020,13 @@ def compute_detailed_analytics(
 def update_data():
     """Lance la synchronisation complète : téléchargement, constitution du dataset et recalcul des stats."""
     import subprocess
+    import gc
     try:
+        # Libérer le cache et la mémoire avant de lancer les sous-processus
+        CACHE.clear()
+        PLAYERS_CACHE.clear()
+        gc.collect()
+
         # 1. Télécharger les matchs récents
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "00_download_data.py")], check=True, timeout=120)
         
@@ -1028,13 +1034,14 @@ def update_data():
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "atp"], check=True, timeout=120)
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "wta"], check=True, timeout=120)
         
-        # 3. Recalculer le feature engineering et l'état des joueurs
-        subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "atp"], check=True, timeout=400)
-        subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "wta"], check=True, timeout=300)
+        # 3. Recalculer l'état des joueurs en mode ultra-léger (state-only)
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "atp", "--state-only"], check=True, timeout=300)
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "wta", "--state-only"], check=True, timeout=300)
 
-        # Réinitialisation des caches pour prise en compte immédiate
+        # Réinitialisation des caches et nettoyage mémoire pour prise en compte immédiate
         CACHE.clear()
         PLAYERS_CACHE.clear()
+        gc.collect()
 
         now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
         return {
@@ -1044,6 +1051,7 @@ def update_data():
             "output": ""
         }
     except Exception as e:
+        gc.collect()
         return {
             "success": False,
             "message": f"Erreur lors de la synchronisation : {str(e)}",

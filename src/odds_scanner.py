@@ -480,138 +480,152 @@ def scan_daily_matches(
         raw_matches = get_demo_matches(circuit_key)
         is_demo_mode = True
 
-    # 3. Résolution des noms et analyse prédictive des matchs
+    # 3. Résolution des noms et analyse prédictive des matchs isolée par circuit
+    # pour garantir que les ressources ATP et WTA ne sont JAMAIS chargées en mémoire ensemble.
+    import gc
+
     analyzed_matches = []
     total_vbs_found = 0
     atp_count = 0
     wta_count = 0
 
-    # Cache des ressources par circuit pour éviter de recharger plusieurs fois
-    circuit_resources = {}
-
+    # Séparer les matchs par circuit
+    matches_by_circuit = {"atp": [], "wta": []}
     for m in raw_matches:
-        m_circuit = m.get("circuit", "atp").lower()
-        if m_circuit == "atp":
-            atp_count += 1
-        else:
-            wta_count += 1
+        c = m.get("circuit", "atp").lower()
+        if c not in matches_by_circuit:
+            matches_by_circuit[c] = []
+        matches_by_circuit[c].append(m)
 
-        if m_circuit not in circuit_resources and get_resources_func:
-            circuit_resources[m_circuit] = get_resources_func(m_circuit)
+    for current_circuit, circuit_match_list in matches_by_circuit.items():
+        if not circuit_match_list:
+            continue
 
-        res = circuit_resources.get(m_circuit, {})
+        res = get_resources_func(current_circuit) if get_resources_func else {}
         known_players = res.get("players", [])
         player_state = res.get("state", {})
 
-        p1_resolved = m["p1_raw"]
-        p2_resolved = m["p2_raw"]
+        for m in circuit_match_list:
+            if current_circuit == "atp":
+                atp_count += 1
+            else:
+                wta_count += 1
 
-        if smart_resolve_func and known_players and player_state:
-            p1_resolved = smart_resolve_func(m["p1_raw"], known_players, player_state)
-            p2_resolved = smart_resolve_func(m["p2_raw"], known_players, player_state)
+            p1_resolved = m["p1_raw"]
+            p2_resolved = m["p2_raw"]
 
-        m_item = {
-            "id": m.get("id"),
-            "circuit": m_circuit,
-            "sport_title": m.get("sport_title"),
-            "tournament": m.get("tournament"),
-            "surface": m.get("surface"),
-            "level": m.get("level"),
-            "best_of": m.get("best_of"),
-            "indoor": m.get("indoor"),
-            "commence_time": m.get("commence_time"),
-            "time_display": m.get("time_display"),
-            "p1_raw": m["p1_raw"],
-            "p2_raw": m["p2_raw"],
-            "p1": p1_resolved,
-            "p2": p2_resolved,
-            "bookmaker": m.get("bookmaker", "Bet365"),
-            "odds1": m.get("odds1"),
-            "odds2": m.get("odds2"),
-            "total_line": m.get("total_line"),
-            "odds_over": m.get("odds_over"),
-            "odds_under": m.get("odds_under"),
-            "handicap_line": m.get("handicap_line"),
-            "odds_h1": m.get("odds_h1"),
-            "odds_h2": m.get("odds_h2"),
-            "prediction": None,
-            "full_report": None,
-            "has_value_bet": False,
-            "top_value_bet": None,
-            "all_value_bets": []
-        }
+            if smart_resolve_func and known_players and player_state:
+                p1_resolved = smart_resolve_func(m["p1_raw"], known_players, player_state)
+                p2_resolved = smart_resolve_func(m["p2_raw"], known_players, player_state)
 
-        # Exécuter la prédiction complète
-        if predict_func:
-            try:
-                class DummyReq:
-                    def __init__(self, **kwargs):
-                        for k, v in kwargs.items():
-                            setattr(self, k, v)
+            m_item = {
+                "id": m.get("id"),
+                "circuit": current_circuit,
+                "sport_title": m.get("sport_title"),
+                "tournament": m.get("tournament"),
+                "surface": m.get("surface"),
+                "level": m.get("level"),
+                "best_of": m.get("best_of"),
+                "indoor": m.get("indoor"),
+                "commence_time": m.get("commence_time"),
+                "time_display": m.get("time_display"),
+                "p1_raw": m["p1_raw"],
+                "p2_raw": m["p2_raw"],
+                "p1": p1_resolved,
+                "p2": p2_resolved,
+                "bookmaker": m.get("bookmaker", "Bet365"),
+                "odds1": m.get("odds1"),
+                "odds2": m.get("odds2"),
+                "total_line": m.get("total_line"),
+                "odds_over": m.get("odds_over"),
+                "odds_under": m.get("odds_under"),
+                "handicap_line": m.get("handicap_line"),
+                "odds_h1": m.get("odds_h1"),
+                "odds_h2": m.get("odds_h2"),
+                "prediction": None,
+                "full_report": None,
+                "has_value_bet": False,
+                "top_value_bet": None,
+                "all_value_bets": []
+            }
 
-                req_obj = DummyReq(
-                    circuit=m_circuit,
-                    p1=p1_resolved,
-                    p2=p2_resolved,
-                    surface=m.get("surface", "Hard"),
-                    tournament=m.get("tournament", "Tournoi"),
-                    level=m.get("level", "A"),
-                    round="R32",
-                    best_of=m.get("best_of", 3),
-                    indoor=m.get("indoor", 0),
-                    date=None,
-                    odds1=m.get("odds1"),
-                    odds2=m.get("odds2"),
-                    total_line=None,
-                    odds_over=None,
-                    odds_under=None,
-                    handicap_line=None,
-                    odds_h1=None,
-                    odds_h2=None,
-                    odds_set1_p1=None,
-                    odds_set1_p2=None,
-                    odds_sets_over25=None,
-                    odds_sets_under25=None,
-                    odds_tb_yes=None,
-                    odds_tb_no=None
-                )
+            # Exécuter la prédiction complète
+            if predict_func:
+                try:
+                    class DummyReq:
+                        def __init__(self, **kwargs):
+                            for k, v in kwargs.items():
+                                setattr(self, k, v)
 
-                pred_res = predict_func(req_obj)
-                m_item["prediction"] = {
-                    "proba_p1": pred_res.get("proba_p1"),
-                    "proba_p2": pred_res.get("proba_p2"),
-                    "fair_odds_p1": pred_res.get("fair_odds_p1"),
-                    "fair_odds_p2": pred_res.get("fair_odds_p2"),
-                    "match_confidence": pred_res.get("confidence", {}).get("score", 75),
-                    "confidence_level": pred_res.get("confidence", {}).get("level", "Moyenne"),
-                    "individual_probas": pred_res.get("individual_probas"),
-                    "shap_explanation": pred_res.get("shap_explanation")
-                }
-                # Garder le rapport complet pour affichage instantané dans la popup modale
-                m_item["full_report"] = pred_res
+                    req_obj = DummyReq(
+                        circuit=current_circuit,
+                        p1=p1_resolved,
+                        p2=p2_resolved,
+                        surface=m.get("surface", "Hard"),
+                        tournament=m.get("tournament", "Tournoi"),
+                        level=m.get("level", "A"),
+                        round="R32",
+                        best_of=m.get("best_of", 3),
+                        indoor=m.get("indoor", 0),
+                        date=None,
+                        odds1=m.get("odds1"),
+                        odds2=m.get("odds2"),
+                        total_line=None,
+                        odds_over=None,
+                        odds_under=None,
+                        handicap_line=None,
+                        odds_h1=None,
+                        odds_h2=None,
+                        odds_set1_p1=None,
+                        odds_set1_p2=None,
+                        odds_sets_over25=None,
+                        odds_sets_under25=None,
+                        odds_tb_yes=None,
+                        odds_tb_no=None
+                    )
 
-                # Filtrer les Value Bets strictement sur le marché Vainqueur du Match
-                all_vbs = pred_res.get("recommended_value_bets", [])
-                winner_vbs = [vb for vb in all_vbs if vb.get("market") == "Vainqueur Match"]
-                
-                # Vérification directe des cotes Betclic vainqueur
-                if not winner_vbs:
-                    vb1 = pred_res.get("vb_p1")
-                    vb2 = pred_res.get("vb_p2")
-                    if vb1 and vb1.get("is_value_bet"):
-                        winner_vbs.append(vb1)
-                    if vb2 and vb2.get("is_value_bet"):
-                        winner_vbs.append(vb2)
+                    pred_res = predict_func(req_obj)
+                    m_item["prediction"] = {
+                        "proba_p1": pred_res.get("proba_p1"),
+                        "proba_p2": pred_res.get("proba_p2"),
+                        "fair_odds_p1": pred_res.get("fair_odds_p1"),
+                        "fair_odds_p2": pred_res.get("fair_odds_p2"),
+                        "match_confidence": pred_res.get("confidence", {}).get("score", 75),
+                        "confidence_level": pred_res.get("confidence", {}).get("level", "Moyenne"),
+                        "individual_probas": pred_res.get("individual_probas"),
+                        "shap_explanation": pred_res.get("shap_explanation")
+                    }
+                    # Garder le rapport complet pour affichage instantané dans la popup modale
+                    m_item["full_report"] = pred_res
 
-                m_item["all_value_bets"] = winner_vbs
-                if winner_vbs:
-                    m_item["has_value_bet"] = True
-                    m_item["top_value_bet"] = winner_vbs[0]
-                    total_vbs_found += 1
-            except Exception as pe:
-                logger.warning(f"Erreur prédiction pour {p1_resolved} vs {p2_resolved}: {pe}")
+                    # Filtrer les Value Bets strictement sur le marché Vainqueur du Match
+                    all_vbs = pred_res.get("recommended_value_bets", [])
+                    winner_vbs = [vb for vb in all_vbs if vb.get("market") == "Vainqueur Match"]
+                    
+                    # Vérification directe des cotes Betclic vainqueur
+                    if not winner_vbs:
+                        vb1 = pred_res.get("vb_p1")
+                        vb2 = pred_res.get("vb_p2")
+                        if vb1 and vb1.get("is_value_bet"):
+                            winner_vbs.append(vb1)
+                        if vb2 and vb2.get("is_value_bet"):
+                            winner_vbs.append(vb2)
 
-        analyzed_matches.append(m_item)
+                    m_item["all_value_bets"] = winner_vbs
+                    if winner_vbs:
+                        m_item["has_value_bet"] = True
+                        m_item["top_value_bet"] = winner_vbs[0]
+                        total_vbs_found += 1
+                except Exception as pe:
+                    logger.warning(f"Erreur prédiction pour {p1_resolved} vs {p2_resolved}: {pe}")
+
+            analyzed_matches.append(m_item)
+
+        # Libération mémoire après le circuit
+        del res
+        del known_players
+        del player_state
+        gc.collect()
 
     now_datetime = datetime.now()
     last_update_str = f"{now_datetime.strftime('%H:%M')}"

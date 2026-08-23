@@ -218,24 +218,8 @@ def display_value_bet_analysis(p1, p2, p_p1, p_p2, odds1, odds2, edge_threshold=
 
 
 # --------------------------------------------------------------------------
-# Modèle Stacking Ensemble & Explicabilité SHAP
+# Modèle Stacking Ensemble & Explicabilité Native TreeSHAP (0 MB Overhead)
 # --------------------------------------------------------------------------
-
-import shap
-
-_shap_explainer_cache = {}
-
-
-def get_shap_explainer(tree_model):
-    """Initialise et met en cache un TreeExplainer SHAP pour un modèle d'arbres."""
-    model_id = id(tree_model)
-    if model_id not in _shap_explainer_cache:
-        try:
-            _shap_explainer_cache[model_id] = shap.TreeExplainer(tree_model)
-        except Exception as e:
-            # Fallback
-            _shap_explainer_cache[model_id] = None
-    return _shap_explainer_cache[model_id]
 
 
 class EnsemblePredictor:
@@ -388,27 +372,21 @@ SHAP_PILLARS = {
 
 def compute_match_shap_explanation(X_row, ensemble_predictor, feature_cols, p1="Joueur 1", p2="Joueur 2"):
     """
-    Calcule les contributions SHAP (TreeSHAP) pour le match et les agrège
-    en 8 piliers tennistiques avec phrases explicatives et jauges en pourcentage.
+    Calcule les contributions SHAP (TreeSHAP exact via le moteur natif C++ de XGBoost)
+    pour le match et les agrège en 8 piliers tennistiques avec phrases explicatives et jauges en pourcentage.
+    Exécution instantanée et 0 Mo de RAM supplémentaire (évite la dépendance shap.TreeExplainer).
     """
-    explainer = get_shap_explainer(ensemble_predictor.xgb_model)
     raw_shap_dict = {}
 
-    if explainer is not None:
+    xgb_mod = ensemble_predictor.xgb_model if hasattr(ensemble_predictor, "xgb_model") else ensemble_predictor
+    if xgb_mod is not None:
         try:
-            shap_vals = explainer.shap_values(X_row)
-            # En classification binaire, TreeExplainer peut renvoyer un tableau 1D ou 2D
-            if isinstance(shap_vals, list):
-                # 2 sorties (classe 0 et classe 1) -> on prend la classe 1
-                sv = shap_vals[1][0] if len(shap_vals) > 1 else shap_vals[0][0]
-            elif len(shap_vals.shape) == 2:
-                sv = shap_vals[0]
-            else:
-                sv = shap_vals
-
+            booster = xgb_mod.get_booster() if hasattr(xgb_mod, "get_booster") else xgb_mod
+            dmat = xgb.DMatrix(X_row[feature_cols])
+            contribs = booster.predict(dmat, pred_contribs=True)[0]
             for idx, col in enumerate(feature_cols):
-                if idx < len(sv):
-                    raw_shap_dict[col] = float(sv[idx])
+                if idx < len(contribs):
+                    raw_shap_dict[col] = float(contribs[idx])
         except Exception:
             raw_shap_dict = {}
 

@@ -187,7 +187,7 @@ def derive_match_outcome_stats(score, p1_won, best_of):
             p1_comeback, p2_comeback, tb_played, tb_won_p2)
 
 
-def build_features(df, circuit="atp"):
+def build_features(df, circuit="atp", state_only=False):
     df = df.sort_values(["tourney_date", "match_id"]).reset_index(drop=True)
     n = len(df)
 
@@ -197,10 +197,9 @@ def build_features(df, circuit="atp"):
     surface = df["surface"].to_numpy()
     date_min = df["tourney_date"].min()
     date_days = (df["tourney_date"] - date_min).dt.days.to_numpy()
-    tourney_date_out = df["tourney_date"].to_numpy()
-    day_of_year = df["tourney_date"].dt.dayofyear.to_numpy()
+    tourney_date_out = df["tourney_date"].to_numpy() if not state_only else None
+    day_of_year = df["tourney_date"].dt.dayofyear.to_numpy() if not state_only else None
 
-    
     p1_rank = df["p1_rank"].to_numpy(dtype=float)
     p2_rank = df["p2_rank"].to_numpy(dtype=float)
     p1_ioc = df["p1_ioc"].to_numpy(dtype=str)
@@ -420,53 +419,56 @@ def build_features(df, circuit="atp"):
     # ================= Tableaux de sortie pré-alloués =================
 
 
-    out = {name: np.empty(n) for name in [
-        "elo_diff", "elo_surface_diff", "elo_p1", "elo_p2", "elo_trend_diff", "points_diff", "peak_rank_diff", "rank_momentum_diff",
-        "form10_diff", "form365d_diff",
-        "streak_diff", "consistency_diff",
-        "h2h_diff", "h2h_total", "h2h_surface_diff", "days_since_h2h", "last_h2h_result_diff",
-        "matches_this_tourney_diff", "avg_minutes_recent_diff",
-        "last_retirement_diff", "career_retirement_rate_diff",
-        "age_diff", "ht_diff", "experience_diff", "hand_missing_diff",
-        "surface_experience_diff", "surface_winrate_diff", "surface_transition_diff",
-        "seed_number_diff", "is_wildcard_diff", "is_qualifier_diff",
-        "decided_set_winrate_diff", "comeback_rate_diff", "tiebreak_winrate_diff",
-        "giant_killer_rate_diff",
-        # --- Nouvelles features ---
-        "sets_7d_diff", "sets_14d_diff", "sets_tourney_diff",
-        "tourney_game_winpct_diff",
-        "form10_surface_diff", "form365d_surface_diff",
-        "elo_surface_w_diff",
-        "upset_rate_10_diff",
-        "late_round_winrate_diff", "early_round_winrate_diff",
-        
-        "hours_rest_diff", "short_rest_p1", "short_rest_p2", "is_night_match",
-        "travel_strain_diff", "short_rest_surface_change_diff",
-        "game_dominance_ema5_diff", "game_dominance_ema10_diff",
-        
-        "tourney_cpi", "fast_court_winrate_diff", "medium_court_winrate_diff", "slow_court_winrate_diff",
-        "tourney_altitude", "high_altitude_winrate_diff", "home_advantage_diff",
-        "kryptonite_diff", "is_defending_champion_diff",
-        
-        # --- Nouvelles features Archétypes ---
-        "surface_bias_diff", "grind_mismatch", 
-        "serve_return_edge1", "serve_return_edge2",
-        "winrate_vs_arch_diff",
-        
-        # --- Phase B Nouvelles Features ---
-        "matches_last_3d_diff", "matches_last_7d_diff", "hours_played_last_14d_diff",
-        "form20_surface_diff",
-        "serve_momentum_diff", "return_momentum_diff", "elo_momentum_diff",
+    if not state_only:
+        out = {name: np.empty(n) for name in [
+            "elo_diff", "elo_surface_diff", "elo_p1", "elo_p2", "elo_trend_diff", "points_diff", "peak_rank_diff", "rank_momentum_diff",
+            "form10_diff", "form365d_diff",
+            "streak_diff", "consistency_diff",
+            "h2h_diff", "h2h_total", "h2h_surface_diff", "days_since_h2h", "last_h2h_result_diff",
+            "matches_this_tourney_diff", "avg_minutes_recent_diff",
+            "last_retirement_diff", "career_retirement_rate_diff",
+            "age_diff", "ht_diff", "experience_diff", "hand_missing_diff",
+            "surface_experience_diff", "surface_winrate_diff", "surface_transition_diff",
+            "seed_number_diff", "is_wildcard_diff", "is_qualifier_diff",
+            "decided_set_winrate_diff", "comeback_rate_diff", "tiebreak_winrate_diff",
+            "giant_killer_rate_diff",
+            # --- Nouvelles features ---
+            "sets_7d_diff", "sets_14d_diff", "sets_tourney_diff",
+            "tourney_game_winpct_diff",
+            "form10_surface_diff", "form365d_surface_diff",
+            "elo_surface_w_diff",
+            "upset_rate_10_diff",
+            "late_round_winrate_diff", "early_round_winrate_diff",
+            
+            "hours_rest_diff", "short_rest_p1", "short_rest_p2", "is_night_match",
+            "travel_strain_diff", "short_rest_surface_change_diff",
+            "game_dominance_ema5_diff", "game_dominance_ema10_diff",
+            
+            "tourney_cpi", "fast_court_winrate_diff", "medium_court_winrate_diff", "slow_court_winrate_diff",
+            "tourney_altitude", "high_altitude_winrate_diff", "home_advantage_diff",
+            "kryptonite_diff", "is_defending_champion_diff",
+            
+            # --- Nouvelles features Archétypes ---
+            "surface_bias_diff", "grind_mismatch", 
+            "serve_return_edge1", "serve_return_edge2",
+            "winrate_vs_arch_diff",
+            
+            # --- Phase B Nouvelles Features ---
+            "matches_last_3d_diff", "matches_last_7d_diff", "hours_played_last_14d_diff",
+            "form20_surface_diff",
+            "serve_momentum_diff", "return_momentum_diff", "elo_momentum_diff",
 
-        # --- Serve & Return Elo + Markov Point-by-Point ---
-        "serve_elo_diff", "return_elo_diff",
-        "serve_elo_surface_diff", "return_elo_surface_diff",
-        "markov_p_win", "markov_hold_diff", "markov_expected_games"
-    ]}
-
-
-    hand_matchup_arr = np.empty(n, dtype=object)
-    serve_diff_20 = {k: np.empty(n) for k in SERVE_RETURN_KEYS}
+            # --- Serve & Return Elo + Markov Point-by-Point ---
+            "serve_elo_diff", "return_elo_diff",
+            "serve_elo_surface_diff", "return_elo_surface_diff",
+            "markov_p_win", "markov_hold_diff", "markov_expected_games"
+        ]}
+        hand_matchup_arr = np.empty(n, dtype=object)
+        serve_diff_20 = {k: np.empty(n) for k in SERVE_RETURN_KEYS}
+    else:
+        out = None
+        hand_matchup_arr = None
+        serve_diff_20 = None
 
     
     def get_cpi(t_name, t_year, t_surf):
@@ -504,268 +506,280 @@ def build_features(df, circuit="atp"):
         e2 = get_decayed_elo(elo[p2], day, last_p2)
         es1 = get_decayed_elo(elo_surface[surf][p1], day, last_p1)
         es2 = get_decayed_elo(elo_surface[surf][p2], day, last_p2)
-        out["elo_diff"][i] = e1 - e2
-        out["elo_surface_diff"][i] = es1 - es2
-        out["elo_p1"][i] = e1
-        out["elo_p2"][i] = e2
         eh1, eh2 = elo_history[p1], elo_history[p2]
-        trend1 = (e1 - eh1[-ELO_TREND_LAG]) if len(eh1) >= ELO_TREND_LAG else np.nan
-        trend2 = (e2 - eh2[-ELO_TREND_LAG]) if len(eh2) >= ELO_TREND_LAG else np.nan
-        out["elo_trend_diff"][i] = trend1 - trend2 if (trend1 == trend1 and trend2 == trend2) else np.nan
-
-        # ---- Classement ----
-        has_rank = (r1 == r1 and r2 == r2)
-        pts1, pts2 = p1_points[i], p2_points[i]
-        out["points_diff"][i] = (np.log1p(pts1) - np.log1p(pts2)) if (pts1 == pts1 and pts2 == pts2) else np.nan
-
-        pr1, pr2 = peak_rank[p1], peak_rank[p2]
-        out["peak_rank_diff"][i] = (pr2 - pr1) if (pr1 < np.inf and pr2 < np.inf) else np.nan
-
         rh1, rh2 = rank_history[p1], rank_history[p2]
-        rm1 = _rank_n_days_ago(rh1, day, RANK_MOMENTUM_DAYS)
-        rm2 = _rank_n_days_ago(rh2, day, RANK_MOMENTUM_DAYS)
-        mom1 = (rm1 - r1) if (rm1 == rm1 and r1 == r1) else np.nan   # positif = amélioration
-        mom2 = (rm2 - r2) if (rm2 == rm2 and r2 == r2) else np.nan
-        out["rank_momentum_diff"][i] = mom1 - mom2 if (mom1 == mom1 and mom2 == mom2) else np.nan
-
-        # ---- Forme récente ----
         rr1, rr2 = recent_results[p1], recent_results[p2]
-        out["form10_diff"][i] = _winrate_n(rr1, 10) - _winrate_n(rr2, 10)
-        out["form365d_diff"][i] = _winrate_days(rr1, day, 365) - _winrate_days(rr2, day, 365)
-        out["streak_diff"][i] = streak[p1] - streak[p2]
-        out["consistency_diff"][i] = _consistency(rr2, 20) - _consistency(rr1, 20)  # std plus bas = plus régulier
-
-        
-        
-        # CPI Features
-        t_cpi = get_cpi(t_name, t_year, surf)
-        out["tourney_cpi"][i] = t_cpi
-        out["fast_court_winrate_diff"][i] = _speed_wr(fast_results, p1) - _speed_wr(fast_results, p2)
-        out["medium_court_winrate_diff"][i] = _speed_wr(medium_results, p1) - _speed_wr(medium_results, p2)
-        out["slow_court_winrate_diff"][i] = _speed_wr(slow_results, p1) - _speed_wr(slow_results, p2)
-        
-        # Altitude Features
-        t_alt = get_altitude(t_name)
-        out["tourney_altitude"][i] = t_alt
-        out["high_altitude_winrate_diff"][i] = _speed_wr(high_altitude_results, p1) - _speed_wr(high_altitude_results, p2)
-
-        
-        # Home Advantage Features
-        t_country = get_tourney_country(t_name)
-        p1_home = 1 if p1_ioc[i] == t_country else 0
-        p2_home = 1 if p2_ioc[i] == t_country else 0
-        out["home_advantage_diff"][i] = p1_home - p2_home
-
-        
-        # Kryptonite
-        p1_h = p1_hand[i]
-        p2_h = p2_hand[i]
-        wr1_vs_L = _speed_wr(vs_lefty_results, p1) if p2_h == 'L' else 0.5
-        wr2_vs_L = _speed_wr(vs_lefty_results, p2) if p1_h == 'L' else 0.5
-        out["kryptonite_diff"][i] = wr1_vs_L - wr2_vs_L
-
-        
-        # Title Defender
-        is_def1 = 1 if tourney_champions.get(t_name) == p1 else 0
-        is_def2 = 1 if tourney_champions.get(t_name) == p2 else 0
-        out["is_defending_champion_diff"][i] = is_def1 - is_def2
-
-        # ---- H2H ----
-
-
-
-
-
-        h2h_w1, h2h_w2 = h2h[p1][p2]
-        h2h_tot = h2h_w1 + h2h_w2
-        out["h2h_total"][i] = h2h_tot
-        out["h2h_diff"][i] = (h2h_w1 - h2h_w2) / h2h_tot if h2h_tot > 0 else 0.0
-
-        hs_w1, hs_w2 = h2h_surface[p1][p2][surf]
-        hs_tot = hs_w1 + hs_w2
-        out["h2h_surface_diff"][i] = (hs_w1 - hs_w2) / hs_tot if hs_tot > 0 else 0.0
-
-        last_day = last_h2h_day[p1].get(p2)
-        out["days_since_h2h"][i] = (day - last_day) if last_day is not None else -1  # -1 = jamais rencontrés
-        last_res = last_h2h_result[p1].get(p2)
-        out["last_h2h_result_diff"][i] = (1 if last_res == 1 else (-1 if last_res == 0 else 0))
-
-        # ---- Repos / fatigue ----
-        rest1 = (day - last_play_date[p1]) if p1 in last_play_date else 365
-        rest2 = (day - last_play_date[p2]) if p2 in last_play_date else 365
-        
-        # Approximation historique pour les features de fatigue (heures)
-        out["hours_rest_diff"][i] = (rest1 - rest2) * 24.0
-        out["short_rest_p1"][i] = 1.0 if rest1 < 1 else 0.0
-        out["short_rest_p2"][i] = 1.0 if rest2 < 1 else 0.0
-        out["is_night_match"][i] = 0.0  # Par défaut, non nocturne en historique
-        t1_id = tourney_id[i]
-        m1 = matches_this_tourney[p1] if last_tourney_id.get(p1) == t1_id else 0
-        m2 = matches_this_tourney[p2] if last_tourney_id.get(p2) == t1_id else 0
-        out["matches_this_tourney_diff"][i] = m1 - m2
-
-        # Travel & Schedule Strain
-        strain1, short_sc1 = compute_travel_strain(p1, day, t1_id, t_country, surf, last_tourney_id, last_play_date, last_tourney_country, last_surface)
-        strain2, short_sc2 = compute_travel_strain(p2, day, t1_id, t_country, surf, last_tourney_id, last_play_date, last_tourney_country, last_surface)
-        out["travel_strain_diff"][i] = strain1 - strain2
-        out["short_rest_surface_change_diff"][i] = short_sc1 - short_sc2
-
-        # Game Dominance EMA
-        out["game_dominance_ema5_diff"][i] = _game_dominance_ema(game_dominance_hist[p1], 5) - _game_dominance_ema(game_dominance_hist[p2], 5)
-        out["game_dominance_ema10_diff"][i] = _game_dominance_ema(game_dominance_hist[p1], 10) - _game_dominance_ema(game_dominance_hist[p2], 10)
-
-        out["avg_minutes_recent_diff"][i] = _avg_minutes(rr1, 5) - _avg_minutes(rr2, 5)
-        out["last_retirement_diff"][i] = int(last_retirement[p1]) - int(last_retirement[p2])
-        cr1 = career_retirements[p1] / career_matches[p1] if career_matches[p1] > 0 else 0.0
-        cr2 = career_retirements[p2] / career_matches[p2] if career_matches[p2] > 0 else 0.0
-        out["career_retirement_rate_diff"][i] = cr1 - cr2
-
-        # ---- Stats de service/retour glissantes & Archétypes ----
         sh1, sh2 = serve_return_hist[p1], serve_return_hist[p2]
-        r5_1, r20_1 = _rolling_stats(sh1)
-        r5_2, r20_2 = _rolling_stats(sh2)
-        for k_idx, k in enumerate(SERVE_RETURN_KEYS):
-            serve_diff_20[k][i] = r20_1[k_idx] - r20_2[k_idx]
+        has_rank = (r1 == r1 and r2 == r2)
 
-        sb1 = _surface_bias(rr1, day, surf)
-        sb2 = _surface_bias(rr2, day, surf)
-        out["surface_bias_diff"][i] = sb1 - sb2
+        if not state_only:
+            out["elo_diff"][i] = e1 - e2
+            out["elo_surface_diff"][i] = es1 - es2
+            out["elo_p1"][i] = e1
+            out["elo_p2"][i] = e2
+            trend1 = (e1 - eh1[-ELO_TREND_LAG]) if len(eh1) >= ELO_TREND_LAG else np.nan
+            trend2 = (e2 - eh2[-ELO_TREND_LAG]) if len(eh2) >= ELO_TREND_LAG else np.nan
+            out["elo_trend_diff"][i] = trend1 - trend2 if (trend1 == trend1 and trend2 == trend2) else np.nan
 
-        arch1 = _get_archetype(r20_1, sb1)
-        arch2 = _get_archetype(r20_2, sb2)
+            # ---- Classement ----
+            pts1, pts2 = p1_points[i], p2_points[i]
+            out["points_diff"][i] = (np.log1p(pts1) - np.log1p(pts2)) if (pts1 == pts1 and pts2 == pts2) else np.nan
 
-        grind1 = r20_1[8] if len(r20_1) > 8 else np.nan
-        grind2 = r20_2[8] if len(r20_2) > 8 else np.nan
-        out["grind_mismatch"][i] = grind1 - grind2 if (grind1 == grind1 and grind2 == grind2) else 0.0
+            pr1, pr2 = peak_rank[p1], peak_rank[p2]
+            out["peak_rank_diff"][i] = (pr2 - pr1) if (pr1 < np.inf and pr2 < np.inf) else np.nan
 
-        serve_win1 = (r20_1[2] * r20_1[3] + (1 - r20_1[2]) * r20_1[4]) if len(r20_1) > 4 else np.nan
-        serve_win2 = (r20_2[2] * r20_2[3] + (1 - r20_2[2]) * r20_2[4]) if len(r20_2) > 4 else np.nan
-        return_won1 = r20_1[6] if len(r20_1) > 6 else np.nan
-        return_won2 = r20_2[6] if len(r20_2) > 6 else np.nan
-        
-        out["serve_return_edge1"][i] = serve_win1 - return_won2 if (serve_win1 == serve_win1 and return_won2 == return_won2) else 0.0
-        out["serve_return_edge2"][i] = serve_win2 - return_won1 if (serve_win2 == serve_win2 and return_won1 == return_won1) else 0.0
+            rh1, rh2 = rank_history[p1], rank_history[p2]
+            rm1 = _rank_n_days_ago(rh1, day, RANK_MOMENTUM_DAYS)
+            rm2 = _rank_n_days_ago(rh2, day, RANK_MOMENTUM_DAYS)
+            mom1 = (rm1 - r1) if (rm1 == rm1 and r1 == r1) else np.nan   # positif = amélioration
+            mom2 = (rm2 - r2) if (rm2 == rm2 and r2 == r2) else np.nan
+            out["rank_momentum_diff"][i] = mom1 - mom2 if (mom1 == mom1 and mom2 == mom2) else np.nan
 
-        wr_vs_arch1 = wins_vs_arch[p1][arch2] / matches_vs_arch[p1][arch2] if matches_vs_arch[p1][arch2] > 0 else 0.5
-        wr_vs_arch2 = wins_vs_arch[p2][arch1] / matches_vs_arch[p2][arch1] if matches_vs_arch[p2][arch1] > 0 else 0.5
-        out["winrate_vs_arch_diff"][i] = wr_vs_arch1 - wr_vs_arch2
+            # ---- Forme récente ----
+            rr1, rr2 = recent_results[p1], recent_results[p2]
+            out["form10_diff"][i] = _winrate_n(rr1, 10) - _winrate_n(rr2, 10)
+            out["form365d_diff"][i] = _winrate_days(rr1, day, 365) - _winrate_days(rr2, day, 365)
+            out["streak_diff"][i] = streak[p1] - streak[p2]
+            out["consistency_diff"][i] = _consistency(rr2, 20) - _consistency(rr1, 20)  # std plus bas = plus régulier
 
-        # ---- Statique ----
-        a1, a2 = p1_age[i], p2_age[i]
-        out["age_diff"][i] = (a1 - a2) if (a1 == a1 and a2 == a2) else np.nan
-        h1, h2 = p1_ht[i], p2_ht[i]
-        out["ht_diff"][i] = (h1 - h2) if (h1 == h1 and h2 == h2) else np.nan
-        hand_matchup_arr[i] = f"{_impute_hand(p1_hand[i])}_{_impute_hand(p2_hand[i])}"
-        out["hand_missing_diff"][i] = int(p1_hand[i] not in ("R", "L")) - int(p2_hand[i] not in ("R", "L"))
-        out["experience_diff"][i] = career_matches[p1] - career_matches[p2]
+            # CPI Features
+            t_cpi = get_cpi(t_name, t_year, surf)
+            out["tourney_cpi"][i] = t_cpi
+            out["fast_court_winrate_diff"][i] = _speed_wr(fast_results, p1) - _speed_wr(fast_results, p2)
+            out["medium_court_winrate_diff"][i] = _speed_wr(medium_results, p1) - _speed_wr(medium_results, p2)
+            out["slow_court_winrate_diff"][i] = _speed_wr(slow_results, p1) - _speed_wr(slow_results, p2)
+            
+            # Altitude Features
+            t_alt = get_altitude(t_name)
+            out["tourney_altitude"][i] = t_alt
+            out["high_altitude_winrate_diff"][i] = _speed_wr(high_altitude_results, p1) - _speed_wr(high_altitude_results, p2)
 
-        fmd1 = first_match_day.get(p1)
-        fmd2 = first_match_day.get(p2)
-        # ---- Surface ----
-        sc1, sc2 = surface_career_count[p1][surf], surface_career_count[p2][surf]
-        out["surface_experience_diff"][i] = sc1 - sc2
-        sw1 = surface_career_wins[p1][surf] / sc1 if sc1 > 0 else 0.5
-        sw2 = surface_career_wins[p2][surf] / sc2 if sc2 > 0 else 0.5
-        out["surface_winrate_diff"][i] = sw1 - sw2
-        trans1 = int(last_surface.get(p1) is not None and last_surface[p1] != surf)
-        trans2 = int(last_surface.get(p2) is not None and last_surface[p2] != surf)
-        out["surface_transition_diff"][i] = trans1 - trans2
+            # Home Advantage Features
+            t_country = get_tourney_country(t_name)
+            p1_home = 1 if p1_ioc[i] == t_country else 0
+            p2_home = 1 if p2_ioc[i] == t_country else 0
+            out["home_advantage_diff"][i] = p1_home - p2_home
 
-        # ---- Contexte (seed / entry) ----
-        sd1, sd2 = p1_seed[i], p2_seed[i]
-        sd1_f = sd1 if sd1 == sd1 else 999
-        sd2_f = sd2 if sd2 == sd2 else 999
-        out["seed_number_diff"][i] = sd2_f - sd1_f  # positif = p1 mieux classé (seed plus basse)
-        out["is_wildcard_diff"][i] = int(p1_entry[i] == "WC") - int(p2_entry[i] == "WC")
-        out["is_qualifier_diff"][i] = int(p1_entry[i] == "Q") - int(p2_entry[i] == "Q")
+            # Kryptonite
+            p1_h = p1_hand[i]
+            p2_h = p2_hand[i]
+            wr1_vs_L = _speed_wr(vs_lefty_results, p1) if p2_h == 'L' else 0.5
+            wr2_vs_L = _speed_wr(vs_lefty_results, p2) if p1_h == 'L' else 0.5
+            out["kryptonite_diff"][i] = wr1_vs_L - wr2_vs_L
 
-        # ---- Mental / clutch ----
-        out["decided_set_winrate_diff"][i] = _mean_field(rr1, 4) - _mean_field(rr2, 4)
-        out["comeback_rate_diff"][i] = _mean_field(rr1, 5) - _mean_field(rr2, 5)
-        out["tiebreak_winrate_diff"][i] = _tb_rate(rr1) - _tb_rate(rr2)
+            # Title Defender
+            is_def1 = 1 if tourney_champions.get(t_name) == p1 else 0
+            is_def2 = 1 if tourney_champions.get(t_name) == p2 else 0
+            out["is_defending_champion_diff"][i] = is_def1 - is_def2
 
-        ob1 = _giant_killer_rate(rr1)
-        ob2 = _giant_killer_rate(rr2)
-        out["giant_killer_rate_diff"][i] = ob1 - ob2
+            # ---- H2H ----
+            h2h_w1, h2h_w2 = h2h[p1][p2]
+            h2h_tot = h2h_w1 + h2h_w2
+            out["h2h_total"][i] = h2h_tot
+            out["h2h_diff"][i] = (h2h_w1 - h2h_w2) / h2h_tot if h2h_tot > 0 else 0.0
 
-        # ---- Sets joués (fatigue granulaire) ----
-        out["sets_7d_diff"][i]  = _sets_count_recent(rr1, day, 7)  - _sets_count_recent(rr2, day, 7)
-        out["sets_14d_diff"][i] = _sets_count_recent(rr1, day, 14) - _sets_count_recent(rr2, day, 14)
-        st1 = tourney_sets_total[p1] if last_tourney_id.get(p1) == t1_id else 0
-        st2 = tourney_sets_total[p2] if last_tourney_id.get(p2) == t1_id else 0
-        out["sets_tourney_diff"][i] = st1 - st2
+            hs_w1, hs_w2 = h2h_surface[p1][p2][surf]
+            hs_tot = hs_w1 + hs_w2
+            out["h2h_surface_diff"][i] = (hs_w1 - hs_w2) / hs_tot if hs_tot > 0 else 0.0
 
-        # ---- Momentum intra-tournoi (domination en jeux et en sets) ----
-        tgw1 = tourney_games_won[p1]   if last_tourney_id.get(p1) == t1_id else 0
-        tgt1 = tourney_games_total[p1] if last_tourney_id.get(p1) == t1_id else 0
-        tgw2 = tourney_games_won[p2]   if last_tourney_id.get(p2) == t1_id else 0
-        tgt2 = tourney_games_total[p2] if last_tourney_id.get(p2) == t1_id else 0
-        tsw1 = tourney_sets_won[p1]    if last_tourney_id.get(p1) == t1_id else 0
-        tst1 = tourney_sets_total[p1]  if last_tourney_id.get(p1) == t1_id else 0
-        tsw2 = tourney_sets_won[p2]    if last_tourney_id.get(p2) == t1_id else 0
-        tst2 = tourney_sets_total[p2]  if last_tourney_id.get(p2) == t1_id else 0
-        out["tourney_game_winpct_diff"][i] = (tgw1/tgt1 if tgt1 > 0 else 0.5) - (tgw2/tgt2 if tgt2 > 0 else 0.5)
-        
-        # ---- Phase B: Fatigue ----
-        out["matches_last_3d_diff"][i] = _count_recent_tuples(rr1, day, 3) - _count_recent_tuples(rr2, day, 3)
-        out["matches_last_7d_diff"][i] = _count_recent_tuples(rr1, day, 7) - _count_recent_tuples(rr2, day, 7)
-        out["hours_played_last_14d_diff"][i] = (_avg_minutes(rr1, 14) * _count_recent_tuples(rr1, day, 14) / 60.0 if _avg_minutes(rr1, 14) == _avg_minutes(rr1, 14) else 0) - (_avg_minutes(rr2, 14) * _count_recent_tuples(rr2, day, 14) / 60.0 if _avg_minutes(rr2, 14) == _avg_minutes(rr2, 14) else 0)
+            last_day = last_h2h_day[p1].get(p2)
+            out["days_since_h2h"][i] = (day - last_day) if last_day is not None else -1  # -1 = jamais rencontrés
+            last_res = last_h2h_result[p1].get(p2)
+            out["last_h2h_result_diff"][i] = (1 if last_res == 1 else (-1 if last_res == 0 else 0))
 
-        # ---- Forme sur la surface courante (récente) ----
-        out["form10_surface_diff"][i]  = _winrate_surface(rr1, surf, 10) - _winrate_surface(rr2, surf, 10)
-        out["form20_surface_diff"][i]  = _winrate_surface(rr1, surf, 20) - _winrate_surface(rr2, surf, 20)
-        out["form365d_surface_diff"][i] = (_winrate_surface_days(rr1, surf, day, 365)
-                                           - _winrate_surface_days(rr2, surf, day, 365))
-        
-        # ---- Phase B: Momentum Serve/Return & Elo ----
-        out["elo_momentum_diff"][i] = (e1 - eh1[-30] if len(eh1) >= 30 else 0) - (e2 - eh2[-30] if len(eh2) >= 30 else 0)
-        
-        # serve momentum = recent (last 5) first won % - long term (last 20) first won %
-        serve_mom1 = r5_1[3] - r20_1[3] if (r5_1[3] == r5_1[3] and r20_1[3] == r20_1[3]) else 0
-        serve_mom2 = r5_2[3] - r20_2[3] if (r5_2[3] == r5_2[3] and r20_2[3] == r20_2[3]) else 0
-        out["serve_momentum_diff"][i] = serve_mom1 - serve_mom2
-        
-        # return momentum = recent return points won % - long term return points won %
-        return_mom1 = r5_1[6] - r20_1[6] if (r5_1[6] == r5_1[6] and r20_1[6] == r20_1[6]) else 0
-        return_mom2 = r5_2[6] - r20_2[6] if (r5_2[6] == r5_2[6] and r20_2[6] == r20_2[6]) else 0
-        out["return_momentum_diff"][i] = return_mom1 - return_mom2
+            # ---- Repos / fatigue ----
+            rest1 = (day - last_play_date[p1]) if p1 in last_play_date else 365
+            rest2 = (day - last_play_date[p2]) if p2 in last_play_date else 365
+            
+            # Approximation historique pour les features de fatigue (heures)
+            out["hours_rest_diff"][i] = (rest1 - rest2) * 24.0
+            out["short_rest_p1"][i] = 1.0 if rest1 < 1 else 0.0
+            out["short_rest_p2"][i] = 1.0 if rest2 < 1 else 0.0
+            out["is_night_match"][i] = 0.0  # Par défaut, non nocturne en historique
+            t1_id = tourney_id[i]
+            m1 = matches_this_tourney[p1] if last_tourney_id.get(p1) == t1_id else 0
+            m2 = matches_this_tourney[p2] if last_tourney_id.get(p2) == t1_id else 0
+            out["matches_this_tourney_diff"][i] = m1 - m2
 
-        # ---- Elo surface avec K adaptatif par niveau de tournoi (avec dépréciation d'inactivité) ----
-        esw1 = get_decayed_elo(elo_surface_w[surf][p1], day, last_p1)
-        esw2 = get_decayed_elo(elo_surface_w[surf][p2], day, last_p2)
-        out["elo_surface_w_diff"][i] = esw1 - esw2
+            # Travel & Schedule Strain
+            strain1, short_sc1 = compute_travel_strain(p1, day, t1_id, t_country, surf, last_tourney_id, last_play_date, last_tourney_country, last_surface)
+            strain2, short_sc2 = compute_travel_strain(p2, day, t1_id, t_country, surf, last_tourney_id, last_play_date, last_tourney_country, last_surface)
+            out["travel_strain_diff"][i] = strain1 - strain2
+            out["short_rest_surface_change_diff"][i] = short_sc1 - short_sc2
 
-        # ---- Giant killer / upset sur les 10 derniers matchs seulement ----
-        out["upset_rate_10_diff"][i]   = _upset_rate_n(rr1, 10) - _upset_rate_n(rr2, 10)
+            # Game Dominance EMA
+            out["game_dominance_ema5_diff"][i] = _game_dominance_ema(game_dominance_hist[p1], 5) - _game_dominance_ema(game_dominance_hist[p2], 5)
+            out["game_dominance_ema10_diff"][i] = _game_dominance_ema(game_dominance_hist[p1], 10) - _game_dominance_ema(game_dominance_hist[p2], 10)
 
-        # ---- Winrate par phase de tournoi (QF/SF/F vs premiers tours, 2 ans) ----
-        out["late_round_winrate_diff"][i]  = (_winrate_round_type(rr1, day, 730, late=True)
-                                               - _winrate_round_type(rr2, day, 730, late=True))
-        out["early_round_winrate_diff"][i] = (_winrate_round_type(rr1, day, 730, late=False)
-                                               - _winrate_round_type(rr2, day, 730, late=False))
+            out["avg_minutes_recent_diff"][i] = _avg_minutes(rr1, 5) - _avg_minutes(rr2, 5)
+            out["last_retirement_diff"][i] = int(last_retirement[p1]) - int(last_retirement[p2])
+            cr1 = career_retirements[p1] / career_matches[p1] if career_matches[p1] > 0 else 0.0
+            cr2 = career_retirements[p2] / career_matches[p2] if career_matches[p2] > 0 else 0.0
+            out["career_retirement_rate_diff"][i] = cr1 - cr2
 
-        # ---- Serve & Return Elo + Markov Point-by-Point (avec dépréciation d'inactivité) ----
-        se1 = get_decayed_elo(serve_elo[p1], day, last_p1)
-        se2 = get_decayed_elo(serve_elo[p2], day, last_p2)
-        re1 = get_decayed_elo(return_elo[p1], day, last_p1)
-        re2 = get_decayed_elo(return_elo[p2], day, last_p2)
-        ses1 = get_decayed_elo(serve_elo_surface[surf][p1], day, last_p1)
-        ses2 = get_decayed_elo(serve_elo_surface[surf][p2], day, last_p2)
-        res1 = get_decayed_elo(return_elo_surface[surf][p1], day, last_p1)
-        res2 = get_decayed_elo(return_elo_surface[surf][p2], day, last_p2)
+            # ---- Stats de service/retour glissantes & Archétypes ----
+            sh1, sh2 = serve_return_hist[p1], serve_return_hist[p2]
+            r5_1, r20_1 = _rolling_stats(sh1)
+            r5_2, r20_2 = _rolling_stats(sh2)
+            for k_idx, k in enumerate(SERVE_RETURN_KEYS):
+                serve_diff_20[k][i] = r20_1[k_idx] - r20_2[k_idx]
 
-        out["serve_elo_diff"][i] = se1 - se2
-        out["return_elo_diff"][i] = re1 - re2
-        out["serve_elo_surface_diff"][i] = ses1 - ses2
-        out["return_elo_surface_diff"][i] = res1 - res2
+            sb1 = _surface_bias(rr1, day, surf)
+            sb2 = _surface_bias(rr2, day, surf)
+            out["surface_bias_diff"][i] = sb1 - sb2
 
-        pa_m, pb_m = estimate_point_probabilities(ses1, res2, ses2, res1, surface=surf, circuit=circuit)
-        bo_i = int(best_of[i]) if (best_of[i] == best_of[i] and best_of[i] in (3, 5)) else 3
-        m_res = p_match(pa_m, pb_m, best_of=bo_i)
+            arch1 = _get_archetype(r20_1, sb1)
+            arch2 = _get_archetype(r20_2, sb2)
 
-        out["markov_p_win"][i] = m_res["proba_a"]
-        out["markov_hold_diff"][i] = m_res["hold_proba_a"] - m_res["hold_proba_b"]
-        out["markov_expected_games"][i] = m_res["expected_total_games"]
+            grind1 = r20_1[8] if len(r20_1) > 8 else np.nan
+            grind2 = r20_2[8] if len(r20_2) > 8 else np.nan
+            out["grind_mismatch"][i] = grind1 - grind2 if (grind1 == grind1 and grind2 == grind2) else 0.0
+
+            serve_win1 = (r20_1[2] * r20_1[3] + (1 - r20_1[2]) * r20_1[4]) if len(r20_1) > 4 else np.nan
+            serve_win2 = (r20_2[2] * r20_2[3] + (1 - r20_2[2]) * r20_2[4]) if len(r20_2) > 4 else np.nan
+            return_won1 = r20_1[6] if len(r20_1) > 6 else np.nan
+            return_won2 = r20_2[6] if len(r20_2) > 6 else np.nan
+            
+            out["serve_return_edge1"][i] = serve_win1 - return_won2 if (serve_win1 == serve_win1 and return_won2 == return_won2) else 0.0
+            out["serve_return_edge2"][i] = serve_win2 - return_won1 if (serve_win2 == serve_win2 and return_won1 == return_won1) else 0.0
+
+            wr_vs_arch1 = wins_vs_arch[p1][arch2] / matches_vs_arch[p1][arch2] if matches_vs_arch[p1][arch2] > 0 else 0.5
+            wr_vs_arch2 = wins_vs_arch[p2][arch1] / matches_vs_arch[p2][arch1] if matches_vs_arch[p2][arch1] > 0 else 0.5
+            out["winrate_vs_arch_diff"][i] = wr_vs_arch1 - wr_vs_arch2
+
+            # ---- Statique ----
+            a1, a2 = p1_age[i], p2_age[i]
+            out["age_diff"][i] = (a1 - a2) if (a1 == a1 and a2 == a2) else np.nan
+            h1, h2 = p1_ht[i], p2_ht[i]
+            out["ht_diff"][i] = (h1 - h2) if (h1 == h1 and h2 == h2) else np.nan
+            hand_matchup_arr[i] = f"{_impute_hand(p1_hand[i])}_{_impute_hand(p2_hand[i])}"
+            out["hand_missing_diff"][i] = int(p1_hand[i] not in ("R", "L")) - int(p2_hand[i] not in ("R", "L"))
+            out["experience_diff"][i] = career_matches[p1] - career_matches[p2]
+
+            # ---- Surface ----
+            sc1, sc2 = surface_career_count[p1][surf], surface_career_count[p2][surf]
+            out["surface_experience_diff"][i] = sc1 - sc2
+            sw1 = surface_career_wins[p1][surf] / sc1 if sc1 > 0 else 0.5
+            sw2 = surface_career_wins[p2][surf] / sc2 if sc2 > 0 else 0.5
+            out["surface_winrate_diff"][i] = sw1 - sw2
+            trans1 = int(last_surface.get(p1) is not None and last_surface[p1] != surf)
+            trans2 = int(last_surface.get(p2) is not None and last_surface[p2] != surf)
+            out["surface_transition_diff"][i] = trans1 - trans2
+
+            # ---- Contexte (seed / entry) ----
+            sd1, sd2 = p1_seed[i], p2_seed[i]
+            sd1_f = sd1 if sd1 == sd1 else 999
+            sd2_f = sd2 if sd2 == sd2 else 999
+            out["seed_number_diff"][i] = sd2_f - sd1_f  # positif = p1 mieux classé (seed plus basse)
+            out["is_wildcard_diff"][i] = int(p1_entry[i] == "WC") - int(p2_entry[i] == "WC")
+            out["is_qualifier_diff"][i] = int(p1_entry[i] == "Q") - int(p2_entry[i] == "Q")
+
+            # ---- Mental / clutch ----
+            out["decided_set_winrate_diff"][i] = _mean_field(rr1, 4) - _mean_field(rr2, 4)
+            out["comeback_rate_diff"][i] = _mean_field(rr1, 5) - _mean_field(rr2, 5)
+            out["tiebreak_winrate_diff"][i] = _tb_rate(rr1) - _tb_rate(rr2)
+
+            ob1 = _giant_killer_rate(rr1)
+            ob2 = _giant_killer_rate(rr2)
+            out["giant_killer_rate_diff"][i] = ob1 - ob2
+
+            # ---- Sets joués (fatigue granulaire) ----
+            out["sets_7d_diff"][i]  = _sets_count_recent(rr1, day, 7)  - _sets_count_recent(rr2, day, 7)
+            out["sets_14d_diff"][i] = _sets_count_recent(rr1, day, 14) - _sets_count_recent(rr2, day, 14)
+            st1 = tourney_sets_total[p1] if last_tourney_id.get(p1) == t1_id else 0
+            st2 = tourney_sets_total[p2] if last_tourney_id.get(p2) == t1_id else 0
+            out["sets_tourney_diff"][i] = st1 - st2
+
+            # ---- Momentum intra-tournoi (domination en jeux et en sets) ----
+            tgw1 = tourney_games_won[p1]   if last_tourney_id.get(p1) == t1_id else 0
+            tgt1 = tourney_games_total[p1] if last_tourney_id.get(p1) == t1_id else 0
+            tgw2 = tourney_games_won[p2]   if last_tourney_id.get(p2) == t1_id else 0
+            tgt2 = tourney_games_total[p2] if last_tourney_id.get(p2) == t1_id else 0
+            out["tourney_game_winpct_diff"][i] = (tgw1/tgt1 if tgt1 > 0 else 0.5) - (tgw2/tgt2 if tgt2 > 0 else 0.5)
+            
+            # ---- Phase B: Fatigue ----
+            out["matches_last_3d_diff"][i] = _count_recent_tuples(rr1, day, 3) - _count_recent_tuples(rr2, day, 3)
+            out["matches_last_7d_diff"][i] = _count_recent_tuples(rr1, day, 7) - _count_recent_tuples(rr2, day, 7)
+            out["hours_played_last_14d_diff"][i] = (_avg_minutes(rr1, 14) * _count_recent_tuples(rr1, day, 14) / 60.0 if _avg_minutes(rr1, 14) == _avg_minutes(rr1, 14) else 0) - (_avg_minutes(rr2, 14) * _count_recent_tuples(rr2, day, 14) / 60.0 if _avg_minutes(rr2, 14) == _avg_minutes(rr2, 14) else 0)
+
+            # ---- Forme sur la surface courante (récente) ----
+            out["form10_surface_diff"][i]  = _winrate_surface(rr1, surf, 10) - _winrate_surface(rr2, surf, 10)
+            out["form20_surface_diff"][i]  = _winrate_surface(rr1, surf, 20) - _winrate_surface(rr2, surf, 20)
+            out["form365d_surface_diff"][i] = (_winrate_surface_days(rr1, surf, day, 365)
+                                               - _winrate_surface_days(rr2, surf, day, 365))
+            
+            # ---- Phase B: Momentum Serve/Return & Elo ----
+            eh1 = elo_history[p1]
+            eh2 = elo_history[p2]
+            out["elo_momentum_diff"][i] = (e1 - eh1[-30] if len(eh1) >= 30 else 0) - (e2 - eh2[-30] if len(eh2) >= 30 else 0)
+            
+            # serve momentum = recent (last 5) first won % - long term (last 20) first won %
+            serve_mom1 = r5_1[3] - r20_1[3] if (r5_1[3] == r5_1[3] and r20_1[3] == r20_1[3]) else 0
+            serve_mom2 = r5_2[3] - r20_2[3] if (r5_2[3] == r5_2[3] and r20_2[3] == r20_2[3]) else 0
+            out["serve_momentum_diff"][i] = serve_mom1 - serve_mom2
+            
+            # return momentum = recent return points won % - long term return points won %
+            return_mom1 = r5_1[6] - r20_1[6] if (r5_1[6] == r5_1[6] and r20_1[6] == r20_1[6]) else 0
+            return_mom2 = r5_2[6] - r20_2[6] if (r5_2[6] == r5_2[6] and r20_2[6] == r20_2[6]) else 0
+            out["return_momentum_diff"][i] = return_mom1 - return_mom2
+
+            # ---- Elo surface avec K adaptatif par niveau de tournoi (avec dépréciation d'inactivité) ----
+            esw1 = get_decayed_elo(elo_surface_w[surf][p1], day, last_p1)
+            esw2 = get_decayed_elo(elo_surface_w[surf][p2], day, last_p2)
+            out["elo_surface_w_diff"][i] = esw1 - esw2
+
+            # ---- Giant killer / upset sur les 10 derniers matchs seulement ----
+            out["upset_rate_10_diff"][i]   = _upset_rate_n(rr1, 10) - _upset_rate_n(rr2, 10)
+
+            # ---- Winrate par phase de tournoi (QF/SF/F vs premiers tours, 2 ans) ----
+            out["late_round_winrate_diff"][i]  = (_winrate_round_type(rr1, day, 730, late=True)
+                                                   - _winrate_round_type(rr2, day, 730, late=True))
+            out["early_round_winrate_diff"][i] = (_winrate_round_type(rr1, day, 730, late=False)
+                                                   - _winrate_round_type(rr2, day, 730, late=False))
+
+            # ---- Serve & Return Elo + Markov Point-by-Point (avec dépréciation d'inactivité) ----
+            se1 = get_decayed_elo(serve_elo[p1], day, last_p1)
+            se2 = get_decayed_elo(serve_elo[p2], day, last_p2)
+            re1 = get_decayed_elo(return_elo[p1], day, last_p1)
+            re2 = get_decayed_elo(return_elo[p2], day, last_p2)
+            ses1 = get_decayed_elo(serve_elo_surface[surf][p1], day, last_p1)
+            ses2 = get_decayed_elo(serve_elo_surface[surf][p2], day, last_p2)
+            res1 = get_decayed_elo(return_elo_surface[surf][p1], day, last_p1)
+            res2 = get_decayed_elo(return_elo_surface[surf][p2], day, last_p2)
+
+            out["serve_elo_diff"][i] = se1 - se2
+            out["return_elo_diff"][i] = re1 - re2
+            out["serve_elo_surface_diff"][i] = ses1 - ses2
+            out["return_elo_surface_diff"][i] = res1 - res2
+
+            pa_m, pb_m = estimate_point_probabilities(ses1, res2, ses2, res1, surface=surf, circuit=circuit)
+            bo_i = int(best_of[i]) if (best_of[i] == best_of[i] and best_of[i] in (3, 5)) else 3
+            m_res = p_match(pa_m, pb_m, best_of=bo_i)
+
+            out["markov_p_win"][i] = m_res["proba_a"]
+            out["markov_hold_diff"][i] = m_res["hold_proba_a"] - m_res["hold_proba_b"]
+            out["markov_expected_games"][i] = m_res["expected_total_games"]
+        else:
+            t_country = get_tourney_country(t_name)
+            t1_id = tourney_id[i]
+            sh1, sh2 = serve_return_hist[p1], serve_return_hist[p2]
+            r5_1, r20_1 = _rolling_stats(sh1)
+            r5_2, r20_2 = _rolling_stats(sh2)
+            sb1 = _surface_bias(recent_results[p1], day, surf)
+            sb2 = _surface_bias(recent_results[p2], day, surf)
+            arch1 = _get_archetype(r20_1, sb1)
+            arch2 = _get_archetype(r20_2, sb2)
+            esw1 = get_decayed_elo(elo_surface_w[surf][p1], day, last_p1)
+            esw2 = get_decayed_elo(elo_surface_w[surf][p2], day, last_p2)
+            se1 = get_decayed_elo(serve_elo[p1], day, last_p1)
+            se2 = get_decayed_elo(serve_elo[p2], day, last_p2)
+            re1 = get_decayed_elo(return_elo[p1], day, last_p1)
+            re2 = get_decayed_elo(return_elo[p2], day, last_p2)
+            ses1 = get_decayed_elo(serve_elo_surface[surf][p1], day, last_p1)
+            ses2 = get_decayed_elo(serve_elo_surface[surf][p2], day, last_p2)
+            res1 = get_decayed_elo(return_elo_surface[surf][p1], day, last_p1)
+            res2 = get_decayed_elo(return_elo_surface[surf][p2], day, last_p2)
+            pa_m, pb_m = estimate_point_probabilities(ses1, res2, ses2, res1, surface=surf, circuit=circuit)
 
         # ================= MISE A JOUR DE L'ETAT (après calcul des features) =================
         p1_won = bool(target[i])
@@ -979,23 +993,26 @@ def build_features(df, circuit="atp"):
         if i % 20000 == 0 and i > 0:
             elapsed = time.time() - t0
             rate = i / elapsed
-            print(f"  {i}/{n} matchs traités ({rate:.0f}/s, ETA {(n - i) / rate:.0f}s)")
+            print(f"  {i}/{n} matchs traités ({rate:.0f}/s, ETA {(n - i) / rate:.0f}s)", flush=True)
 
-    result = pd.DataFrame({
-        "match_id": match_id,
-        "tourney_date": tourney_date_out,
-        "surface": surface,
-        "indoor": indoor_arr,
-        "tourney_level": tourney_level,
-        "best_of": best_of,
-        "round": round_,
-        "retirement": retirement,
-        "hand_matchup": hand_matchup_arr,
-        "target": target,
-        **out,
-    })
-    for k in SERVE_RETURN_KEYS:
-        result[f"{k}_20_diff"] = serve_diff_20[k]
+    if state_only:
+        result = None
+    else:
+        result = pd.DataFrame({
+            "match_id": match_id,
+            "tourney_date": tourney_date_out,
+            "surface": surface,
+            "indoor": indoor_arr,
+            "tourney_level": tourney_level,
+            "best_of": best_of,
+            "round": round_,
+            "retirement": retirement,
+            "hand_matchup": hand_matchup_arr,
+            "target": target,
+            **out,
+        })
+        for k in SERVE_RETURN_KEYS:
+            result[f"{k}_20_diff"] = serve_diff_20[k]
 
     return result, {
         "elo": dict(elo),
@@ -1278,31 +1295,18 @@ def _get_archetype(avg_20, surf_bias):
         return "Polyvalent"
 
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit to process (atp or wta)")
-    args = parser.parse_args()
-
-    in_path = PROCESSED_DIR / f"matches_symmetric_{args.circuit}.parquet"
-    if not in_path.exists():
-        raise FileNotFoundError(f"{in_path} introuvable. Lance d'abord: python 01_build_dataset.py --circuit {args.circuit}")
-    df = pd.read_parquet(in_path)
-    t0 = time.time()
-    feats, player_state = build_features(df, circuit=args.circuit)
-    print(f"Temps total: {time.time() - t0:.1f}s")
-    out_path = PROCESSED_DIR / f"features_{args.circuit}.parquet"
-    feats.to_parquet(out_path, index=False)
-    print(f"{len(feats)} lignes, {feats.shape[1]} colonnes -> {out_path}")
-
-    # Optimisation de la mémoire : suppression des structures inutilisées à l'inférence
-    # et élagage des listes glissantes pour respecter la limite de 512 Mo de RAM sur Render
+def prune_player_state(player_state, max_years=5):
+    """
+    Élagage agressif et optimisation mémoire pour respecter la limite de 512 Mo de RAM sur Render.
+    Réduit la taille de l'état en mémoire de ~192 Mo à ~45 Mo.
+    """
     for k in ["serve_return_hist", "h2h_history"]:
         if k in player_state:
             del player_state[k]
 
     last_day_val = player_state.get("last_day", 0)
-    active_players = {p for p, d in player_state.get("last_play_date", {}).items() if (last_day_val - d) <= 365 * 6}
+    # Filtrer les joueurs ayant joué au moins un match dans les N dernières années (1859 joueurs vs 6518)
+    active_players = {p for p, d in player_state.get("last_play_date", {}).items() if (last_day_val - d) <= 365 * max_years}
 
     heavy_keys = [
         "recent_results", "fast_results", "medium_results", "slow_results",
@@ -1312,7 +1316,7 @@ if __name__ == "__main__":
     for k in heavy_keys:
         if k in player_state:
             player_state[k] = {
-                p: (v[-25:] if len(v) > 25 else v)
+                p: (v[-20:] if len(v) > 20 else v)
                 for p, v in player_state[k].items()
                 if p in active_players and len(v) > 0
             }
@@ -1322,10 +1326,77 @@ if __name__ == "__main__":
             new_d = {}
             for p1, inner in player_state[k].items():
                 if p1 in active_players:
-                    filtered_inner = {p2: v for p2, v in inner.items() if p2 in active_players}
+                    filtered_inner = {
+                        p2: v for p2, v in inner.items()
+                        if p2 in active_players and (v != [0, 0] if isinstance(v, list) else True)
+                    }
                     if filtered_inner:
                         new_d[p1] = filtered_inner
             player_state[k] = new_d
+
+    for k in ["elo_surface", "elo_surface_w", "serve_elo_surface", "return_elo_surface"]:
+        if k in player_state:
+            player_state[k] = {
+                surf: {p: val for p, val in inner.items() if p in active_players}
+                for surf, inner in player_state[k].items()
+            }
+
+    for k in ["surface_career_count", "surface_career_wins", "wins_vs_arch", "matches_vs_arch"]:
+        if k in player_state:
+            player_state[k] = {
+                p: inner for p, inner in player_state[k].items() if p in active_players
+            }
+
+    for k in ["elo", "serve_elo", "return_elo", "peak_rank", "career_matches", "career_retirements",
+              "first_match_day", "last_surface", "last_tourney_id", "last_tourney_country",
+              "matches_this_tourney", "tourney_games_won", "tourney_games_total",
+              "tourney_sets_won", "tourney_sets_total", "streak", "last_play_date",
+              "last_retirement", "last_rank", "last_points", "last_ht", "last_hand",
+              "last_age", "last_age_day"]:
+        if k in player_state:
+            player_state[k] = {p: val for p, val in player_state[k].items() if p in active_players}
+
+    return player_state
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit to process (atp or wta)")
+    parser.add_argument("--state-only", action="store_true", help="Only compute and update player state and players/tournaments metadata (lightweight, uses < 80MB RAM)")
+    args = parser.parse_args()
+
+    in_path = PROCESSED_DIR / f"matches_symmetric_{args.circuit}.parquet"
+    if not in_path.exists():
+        raise FileNotFoundError(f"{in_path} introuvable. Lance d'abord: python 01_build_dataset.py --circuit {args.circuit}")
+
+    if args.state_only:
+        cols = [
+            "p1_name", "p2_name", "p1_ioc", "p2_ioc", "surface", "tourney_date", "p1_rank", "p2_rank",
+            "p1_rank_points", "p2_rank_points", "p1_age", "p2_age", "p1_ht", "p2_ht",
+            "p1_hand", "p2_hand", "p1_seed", "p2_seed", "p1_entry", "p2_entry",
+            "target", "match_id", "tourney_id", "tourney_name", "tourney_level",
+            "best_of", "round", "retirement", "score", "minutes", "indoor",
+            "p1_svpt", "p1_ace", "p1_df", "p1_1stIn", "p1_1stWon", "p1_2ndWon",
+            "p1_bpSaved", "p1_bpFaced", "p1_SvGms",
+            "p2_svpt", "p2_ace", "p2_df", "p2_1stIn", "p2_1stWon", "p2_2ndWon",
+            "p2_bpSaved", "p2_bpFaced", "p2_SvGms"
+        ]
+        df = pd.read_parquet(in_path, columns=cols)
+    else:
+        df = pd.read_parquet(in_path)
+
+    t0 = time.time()
+    feats, player_state = build_features(df, circuit=args.circuit, state_only=args.state_only)
+    print(f"Temps calcul: {time.time() - t0:.1f}s")
+
+    if not args.state_only and feats is not None:
+        out_path = PROCESSED_DIR / f"features_{args.circuit}.parquet"
+        feats.to_parquet(out_path, index=False)
+        print(f"{len(feats)} lignes, {feats.shape[1]} colonnes -> {out_path}")
+
+    # Optimisation de la mémoire et élagage agressif
+    player_state = prune_player_state(player_state, max_years=5)
 
     # Sauvegarde de l'état des joueurs pour 05_predict_match.py
     import pickle
@@ -1334,7 +1405,7 @@ if __name__ == "__main__":
     with open(state_path, "wb") as f:
         pickle.dump(player_state, f, protocol=pickle.HIGHEST_PROTOCOL)
     print(f"Etat des joueurs sauvegarde -> {state_path}")
-    print(f"  {len(player_state['elo'])} joueurs dans la base.")
+    print(f"  {len(player_state['elo'])} joueurs actifs conserves dans la base.")
 
     # Export automatique de players_{circuit}.json pour l'autocomplétion Web/API
     last_day_val = player_state.get("last_day", 0)

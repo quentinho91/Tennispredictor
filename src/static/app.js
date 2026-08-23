@@ -207,6 +207,9 @@ function setupUpdateData() {
 
     try {
       const res = await fetch('/api/update-data', { method: 'POST' });
+      if (!res.ok) {
+        throw new Error(`Le serveur a répondu avec le statut HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success) {
         updateStatusMsg.textContent = `✅ ${data.message} (${data.timestamp})`;
@@ -216,7 +219,7 @@ function setupUpdateData() {
         updateStatusMsg.style.color = '#f87171';
       }
     } catch (err) {
-      updateStatusMsg.textContent = `❌ Erreur de connexion: ${err.message}`;
+      updateStatusMsg.textContent = `❌ Impossible de synchroniser (${err.message}). Si l'instance Render redémarre ou sort de veille, réessayez dans 30 secondes.`;
       updateStatusMsg.style.color = '#f87171';
     } finally {
       btnUpdateData.classList.remove('loading');
