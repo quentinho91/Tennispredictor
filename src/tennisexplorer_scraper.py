@@ -187,7 +187,10 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                     current_href = ""
 
                 is_double = "type=double" in current_href or "mix" in current_href or "double" in current_tourney.lower()
-                is_amateur = "utr" in current_tourney.lower() or "exhibition" in current_tourney.lower() or "futures" in current_tourney.lower()
+                is_challenger = "challenger" in current_tourney.lower() or "challenger" in current_href.lower()
+                is_itf = "itf" in current_tourney.lower() or "itf" in current_href.lower() or "futures" in current_tourney.lower()
+                is_amateur = "utr" in current_tourney.lower() or "exhibition" in current_tourney.lower() or is_challenger or is_itf
+
                 if "wta" in current_href.lower() or "wta" in current_tourney.lower() or "women" in current_href.lower():
                     current_circuit = "wta"
                 else:
@@ -196,7 +199,7 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                 i += 1
                 continue
 
-            if is_double or is_amateur:
+            if is_double or is_amateur or is_challenger or is_itf:
                 i += 1
                 continue
 
@@ -238,7 +241,7 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                             odds2 = None
 
                     # Filtrer les matchs sans cotes si c'est un tournoi mineur
-                    is_major = any(k in current_tourney.lower() for k in ["us open", "winston", "monterrey", "cleveland", "cincinnati", "challenger", "wta", "atp"])
+                    is_major = any(k in current_tourney.lower() for k in ["us open", "winston", "monterrey", "cleveland", "cincinnati", "wta", "atp", "open", "masters"])
                     if not is_major and (odds1 is None or odds2 is None):
                         i += 2
                         continue
@@ -270,8 +273,6 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                             display_title = "WTA Cleveland"
                         elif "philadelphia" in current_tourney.lower():
                             display_title = "WTA Philadelphia"
-                        elif "challenger" in current_tourney.lower():
-                            display_title = f"Challenger {current_tourney.replace('challenger', '').strip()}"
 
                         raw_matches.append({
                             "id": f"te_{len(raw_matches)}_{re.sub(r'[^a-zA-Z0-9]', '', p1_clean)[:8]}",

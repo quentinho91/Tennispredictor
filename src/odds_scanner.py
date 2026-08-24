@@ -581,6 +581,15 @@ def scan_daily_matches(
         is_demo_mode = True
         source_used = "demo"
 
+    # Filtrer strictement les tournois ATP et WTA (exclure Challengers, ITF et Futures)
+    filtered_raw_matches = []
+    for m in raw_matches:
+        t_name = (m.get("sport_title") or m.get("tournament") or "").lower()
+        if "challenger" in t_name or "itf" in t_name or "futures" in t_name or "utr" in t_name:
+            continue
+        filtered_raw_matches.append(m)
+    raw_matches = filtered_raw_matches
+
     # 3. Résolution des noms et analyse prédictive des matchs isolée par circuit
     # pour garantir que les ressources ATP et WTA ne sont JAMAIS chargées en mémoire ensemble.
     import gc

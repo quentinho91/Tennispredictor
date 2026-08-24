@@ -1950,7 +1950,7 @@ async function loadDailyScanner(forceRefresh = false) {
           banner.style.background = 'rgba(59, 130, 246, 0.09)';
           banner.style.color = '#93c5fd';
           banner.innerHTML = `
-            <span>🎾 <b>Scanner Universel TennisExplorer Actif</b> • Couverture 100% : <b>US Open (Qualifs)</b>, <b>Winston-Salem</b>, <b>Monterrey</b>, <b>Cleveland</b> &amp; <b>Challengers</b>.</span>
+            <span>🎾 <b>Scanner Tournois ATP &amp; WTA Actif</b> • Couverture : <b>US Open (Qualifs)</b>, <b>Winston-Salem</b>, <b>Monterrey</b> &amp; <b>Cleveland</b> (100% Tournois Principaux).</span>
             <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Clé The Odds API</button>
           `;
         } else if (data.is_demo_mode) {
@@ -1990,118 +1990,303 @@ async function loadDailyScanner(forceRefresh = false) {
   }
 }
 
+// State for Tournament Accordion & Filtering
+let expandedTournaments = new Set();
+let selectedTourneyFilter = 'all';
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeJsString(str) {
+  if (!str) return '';
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function toggleTournament(tourneyName) {
+  if (expandedTournaments.has(tourneyName)) {
+    expandedTournaments.delete(tourneyName);
+  } else {
+    expandedTournaments.add(tourneyName);
+  }
+  renderScannerGrid();
+}
+window.toggleTournament = toggleTournament;
+
+function toggleAllTournaments() {
+  const currentGroups = getGroupedTournaments(getFilteredMatches());
+  const groupKeys = Object.keys(currentGroups);
+  if (groupKeys.length === 0) return;
+
+  const allOpen = groupKeys.every(k => expandedTournaments.has(k));
+  if (allOpen) {
+    expandedTournaments.clear();
+  } else {
+    groupKeys.forEach(k => expandedTournaments.add(k));
+  }
+  renderScannerGrid();
+}
+window.toggleAllTournaments = toggleAllTournaments;
+
+function filterBySpecificTourney(tourneyName) {
+  selectedTourneyFilter = tourneyName;
+  if (tourneyName !== 'all') {
+    expandedTournaments.add(tourneyName);
+  }
+  renderScannerGrid();
+}
+window.filterBySpecificTourney = filterBySpecificTourney;
+
+function getFilteredMatches() {
+  let matches = currentScannerMatches;
+  // Circuit / VB filter
+  if (currentScannerFilter === 'vb') {
+    matches = matches.filter(m => m.has_value_bet);
+  } else if (currentScannerFilter === 'atp') {
+    matches = matches.filter(m => m.circuit === 'atp');
+  } else if (currentScannerFilter === 'wta') {
+    matches = matches.filter(m => m.circuit === 'wta');
+  }
+  // Specific Tournament filter
+  if (selectedTourneyFilter !== 'all') {
+    matches = matches.filter(m => (m.sport_title || m.tournament) === selectedTourneyFilter);
+  }
+  return matches;
+}
+
+function getGroupedTournaments(matches) {
+  const groups = {};
+  matches.forEach(m => {
+    const tKey = m.sport_title || m.tournament || 'Tournoi Tennis';
+    if (!groups[tKey]) {
+      groups[tKey] = {
+        name: tKey,
+        circuit: m.circuit || 'atp',
+        surface: m.surface || 'Hard',
+        level: m.level || 'A',
+        best_of: m.best_of || 3,
+        matches: [],
+        valueBetsCount: 0
+      };
+    }
+    groups[tKey].matches.push(m);
+    if (m.has_value_bet) {
+      groups[tKey].valueBetsCount++;
+    }
+  });
+  return groups;
+}
+
+function renderTourneysBar(allTourneys) {
+  const bar = document.getElementById('scanner-tourneys-bar');
+  if (!bar) return;
+
+  const totalMatches = currentScannerMatches.length;
+  if (totalMatches === 0) {
+    bar.innerHTML = '';
+    return;
+  }
+
+  let html = `
+    <button type="button" class="tourney-pill-btn ${selectedTourneyFilter === 'all' ? 'active' : ''}" onclick="filterBySpecificTourney('all')">
+      <span>🎾 Tous les tournois</span>
+      <span class="tourney-pill-badge">${totalMatches}</span>
+    </button>
+  `;
+
+  Object.values(allTourneys).forEach(t => {
+    const isAtp = t.circuit === 'atp';
+    const icon = isAtp ? '🏆' : '👑';
+    const vbTag = t.valueBetsCount > 0 ? ` <span style="color:#34d399; font-weight:800;">🔥 ${t.valueBetsCount} VB</span>` : '';
+    const isActive = selectedTourneyFilter === t.name;
+
+    html += `
+      <button type="button" class="tourney-pill-btn ${isActive ? 'active' : ''}" onclick="filterBySpecificTourney('${escapeJsString(t.name)}')">
+        <span>${icon} ${escapeHtml(t.name)}</span>
+        <span class="tourney-pill-badge">${t.matches.length}</span>
+        ${vbTag}
+      </button>
+    `;
+  });
+
+  bar.innerHTML = html;
+}
+
+function renderMatchCardHtml(m) {
+  const hasVb = m.has_value_bet;
+  const topVb = m.top_value_bet;
+  const isAtp = m.circuit === 'atp';
+
+  const proba1 = m.prediction ? (m.prediction.proba_p1 * 100).toFixed(0) : '-';
+  const proba2 = m.prediction ? (m.prediction.proba_p2 * 100).toFixed(0) : '-';
+  const isP1Fav = m.prediction ? (m.prediction.proba_p1 >= m.prediction.proba_p2) : false;
+
+  let vbHtml = '';
+  if (hasVb && topVb) {
+    const confScore = (topVb.confidence && topVb.confidence.score !== undefined) ? `${topVb.confidence.score}%` : '80%';
+    const evVal = (topVb.ev_pct !== undefined) ? topVb.ev_pct : ((topVb.ev_percent !== undefined) ? topVb.ev_percent : 0);
+    const edgeVal = (topVb.edge_pct !== undefined) ? topVb.edge_pct : ((topVb.edge_percent !== undefined) ? topVb.edge_percent : 0);
+    const offeredOddsVal = (topVb.offered_odds && !isNaN(parseFloat(topVb.offered_odds))) ? parseFloat(topVb.offered_odds).toFixed(2) : '2.00';
+
+    const userBk = getUserBankroll();
+    const userStrat = getUserStrategy();
+    const stakeInfo = calculateStake(userBk, userStrat, topVb);
+
+    vbHtml = `
+      <div class="scan-vb-banner">
+        <div class="scan-vb-title">
+          <span>🎯 ${escapeHtml(topVb.selection || '')} @ ${offeredOddsVal}</span>
+          <span style="color:#fbbf24; font-size:11px; font-weight:800;">+${evVal}% EV</span>
+        </div>
+        <div class="scan-vb-meta">
+          <span>🔥 Confiance : ${confScore}</span>
+          <span>• Edge : +${edgeVal}%</span>
+        </div>
+        <div class="scan-vb-stake-tag">
+          💶 Mise conseillée : <b>${stakeInfo.stakeEuros} €</b> (${stakeInfo.stakePct.toFixed(1)}%) &bull; Gain net : <b>+${stakeInfo.netProfit} €</b>
+        </div>
+      </div>
+    `;
+  } else {
+    vbHtml = `
+      <div class="scan-no-vb-msg">
+        ⚖️ Cotes équilibrées (Marge Bet365)
+      </div>
+    `;
+  }
+
+  const odds1Str = m.odds1 ? m.odds1.toFixed(2) : '-';
+  const odds2Str = m.odds2 ? m.odds2.toFixed(2) : '-';
+  const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP</span>` : `<span class="circuit-pill-wta">👑 WTA</span>`;
+
+  let matchTimeDisplay = m.time_display || 'Aujourd\'hui';
+  if (m.commence_time) {
+    try {
+      const dt = new Date(m.commence_time);
+      if (!isNaN(dt.getTime())) {
+        matchTimeDisplay = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      }
+    } catch (e) {}
+  }
+
+  return `
+    <div class="scan-match-card ${hasVb ? 'has-vb' : ''}" onclick="openMatchDetailModal('${m.id}')" style="cursor: pointer;" title="Cliquer pour ouvrir le rapport d'analyse détaillé en grand">
+      <div class="scan-card-top">
+        <div style="display:flex; align-items:center; gap:6px;">
+          ${circuitBadge}
+          <span class="scan-tourney-tag">🏆 ${escapeHtml(m.sport_title || m.tournament)} • ${escapeHtml(m.surface || 'Hard')}</span>
+        </div>
+        <span class="scan-time-tag">⏰ ${escapeHtml(matchTimeDisplay)}</span>
+      </div>
+
+      <div class="scan-players-wrap">
+        <div class="scan-player-row">
+          <div class="scan-player-name">
+            ${escapeHtml(m.p1)}
+            <span class="scan-proba-pill ${isP1Fav ? 'fav' : ''}">${proba1}%</span>
+          </div>
+          <div class="scan-odds-pill">@ ${odds1Str}</div>
+        </div>
+
+        <div class="scan-player-row">
+          <div class="scan-player-name">
+            ${escapeHtml(m.p2)}
+            <span class="scan-proba-pill ${!isP1Fav ? 'fav' : ''}">${proba2}%</span>
+          </div>
+          <div class="scan-odds-pill">@ ${odds2Str}</div>
+        </div>
+      </div>
+
+      ${vbHtml}
+
+      <div class="scan-btn-load" style="pointer-events: none; text-align: center; margin-top: 4px;">
+        🔍 Voir le rapport complet en grand
+      </div>
+    </div>
+  `;
+}
+
 function renderScannerGrid() {
   const grid = document.getElementById('scanner-grid');
   if (!grid) return;
 
-  let matchesToShow = currentScannerMatches;
-  if (currentScannerFilter === 'vb') {
-    matchesToShow = currentScannerMatches.filter(m => m.has_value_bet);
-  } else if (currentScannerFilter === 'atp') {
-    matchesToShow = currentScannerMatches.filter(m => m.circuit === 'atp');
-  } else if (currentScannerFilter === 'wta') {
-    matchesToShow = currentScannerMatches.filter(m => m.circuit === 'wta');
-  }
+  const allFilteredMatches = getFilteredMatches();
+  const allAvailableTourneys = getGroupedTournaments(currentScannerMatches);
+  const currentGroups = getGroupedTournaments(allFilteredMatches);
 
-  if (matchesToShow.length === 0) {
+  renderTourneysBar(allAvailableTourneys);
+
+  const groupKeys = Object.keys(currentGroups);
+  if (groupKeys.length === 0) {
     if (currentScannerFilter === 'vb') {
-      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 30px; color: var(--text-dim);">🎯 Aucun Value Bet détecté sur les cotes actuelles avec les marges de sécurité requises.</div>`;
+      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 35px; color: var(--text-dim); background: rgba(15,23,42,0.4); border-radius: var(--radius-md); border: 1px dashed var(--border);">🎯 Aucun Value Bet détecté sur les cotes actuelles avec les marges de sécurité requises.</div>`;
     } else {
-      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 30px; color: var(--text-dim);">Aucun match programmé dans cette catégorie pour le moment.</div>`;
+      grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 35px; color: var(--text-dim); background: rgba(15,23,42,0.4); border-radius: var(--radius-md); border: 1px dashed var(--border);">Aucun match programmé dans cette catégorie pour le moment.</div>`;
     }
     return;
   }
 
+  // Update Déplier / Replier Button text
+  const allOpen = groupKeys.every(k => expandedTournaments.has(k));
+  const toggleBtnIcon = document.getElementById('toggle-all-tourneys-icon');
+  const toggleBtnText = document.getElementById('toggle-all-tourneys-text');
+  if (toggleBtnIcon && toggleBtnText) {
+    toggleBtnIcon.textContent = allOpen ? '📁' : '📂';
+    toggleBtnText.textContent = allOpen ? 'Replier tout' : 'Déplier tout';
+  }
+
   let html = '';
-  matchesToShow.forEach(m => {
-    const hasVb = m.has_value_bet;
-    const topVb = m.top_value_bet;
-    const isAtp = m.circuit === 'atp';
 
-    const proba1 = m.prediction ? (m.prediction.proba_p1 * 100).toFixed(0) : '-';
-    const proba2 = m.prediction ? (m.prediction.proba_p2 * 100).toFixed(0) : '-';
-    const isP1Fav = m.prediction ? (m.prediction.proba_p1 >= m.prediction.proba_p2) : false;
+  groupKeys.forEach(tKey => {
+    const group = currentGroups[tKey];
+    const isAtp = group.circuit === 'atp';
+    const isOpen = expandedTournaments.has(tKey) || (currentScannerFilter === 'vb' && group.valueBetsCount > 0) || (selectedTourneyFilter === tKey);
+    const hasVb = group.valueBetsCount > 0;
 
-    let vbHtml = '';
-    if (hasVb && topVb) {
-      const confScore = (topVb.confidence && topVb.confidence.score !== undefined) ? `${topVb.confidence.score}%` : '80%';
-      const evVal = (topVb.ev_pct !== undefined) ? topVb.ev_pct : ((topVb.ev_percent !== undefined) ? topVb.ev_percent : 0);
-      const edgeVal = (topVb.edge_pct !== undefined) ? topVb.edge_pct : ((topVb.edge_percent !== undefined) ? topVb.edge_percent : 0);
-      const offeredOddsVal = (topVb.offered_odds && !isNaN(parseFloat(topVb.offered_odds))) ? parseFloat(topVb.offered_odds).toFixed(2) : '2.00';
+    const circuitBadge = isAtp 
+      ? `<span class="tourney-circuit-badge atp">🏆 ATP TOUR</span>` 
+      : `<span class="tourney-circuit-badge wta">👑 WTA TOUR</span>`;
 
-      const userBk = getUserBankroll();
-      const userStrat = getUserStrategy();
-      const stakeInfo = calculateStake(userBk, userStrat, topVb);
+    const vbPill = hasVb 
+      ? `<span class="tourney-vb-count">🔥 ${group.valueBetsCount} Value Bet${group.valueBetsCount > 1 ? 's' : ''}</span>` 
+      : '';
 
-      vbHtml = `
-        <div class="scan-vb-banner">
-          <div class="scan-vb-title">
-            <span>🎯 ${escapeHtml(topVb.selection || '')} @ ${offeredOddsVal}</span>
-            <span style="color:#fbbf24; font-size:11px; font-weight:800;">+${evVal}% EV</span>
-          </div>
-          <div class="scan-vb-meta">
-            <span>🔥 Confiance : ${confScore}</span>
-            <span>• Edge : +${edgeVal}%</span>
-          </div>
-          <div class="scan-vb-stake-tag">
-            💶 Mise conseillée : <b>${stakeInfo.stakeEuros} €</b> (${stakeInfo.stakePct.toFixed(1)}%) &bull; Gain net : <b>+${stakeInfo.netProfit} €</b>
-          </div>
-        </div>
-      `;
-    } else {
-      vbHtml = `
-        <div class="scan-no-vb-msg">
-          ⚖️ Cotes équilibrées (Marge Bet365)
-        </div>
-      `;
-    }
-
-    const odds1Str = m.odds1 ? m.odds1.toFixed(2) : '-';
-    const odds2Str = m.odds2 ? m.odds2.toFixed(2) : '-';
-    const circuitBadge = isAtp ? `<span class="circuit-pill-atp">🏆 ATP</span>` : `<span class="circuit-pill-wta">👑 WTA</span>`;
-
-    let matchTimeDisplay = m.time_display || 'Aujourd\'hui';
-    if (m.commence_time) {
-      try {
-        const dt = new Date(m.commence_time);
-        if (!isNaN(dt.getTime())) {
-          matchTimeDisplay = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        }
-      } catch (e) {}
-    }
+    let matchesHtml = '';
+    group.matches.forEach(m => {
+      matchesHtml += renderMatchCardHtml(m);
+    });
 
     html += `
-      <div class="scan-match-card ${hasVb ? 'has-vb' : ''}" onclick="openMatchDetailModal('${m.id}')" style="cursor: pointer;" title="Cliquer pour ouvrir le rapport d'analyse détaillé en grand">
-        <div class="scan-card-top">
-          <div style="display:flex; align-items:center; gap:6px;">
+      <div class="tourney-group-card ${isOpen ? 'is-open' : ''} ${hasVb ? 'has-vb' : ''}">
+        <div class="tourney-group-header" onclick="toggleTournament('${escapeJsString(tKey)}')">
+          <div class="tourney-group-title-wrap">
             ${circuitBadge}
-            <span class="scan-tourney-tag">🏆 ${escapeHtml(m.sport_title || m.tournament)} • ${escapeHtml(m.surface)}</span>
-          </div>
-          <span class="scan-time-tag">⏰ ${escapeHtml(matchTimeDisplay)}</span>
-        </div>
-
-        <div class="scan-players-wrap">
-          <div class="scan-player-row">
-            <div class="scan-player-name">
-              ${escapeHtml(m.p1)}
-              <span class="scan-proba-pill ${isP1Fav ? 'fav' : ''}">${proba1}%</span>
+            <div class="tourney-group-title">
+              <span>${isAtp ? '🎾' : '🌟'}</span> ${escapeHtml(group.name)}
             </div>
-            <div class="scan-odds-pill">@ ${odds1Str}</div>
+            <span class="tourney-surface-tag">🏟️ ${escapeHtml(group.surface || 'Hard')} • Best-of ${group.best_of || 3}</span>
           </div>
 
-          <div class="scan-player-row">
-            <div class="scan-player-name">
-              ${escapeHtml(m.p2)}
-              <span class="scan-proba-pill ${!isP1Fav ? 'fav' : ''}">${proba2}%</span>
-            </div>
-            <div class="scan-odds-pill">@ ${odds2Str}</div>
+          <div class="tourney-group-stats">
+            <span class="tourney-matches-count">📅 ${group.matches.length} match${group.matches.length > 1 ? 's' : ''}</span>
+            ${vbPill}
+            <button type="button" class="tourney-toggle-btn" onclick="event.stopPropagation(); toggleTournament('${escapeJsString(tKey)}')">
+              <span>${isOpen ? 'Masquer' : 'Voir les matchs'}</span>
+              <span class="tourney-chevron">▼</span>
+            </button>
           </div>
         </div>
 
-        ${vbHtml}
-
-        <div class="scan-btn-load" style="pointer-events: none; text-align: center; margin-top: 4px;">
-          🔍 Voir le rapport complet en grand
+        <div class="tourney-group-body">
+          <div class="scanner-grid">
+            ${matchesHtml}
+          </div>
         </div>
       </div>
     `;

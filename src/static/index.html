@@ -80,17 +80,17 @@
         <div class="scanner-header">
           <div class="scanner-title-wrap">
             <div class="card-title" style="margin-bottom: 2px;">
-              <span>📅</span> Programme du Jour &amp; Value Bets
+              <span>📅</span> Programme des Tournois &amp; Value Bets
             </div>
             <div class="scanner-subtitle">
-              Cotes réelles <span class="bm-badge">Betclic</span> • Hommes &amp; Femmes en direct
+              Cotes réelles <span class="bm-badge">Betclic</span> • <b>100% Tournois ATP &amp; WTA</b> (Grand Chelem, Masters &amp; 250/500)
             </div>
           </div>
 
           <div class="scanner-controls">
             <div class="scanner-source-wrap">
               <select id="scanner-source-select" class="scanner-source-select" title="Choisir la source de scan des matchs et cotes" onchange="changeScannerSource(this.value)">
-                <option value="tennisexplorer" selected>🎾 TennisExplorer (Qualifs US Open, Winston-Salem, WTA &amp; Challengers)</option>
+                <option value="tennisexplorer" selected>🎾 TennisExplorer (ATP, WTA, US Open &amp; Masters)</option>
                 <option value="the_odds_api">🌐 The Odds API (Bet365 Live)</option>
               </select>
             </div>
@@ -111,6 +111,9 @@
             </div>
 
             <div class="scanner-actions">
+              <button type="button" id="btn-toggle-all-tourneys" class="scanner-action-btn" onclick="toggleAllTournaments()" title="Déplier ou replier tous les tournois">
+                <span id="toggle-all-tourneys-icon">📂</span> <span id="toggle-all-tourneys-text">Déplier tout</span>
+              </button>
               <button type="button" id="btn-refresh-scanner" class="scanner-action-btn" title="Actualiser le scan des cotes">
                 <span class="refresh-icon">🔄</span> <span id="scanner-time-text">Actualiser</span>
               </button>
@@ -121,15 +124,18 @@
           </div>
         </div>
 
+        <!-- Tournaments Quick Filter Bar -->
+        <div id="scanner-tourneys-bar" class="scanner-tourneys-bar"></div>
+
         <!-- Demo / API Key status banner -->
         <div id="scanner-mode-banner" class="scanner-mode-banner" style="display: none;"></div>
 
         <!-- Loading State -->
         <div id="scanner-loading" class="scanner-loading" style="display: none;">
-          <span class="scanner-spinner">⏳</span> Analyse des matchs et scan des cotes Betclic en cours...
+          <span class="scanner-spinner">⏳</span> Analyse des tournois ATP &amp; WTA et scan des cotes en cours...
         </div>
 
-        <!-- Match Cards Grid -->
+        <!-- Match Cards & Tournaments Container -->
         <div id="scanner-grid" class="scanner-grid">
           <!-- Injected via JavaScript -->
         </div>
