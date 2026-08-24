@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 import urllib.request
 import urllib.parse
 import json
+from src.tennisexplorer_scraper import fetch_tennisexplorer_matches
 
 logger = logging.getLogger("tennis_predictor.odds_scanner")
 
@@ -434,6 +435,7 @@ def scan_daily_matches(
     circuit: str = "all",
     bookmaker: str = "bet365",
     api_key: Optional[str] = None,
+    source: str = "tennisexplorer",
     force_refresh: bool = False,
     predict_func: Optional[Any] = None,
     get_resources_func: Optional[Any] = None,
@@ -442,120 +444,142 @@ def scan_daily_matches(
     """
     Exécute le scan quotidien des matchs (ATP + WTA combinés ou séparés) :
     1. Vérifie le cache en mémoire (TTL: 30 min).
-    2. Appelle The Odds API (ou flux démo si pas de clé).
-    3. Résout automatiquement les contextes tournois/surfaces/formats.
+    2. Récupère les matchs via TennisExplorer (100% de couverture: US Open Qualifs, Winston-Salem, WTA, Challengers)
+       ou The Odds API (selon la source choisie).
+    3. Résout automatiquement les contextes tournois/surfaces/formats et les noms de joueurs.
     4. Exécute l'analyse prédictive ML + Markov pour chaque match.
     5. Retourne les matchs triés et enrichis pour la vue dashboard et popup modal.
     """
     circuit_key = circuit.lower()
+    source_key = source.lower() if source else "tennisexplorer"
+    cache_lookup_key = f"{circuit_key}_{source_key}_{bookmaker}"
     now_ts = time.time()
 
     # Si rafraîchissement forcé demandé, vider le cache immédiatement
     if force_refresh:
-        SCANNER_CACHE.pop(circuit_key, None)
-        SCANNER_CACHE.pop("all", None)
+        SCANNER_CACHE.pop(cache_lookup_key, None)
+        SCANNER_CACHE.pop(f"{circuit_key}_tennisexplorer_{bookmaker}", None)
+        SCANNER_CACHE.pop(f"{circuit_key}_the_odds_api_{bookmaker}", None)
+        SCANNER_CACHE.pop(f"all_tennisexplorer_{bookmaker}", None)
+        SCANNER_CACHE.pop(f"all_the_odds_api_{bookmaker}", None)
 
     # 1. Vérification du cache en mémoire
-    if not force_refresh and circuit_key in SCANNER_CACHE:
-        cached_entry = SCANNER_CACHE[circuit_key]
+    if not force_refresh and cache_lookup_key in SCANNER_CACHE:
+        cached_entry = SCANNER_CACHE[cache_lookup_key]
         if (now_ts - cached_entry["timestamp"]) < CACHE_TTL_SECONDS:
-            logger.info(f"Retour des matchs scannés depuis le cache (âge: {int(now_ts - cached_entry['timestamp'])}s)")
+            logger.info(f"Retour des matchs scannés depuis le cache ({source_key}, âge: {int(now_ts - cached_entry['timestamp'])}s)")
             cached_data = dict(cached_entry["data"])
             cached_data["cached"] = True
             cached_data["cache_age_seconds"] = int(now_ts - cached_entry["timestamp"])
             return cached_data
 
-    resolved_api_key = api_key or os.getenv("ODDS_API_KEY") or os.getenv("THE_ODDS_API_KEY")
-    is_demo_mode = not bool(resolved_api_key and len(resolved_api_key.strip()) > 8)
-
     raw_matches = []
     quota_info = {"requests_remaining": None, "requests_used": None}
+    source_used = source_key
+    is_demo_mode = False
 
-    if is_demo_mode:
-        logger.info("Aucune clé The Odds API configurée -> Utilisation du mode Démo")
-        raw_matches = get_demo_matches(circuit_key)
-    else:
+    # 2. Récupération des données selon la source sélectionnée
+    if source_key in ("tennisexplorer", "auto"):
         try:
-            active_sports = fetch_the_odds_api_sports(resolved_api_key)
+            logger.info(f"Scan des matchs du jour via TennisExplorer (circuit={circuit_key})...")
+            raw_matches = fetch_tennisexplorer_matches(circuit=circuit_key)
+            if raw_matches:
+                source_used = "tennisexplorer"
+                quota_info = {"requests_remaining": "Illimité", "requests_used": "Scraping Direct"}
+        except Exception as te_err:
+            logger.warning(f"Erreur extraction TennisExplorer: {te_err}")
+            raw_matches = []
 
-            # Prioriser impérativement les tournois actifs (en cours cette semaine)
-            # devant les compétitions hors saison / futures (Aus Open, Roland Garros...)
-            in_season = [s for s in active_sports if s.get("active", False)]
-            out_of_season = [s for s in active_sports if not s.get("active", False)]
-            sorted_sports = in_season + out_of_season
+    # Si la source demandée est The Odds API ou si TennisExplorer a échoué en mode auto
+    if not raw_matches and source_key in ("the_odds_api", "auto"):
+        resolved_api_key = api_key or os.getenv("ODDS_API_KEY") or os.getenv("THE_ODDS_API_KEY")
+        is_demo_mode = not bool(resolved_api_key and len(resolved_api_key.strip()) > 8)
 
-            if circuit_key == "atp":
-                target_sport_keys = [s["key"] for s in sorted_sports if "atp" in s["key"]][:8]
-            elif circuit_key == "wta":
-                target_sport_keys = [s["key"] for s in sorted_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())][:8]
-            else:
-                # All: ATP + WTA équilibré
-                atp_keys = [s["key"] for s in sorted_sports if "atp" in s["key"]]
-                wta_keys = [s["key"] for s in sorted_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())]
-                other_keys = [s["key"] for s in sorted_sports if s["key"] not in atp_keys and s["key"] not in wta_keys]
-                target_sport_keys = atp_keys[:5] + wta_keys[:5] + other_keys[:2]
+        if is_demo_mode:
+            logger.info("Aucune clé The Odds API valide -> Mode Démo")
+            raw_matches = get_demo_matches(circuit_key)
+            source_used = "demo"
+        else:
+            try:
+                source_used = "the_odds_api"
+                active_sports = fetch_the_odds_api_sports(resolved_api_key)
 
-            # Récupérer les tournois actifs (ATP et WTA garantis)
-            for s_key in target_sport_keys:
-                m_circuit = "wta" if ("wta" in s_key or "women" in s_key) else "atp"
-                try:
-                    events, q_info = fetch_odds_for_sport(s_key, resolved_api_key)
-                    if q_info.get("requests_remaining"):
-                        quota_info = q_info
-                except Exception as sport_err:
-                    logger.warning(f"Impossible de charger les cotes pour {s_key}: {sport_err}")
-                    continue
+                in_season = [s for s in active_sports if s.get("active", False)]
+                out_of_season = [s for s in active_sports if not s.get("active", False)]
+                sorted_sports = in_season + out_of_season
 
-                for ev in events:
-                    odds = extract_match_odds(ev, target_bookmaker=bookmaker)
-                    if not odds.get("odds1") or not odds.get("odds2"):
+                if circuit_key == "atp":
+                    target_sport_keys = [s["key"] for s in sorted_sports if "atp" in s["key"]][:8]
+                elif circuit_key == "wta":
+                    target_sport_keys = [s["key"] for s in sorted_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())][:8]
+                else:
+                    atp_keys = [s["key"] for s in sorted_sports if "atp" in s["key"]]
+                    wta_keys = [s["key"] for s in sorted_sports if ("wta" in s["key"] or "women" in s.get("title", "").lower())]
+                    other_keys = [s["key"] for s in sorted_sports if s["key"] not in atp_keys and s["key"] not in wta_keys]
+                    target_sport_keys = atp_keys[:5] + wta_keys[:5] + other_keys[:2]
+
+                for s_key in target_sport_keys:
+                    m_circuit = "wta" if ("wta" in s_key or "women" in s_key) else "atp"
+                    try:
+                        events, q_info = fetch_odds_for_sport(s_key, resolved_api_key)
+                        if q_info.get("requests_remaining"):
+                            quota_info = q_info
+                    except Exception as sport_err:
+                        logger.warning(f"Impossible de charger les cotes pour {s_key}: {sport_err}")
                         continue
 
-                    commence_raw = ev.get("commence_time", "")
-                    time_display = "Aujourd'hui"
-                    if commence_raw:
-                        try:
-                            dt = datetime.fromisoformat(commence_raw.replace("Z", "+00:00"))
-                            time_display = f"{dt.strftime('%H:%M')}"
-                        except Exception:
-                            pass
+                    for ev in events:
+                        odds = extract_match_odds(ev, target_bookmaker=bookmaker)
+                        if not odds.get("odds1") or not odds.get("odds2"):
+                            continue
 
-                    sport_title = ev.get("sport_title", "Tournoi Tennis")
-                    context = resolve_tournament_context(sport_title, circuit=m_circuit)
+                        commence_raw = ev.get("commence_time", "")
+                        time_display = "Aujourd'hui"
+                        if commence_raw:
+                            try:
+                                dt = datetime.fromisoformat(commence_raw.replace("Z", "+00:00"))
+                                time_display = f"{dt.strftime('%H:%M')}"
+                            except Exception:
+                                pass
 
-                    raw_matches.append({
-                        "id": ev.get("id", f"match_{len(raw_matches)}"),
-                        "circuit": m_circuit,
-                        "sport_title": sport_title,
-                        "tournament": context["tournament"],
-                        "surface": context["surface"],
-                        "level": context["level"],
-                        "best_of": context["best_of"],
-                        "indoor": context["indoor"],
-                        "commence_time": commence_raw,
-                        "time_display": time_display,
-                        "p1_raw": ev.get("home_team", ""),
-                        "p2_raw": ev.get("away_team", ""),
-                        "p1": ev.get("home_team", ""),
-                        "p2": ev.get("away_team", ""),
-                        "odds1": odds.get("odds1"),
-                        "odds2": odds.get("odds2"),
-                        "total_line": odds.get("total_line"),
-                        "odds_over": odds.get("odds_over"),
-                        "odds_under": odds.get("odds_under"),
-                        "handicap_line": odds.get("handicap_line"),
-                        "odds_h1": odds.get("odds_h1"),
-                        "odds_h2": odds.get("odds_h2"),
-                        "bookmaker": odds.get("bookmaker_name", bookmaker.capitalize())
-                    })
-        except Exception as e:
-            logger.error(f"Erreur appel The Odds API: {e} -> Fallback sur mode Démo")
-            raw_matches = get_demo_matches(circuit_key)
-            is_demo_mode = True
+                        sport_title = ev.get("sport_title", "Tournoi Tennis")
+                        context = resolve_tournament_context(sport_title, circuit=m_circuit)
+
+                        raw_matches.append({
+                            "id": ev.get("id", f"match_{len(raw_matches)}"),
+                            "circuit": m_circuit,
+                            "sport_title": sport_title,
+                            "tournament": context["tournament"],
+                            "surface": context["surface"],
+                            "level": context["level"],
+                            "best_of": context["best_of"],
+                            "indoor": context["indoor"],
+                            "commence_time": commence_raw,
+                            "time_display": time_display,
+                            "p1_raw": ev.get("home_team", ""),
+                            "p2_raw": ev.get("away_team", ""),
+                            "p1": ev.get("home_team", ""),
+                            "p2": ev.get("away_team", ""),
+                            "odds1": odds.get("odds1"),
+                            "odds2": odds.get("odds2"),
+                            "total_line": odds.get("total_line"),
+                            "odds_over": odds.get("odds_over"),
+                            "odds_under": odds.get("odds_under"),
+                            "handicap_line": odds.get("handicap_line"),
+                            "odds_h1": odds.get("odds_h1"),
+                            "odds_h2": odds.get("odds_h2"),
+                            "bookmaker": odds.get("bookmaker_name", bookmaker.capitalize())
+                        })
+            except Exception as e:
+                logger.error(f"Erreur appel The Odds API: {e} -> Fallback Démo")
+                raw_matches = get_demo_matches(circuit_key)
+                is_demo_mode = True
+                source_used = "demo"
 
     if not raw_matches:
         raw_matches = get_demo_matches(circuit_key)
         is_demo_mode = True
+        source_used = "demo"
 
     # 3. Résolution des noms et analyse prédictive des matchs isolée par circuit
     # pour garantir que les ressources ATP et WTA ne sont JAMAIS chargées en mémoire ensemble.
@@ -594,6 +618,9 @@ def scan_daily_matches(
             if smart_resolve_func and known_players and player_state:
                 p1_resolved = smart_resolve_func(m["p1_raw"], known_players, player_state)
                 p2_resolved = smart_resolve_func(m["p2_raw"], known_players, player_state)
+
+            if p1_resolved.lower() == p2_resolved.lower():
+                continue
 
             m_item = {
                 "id": m.get("id"),
@@ -679,7 +706,7 @@ def scan_daily_matches(
                     all_vbs = pred_res.get("recommended_value_bets", [])
                     winner_vbs = [vb for vb in all_vbs if vb.get("market") == "Vainqueur Match"]
                     
-                    # Vérification directe des cotes Betclic vainqueur
+                    # Vérification directe des cotes vainqueur
                     if not winner_vbs:
                         vb1 = pred_res.get("vb_p1")
                         vb2 = pred_res.get("vb_p2")
@@ -711,6 +738,7 @@ def scan_daily_matches(
     response_payload = {
         "success": True,
         "circuit": circuit_key,
+        "source": source_used,
         "bookmaker": bookmaker,
         "is_demo_mode": is_demo_mode,
         "cached": False,
@@ -726,7 +754,7 @@ def scan_daily_matches(
         "matches": analyzed_matches
     }
 
-    SCANNER_CACHE[circuit_key] = {
+    SCANNER_CACHE[cache_lookup_key] = {
         "timestamp": now_ts,
         "data": response_payload,
         "bookmaker": bookmaker

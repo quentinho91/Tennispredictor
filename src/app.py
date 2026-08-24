@@ -645,11 +645,11 @@ def filter_uncorrelated_value_bets(
 
 
 def smart_resolve_name(name: str, known: List[str], state: Dict[str, Any]) -> str:
-    """Résolution intelligente et robuste du nom du joueur."""
+    """Résolution intelligente et robuste du nom du joueur (gère les noms complets et abrégés comme 'Sonego L.')."""
     if not name or not isinstance(name, str):
         return name
     clean_name = name.strip()
-    clean_lower = clean_name.lower()
+    clean_lower = clean_name.lower().replace(".", "").replace("-", " ")
     if not clean_lower:
         return name
 
@@ -658,29 +658,46 @@ def smart_resolve_name(name: str, known: List[str], state: Dict[str, Any]) -> st
         if p.lower() == clean_lower:
             return p
 
-    q_tokens = clean_lower.split()
+    q_tokens = [t for t in clean_lower.split() if t]
     last_day = state.get("last_day", 9727)
     candidates = []
 
     for p in known:
-        p_lower = p.lower()
+        p_lower = p.lower().replace("-", " ")
         p_tokens = p_lower.split()
 
-        # Inversion des noms / correspondance de jetons (ex. 'Cobolli Flavio', 'Pow Luca')
+        match_score = 0
         if set(q_tokens) == set(p_tokens):
             match_score = 1000
-        elif clean_lower in p_lower:
-            match_score = 500
-        elif all(any(pt.startswith(qt) or qt in pt for pt in p_tokens) for qt in q_tokens):
-            match_score = 400
-        elif any(pt.startswith(clean_lower) for pt in p_tokens) or p_lower.startswith(clean_lower):
-            match_score = 300
-        else:
+        elif len(q_tokens) == 2 and len(q_tokens[1]) == 1:
+            # Format "LastName Initial" (ex: "sonego l")
+            last_name_q = q_tokens[0]
+            initial_q = q_tokens[1]
+            if last_name_q in p_tokens and any(pt.startswith(initial_q) for pt in p_tokens if pt != last_name_q):
+                match_score = 900
+            elif any(difflib.SequenceMatcher(None, last_name_q, pt).ratio() >= 0.90 for pt in p_tokens) and any(pt.startswith(initial_q) for pt in p_tokens):
+                match_score = 800
+        elif len(q_tokens) >= 2 and len(q_tokens[-1]) == 1:
+            # Multi-word lastname + initial (ex: "carreno busta p", "bouzas maneiro j")
+            last_name_tokens = q_tokens[:-1]
+            initial_q = q_tokens[-1]
+            if all(t in p_tokens for t in last_name_tokens) and any(pt.startswith(initial_q) for pt in p_tokens if pt not in last_name_tokens):
+                match_score = 950
+        elif len(q_tokens) == 2 and len(q_tokens[0]) == 1:
+            # Format "Initial LastName" (ex: "l sonego")
+            initial_q = q_tokens[0]
+            last_name_q = q_tokens[1]
+            if last_name_q in p_tokens and any(pt.startswith(initial_q) for pt in p_tokens if pt != last_name_q):
+                match_score = 900
+        elif len(q_tokens) >= 2 and all(qt in p_tokens for qt in q_tokens):
+            match_score = 700
+        elif len(clean_lower) >= 6:
             ratio = difflib.SequenceMatcher(None, clean_lower, p_lower).ratio()
-            if ratio >= 0.70:
+            if ratio >= 0.85:
                 match_score = int(ratio * 250)
-            else:
-                continue
+
+        if match_score <= 0:
+            continue
 
         # Score de priorité du joueur (classement, Elo, activité récente)
         rank = state.get("last_rank", {}).get(p)
@@ -1505,11 +1522,12 @@ from src.odds_scanner import scan_daily_matches
 def get_daily_scanner(
     circuit: str = "all",
     bookmaker: str = "betclic",
+    source: str = Query("tennisexplorer"),
     api_key: Optional[str] = Query(None),
     refresh: bool = False
 ):
     """
-    Scan quotidien des matchs avec cotes Betclic / The Odds API (Hommes + Femmes combinés),
+    Scan quotidien des matchs avec TennisExplorer (100% tournois, qualifs US Open, Winston-Salem) ou The Odds API,
     résolution automatique des contextes et détection instantanée des Value Bets.
     """
     c_lower = circuit.lower()
@@ -1517,6 +1535,7 @@ def get_daily_scanner(
     return scan_daily_matches(
         circuit=c_lower,
         bookmaker=bookmaker,
+        source=source,
         api_key=api_key,
         force_refresh=refresh,
         predict_func=predict_match,

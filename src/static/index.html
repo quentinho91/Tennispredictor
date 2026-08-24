@@ -88,6 +88,13 @@
           </div>
 
           <div class="scanner-controls">
+            <div class="scanner-source-wrap">
+              <select id="scanner-source-select" class="scanner-source-select" title="Choisir la source de scan des matchs et cotes" onchange="changeScannerSource(this.value)">
+                <option value="tennisexplorer" selected>🎾 TennisExplorer (Qualifs US Open, Winston-Salem, WTA &amp; Challengers)</option>
+                <option value="the_odds_api">🌐 The Odds API (Bet365 Live)</option>
+              </select>
+            </div>
+
             <div class="scanner-filters">
               <button type="button" class="filter-btn active" data-filter="all" id="btn-filter-all">
                 Tous (<span id="count-all-matches">0</span>)

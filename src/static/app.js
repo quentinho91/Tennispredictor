@@ -1798,8 +1798,10 @@ window.switchPageTab = switchPageTab;
 // DAILY MATCHES SCANNER & BET365 LIVE ODDS (ATP + WTA)
 // ============================================================
 const ODDS_API_KEY_STORAGE = 'tennis_odds_api_key';
+const SCANNER_SOURCE_STORAGE = 'tennis_scanner_source';
 let currentScannerMatches = [];
 let currentScannerFilter = 'all'; // 'all' | 'atp' | 'wta' | 'vb'
+let currentScannerSource = localStorage.getItem(SCANNER_SOURCE_STORAGE) || 'tennisexplorer';
 
 function setupDailyScanner() {
   const btnFilterAll = document.getElementById('btn-filter-all');
@@ -1808,6 +1810,11 @@ function setupDailyScanner() {
   const btnFilterVb = document.getElementById('btn-filter-vb');
   const btnRefresh = document.getElementById('btn-refresh-scanner');
   const btnSettings = document.getElementById('btn-scanner-settings');
+  const sourceSelect = document.getElementById('scanner-source-select');
+
+  if (sourceSelect) {
+    sourceSelect.value = currentScannerSource;
+  }
 
   const filterBtns = [btnFilterAll, btnFilterAtp, btnFilterWta, btnFilterVb];
 
@@ -1839,9 +1846,18 @@ function setupDailyScanner() {
     keyInput.value = savedKey;
   }
 
-  // Initial load (Combined ATP + WTA)
+  // Initial load (Combined ATP + WTA via TennisExplorer 100% couverture)
   loadDailyScanner(false);
 }
+
+function changeScannerSource(newSource) {
+  currentScannerSource = newSource || 'tennisexplorer';
+  localStorage.setItem(SCANNER_SOURCE_STORAGE, currentScannerSource);
+  const sourceSelect = document.getElementById('scanner-source-select');
+  if (sourceSelect) sourceSelect.value = currentScannerSource;
+  loadDailyScanner(true);
+}
+window.changeScannerSource = changeScannerSource;
 
 function openApiKeyModal() {
   const modal = document.getElementById('api-key-modal');
@@ -1869,6 +1885,11 @@ function saveApiKeyAndRefresh() {
     }
   }
   closeApiKeyModal();
+  // Basculer automatiquement sur The Odds API si une clé vient d'être enregistrée
+  currentScannerSource = 'the_odds_api';
+  localStorage.setItem(SCANNER_SOURCE_STORAGE, currentScannerSource);
+  const sourceSelect = document.getElementById('scanner-source-select');
+  if (sourceSelect) sourceSelect.value = currentScannerSource;
   loadDailyScanner(true);
 }
 window.saveApiKeyAndRefresh = saveApiKeyAndRefresh;
@@ -1895,10 +1916,11 @@ async function loadDailyScanner(forceRefresh = false) {
 
   const savedKey = localStorage.getItem(ODDS_API_KEY_STORAGE) || '';
   const keyParam = savedKey ? `&api_key=${encodeURIComponent(savedKey)}` : '';
+  const sourceParam = `&source=${encodeURIComponent(currentScannerSource)}`;
   const refreshParam = forceRefresh ? '&refresh=true' : '';
 
   try {
-    const res = await fetch(`/api/scanner?circuit=all&bookmaker=betclic${keyParam}${refreshParam}`);
+    const res = await fetch(`/api/scanner?circuit=all&bookmaker=betclic${sourceParam}${keyParam}${refreshParam}`);
     if (!res.ok) {
       throw new Error(`Erreur serveur HTTP ${res.status}`);
     }
@@ -1922,13 +1944,22 @@ async function loadDailyScanner(forceRefresh = false) {
 
       // Mode banner
       if (banner) {
-        if (data.is_demo_mode) {
+        if (data.source === 'tennisexplorer') {
+          banner.style.display = 'flex';
+          banner.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+          banner.style.background = 'rgba(59, 130, 246, 0.09)';
+          banner.style.color = '#93c5fd';
+          banner.innerHTML = `
+            <span>🎾 <b>Scanner Universel TennisExplorer Actif</b> • Couverture 100% : <b>US Open (Qualifs)</b>, <b>Winston-Salem</b>, <b>Monterrey</b>, <b>Cleveland</b> &amp; <b>Challengers</b>.</span>
+            <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Clé The Odds API</button>
+          `;
+        } else if (data.is_demo_mode) {
           banner.style.display = 'flex';
           banner.style.borderColor = 'rgba(59, 130, 246, 0.3)';
           banner.style.background = 'rgba(59, 130, 246, 0.1)';
           banner.style.color = '#93c5fd';
           banner.innerHTML = `
-            <span>💡 <b>Mode Démo actif (Cotes simulées Bet365)</b> • Connectez votre clé The Odds API (gratuite) pour scanner les cotes réelles du jour.</span>
+            <span>💡 <b>Mode Démo actif (Cotes simulées Bet365)</b> • Connectez votre clé The Odds API (gratuite) pour scanner les cotes en direct.</span>
             <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px;">⚙️ Ajouter ma clé gratuite</button>
           `;
         } else {
@@ -2044,7 +2075,7 @@ function renderScannerGrid() {
         <div class="scan-card-top">
           <div style="display:flex; align-items:center; gap:6px;">
             ${circuitBadge}
-            <span class="scan-tourney-tag">🏆 ${escapeHtml(m.tournament)} • ${escapeHtml(m.surface)}</span>
+            <span class="scan-tourney-tag">🏆 ${escapeHtml(m.sport_title || m.tournament)} • ${escapeHtml(m.surface)}</span>
           </div>
           <span class="scan-time-tag">⏰ ${escapeHtml(matchTimeDisplay)}</span>
         </div>
