@@ -246,12 +246,23 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                         i += 2
                         continue
 
-                    # Score / Statut
+                    # Score / Statut : ignorer les matchs déjà terminés (avec score, abandon ou résultat final)
                     res_td1 = row.find("td", class_="result")
                     res_td2 = next_row.find("td", class_="result")
                     s1 = res_td1.get_text(strip=True) if res_td1 else ""
                     s2 = res_td2.get_text(strip=True) if res_td2 else ""
-                    is_finished = bool(s1 or s2)
+                    is_finished = bool(
+                        s1 or s2 
+                        or "ret" in time_val.lower() 
+                        or "w.o" in time_val.lower() 
+                        or "canc" in time_val.lower() 
+                        or "fin" in time_val.lower()
+                    )
+
+                    # Si le match est déjà terminé, on le saute pour ne garder que les matchs à venir/en cours
+                    if is_finished:
+                        i += 2
+                        continue
 
                     # Clé unique pour éviter les doublons
                     match_key = f"{p1_clean.lower()}_{p2_clean.lower()}_{current_tourney.lower()}"
@@ -297,8 +308,8 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                             "handicap_line": None,
                             "odds_h1": None,
                             "odds_h2": None,
-                            "bookmaker": "TennisExplorer / Bet365",
-                            "is_finished": is_finished
+                            "bookmaker": "Betclic / Cotes Réelles",
+                            "is_finished": False
                         })
 
                     i += 2

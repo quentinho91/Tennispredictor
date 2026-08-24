@@ -581,9 +581,11 @@ def scan_daily_matches(
         is_demo_mode = True
         source_used = "demo"
 
-    # Filtrer strictement les tournois ATP et WTA (exclure Challengers, ITF et Futures)
+    # Filtrer strictement les tournois ATP et WTA (exclure Challengers, ITF, Futures et matchs terminés)
     filtered_raw_matches = []
     for m in raw_matches:
+        if m.get("is_finished"):
+            continue
         t_name = (m.get("sport_title") or m.get("tournament") or "").lower()
         if "challenger" in t_name or "itf" in t_name or "futures" in t_name or "utr" in t_name:
             continue
