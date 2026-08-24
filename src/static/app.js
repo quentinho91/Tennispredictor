@@ -1799,6 +1799,9 @@ window.switchPageTab = switchPageTab;
 // ============================================================
 const ODDS_API_KEY_STORAGE = 'tennis_odds_api_key';
 const SCANNER_SOURCE_STORAGE = 'tennis_scanner_source';
+const SCANNER_CACHE_PAYLOAD_KEY = 'tp_cached_scanner_payload';
+const SCANNER_CACHE_TIME_KEY = 'tp_cached_scanner_time';
+
 let currentScannerMatches = [];
 let currentScannerFilter = 'all'; // 'all' | 'atp' | 'wta' | 'vb'
 let currentScannerSource = localStorage.getItem(SCANNER_SOURCE_STORAGE) || 'tennisexplorer';
@@ -1846,7 +1849,7 @@ function setupDailyScanner() {
     keyInput.value = savedKey;
   }
 
-  // Initial load (Combined ATP + WTA via TennisExplorer 100% couverture)
+  // Initial load : utilise le cache persistant de la dernière actualisation si disponible
   loadDailyScanner(false);
 }
 
@@ -1894,21 +1897,93 @@ function saveApiKeyAndRefresh() {
 }
 window.saveApiKeyAndRefresh = saveApiKeyAndRefresh;
 
-async function loadDailyScanner(forceRefresh = false) {
-  const grid = document.getElementById('scanner-grid');
-  const loading = document.getElementById('scanner-loading');
-  const banner = document.getElementById('scanner-mode-banner');
+function applyScannerData(data, timeStr) {
+  if (!data || !data.matches) return;
+  currentScannerMatches = data.matches;
+
   const countAll = document.getElementById('count-all-matches');
   const countAtp = document.getElementById('count-atp-matches');
   const countWta = document.getElementById('count-wta-matches');
   const countVb = document.getElementById('count-vb-matches');
   const tabScannerCount = document.getElementById('tab-scanner-count');
   const timeText = document.getElementById('scanner-time-text');
+  const banner = document.getElementById('scanner-mode-banner');
+
+  if (countAll) countAll.textContent = data.total_matches || currentScannerMatches.length;
+  if (countAtp) countAtp.textContent = data.atp_count || 0;
+  if (countWta) countWta.textContent = data.wta_count || 0;
+  if (countVb) countVb.textContent = data.value_bets_count || 0;
+  if (tabScannerCount) tabScannerCount.textContent = data.total_matches || currentScannerMatches.length;
+
+  if (timeText && timeStr) {
+    timeText.textContent = timeStr;
+  }
+
+  // Mode banner
+  if (banner) {
+    if (data.source === 'tennisexplorer') {
+      banner.style.display = 'flex';
+      banner.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+      banner.style.background = 'rgba(59, 130, 246, 0.09)';
+      banner.style.color = '#93c5fd';
+      banner.innerHTML = `
+        <span>🎾 <b>Scanner Tournois ATP &amp; WTA Actif</b> • Cotes <b>Betclic</b> • US Open (Qualifs), Winston-Salem, Monterrey &amp; Cleveland.</span>
+        <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Clé The Odds API</button>
+      `;
+    } else if (data.is_demo_mode) {
+      banner.style.display = 'flex';
+      banner.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+      banner.style.background = 'rgba(59, 130, 246, 0.1)';
+      banner.style.color = '#93c5fd';
+      banner.innerHTML = `
+        <span>💡 <b>Mode Démo actif (Cotes simulées Bet365)</b> • Connectez votre clé The Odds API (gratuite) pour scanner les cotes en direct.</span>
+        <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px;">⚙️ Ajouter ma clé gratuite</button>
+      `;
+    } else {
+      const remaining = (data.quota_info && data.quota_info.requests_remaining) ? data.quota_info.requests_remaining : '500';
+      banner.style.display = 'flex';
+      banner.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+      banner.style.background = 'rgba(16, 185, 129, 0.08)';
+      banner.style.color = '#34d399';
+      banner.innerHTML = `
+        <span>🟢 <b>The Odds API connectée (Bet365 Live)</b> • Quota restant : <b>${remaining}/500</b> appels ce mois-ci.</span>
+        <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Modifier</button>
+      `;
+    }
+  }
+
+  renderScannerGrid();
+}
+
+async function loadDailyScanner(forceRefresh = false) {
+  const grid = document.getElementById('scanner-grid');
+  const loading = document.getElementById('scanner-loading');
+  const timeText = document.getElementById('scanner-time-text');
   const btnRefresh = document.getElementById('btn-refresh-scanner');
 
+  // 1. Si pas de refresh forcé, vérifier d'abord le cache local du navigateur
+  if (!forceRefresh) {
+    const cachedPayloadStr = localStorage.getItem(SCANNER_CACHE_PAYLOAD_KEY);
+    const cachedTimeStr = localStorage.getItem(SCANNER_CACHE_TIME_KEY);
+    if (cachedPayloadStr) {
+      try {
+        const cachedData = JSON.parse(cachedPayloadStr);
+        if (cachedData && cachedData.matches && cachedData.matches.length > 0) {
+          if (loading) loading.style.display = 'none';
+          if (grid) grid.style.opacity = '1';
+          applyScannerData(cachedData, cachedTimeStr || ('Actualisé ' + (cachedData.last_update || '')));
+          return;
+        }
+      } catch (e) {
+        console.warn('Erreur lecture cache local scanner', e);
+      }
+    }
+  }
+
+  // 2. Si refresh forcé ou pas de cache, afficher l'état de chargement et appeler l'API
   if (loading) loading.style.display = 'block';
   if (grid) grid.style.opacity = '0.4';
-  if (btnRefresh && forceRefresh) {
+  if (btnRefresh) {
     btnRefresh.classList.add('loading');
     btnRefresh.disabled = true;
     if (timeText) timeText.textContent = 'Actualisation...';
@@ -1927,59 +2002,34 @@ async function loadDailyScanner(forceRefresh = false) {
     const data = await res.json();
 
     if (data.success && data.matches) {
-      currentScannerMatches = data.matches;
-
-      if (countAll) countAll.textContent = data.total_matches || currentScannerMatches.length;
-      if (countAtp) countAtp.textContent = data.atp_count || 0;
-      if (countWta) countWta.textContent = data.wta_count || 0;
-      if (countVb) countVb.textContent = data.value_bets_count || 0;
-      if (tabScannerCount) tabScannerCount.textContent = data.total_matches || currentScannerMatches.length;
-
-      // Heure locale formatée depuis le navigateur (ex: 10:50)
+      // Heure locale formatée depuis le navigateur (ex: 23:15)
       const now = new Date();
       const h = String(now.getHours()).padStart(2, '0');
       const m = String(now.getMinutes()).padStart(2, '0');
-      const localTimeStr = `${h}:${m}`;
-      if (timeText) timeText.textContent = `Actualisé ${localTimeStr}`;
+      const localTimeStr = `Actualisé ${h}:${m}`;
 
-      // Mode banner
-      if (banner) {
-        if (data.source === 'tennisexplorer') {
-          banner.style.display = 'flex';
-          banner.style.borderColor = 'rgba(59, 130, 246, 0.4)';
-          banner.style.background = 'rgba(59, 130, 246, 0.09)';
-          banner.style.color = '#93c5fd';
-          banner.innerHTML = `
-            <span>🎾 <b>Scanner Tournois ATP &amp; WTA Actif</b> • Couverture : <b>US Open (Qualifs)</b>, <b>Winston-Salem</b>, <b>Monterrey</b> &amp; <b>Cleveland</b> (100% Tournois Principaux).</span>
-            <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Clé The Odds API</button>
-          `;
-        } else if (data.is_demo_mode) {
-          banner.style.display = 'flex';
-          banner.style.borderColor = 'rgba(59, 130, 246, 0.3)';
-          banner.style.background = 'rgba(59, 130, 246, 0.1)';
-          banner.style.color = '#93c5fd';
-          banner.innerHTML = `
-            <span>💡 <b>Mode Démo actif (Cotes simulées Bet365)</b> • Connectez votre clé The Odds API (gratuite) pour scanner les cotes en direct.</span>
-            <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px;">⚙️ Ajouter ma clé gratuite</button>
-          `;
-        } else {
-          const remaining = (data.quota_info && data.quota_info.requests_remaining) ? data.quota_info.requests_remaining : '500';
-          banner.style.display = 'flex';
-          banner.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-          banner.style.background = 'rgba(16, 185, 129, 0.08)';
-          banner.style.color = '#34d399';
-          banner.innerHTML = `
-            <span>🟢 <b>The Odds API connectée (Bet365 Live)</b> • Quota restant : <b>${remaining}/500</b> appels ce mois-ci.</span>
-            <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Modifier</button>
-          `;
-        }
+      // Sauvegarde persistante dans le localStorage
+      try {
+        localStorage.setItem(SCANNER_CACHE_PAYLOAD_KEY, JSON.stringify(data));
+        localStorage.setItem(SCANNER_CACHE_TIME_KEY, localTimeStr);
+      } catch (storageErr) {
+        console.warn('Quota localStorage dépassé ou indisponible', storageErr);
       }
 
-      renderScannerGrid();
+      applyScannerData(data, localTimeStr);
     }
   } catch (err) {
     console.error('Erreur scanner cotes', err);
-    if (grid) grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 25px; color: #f87171;">⚠️ Connexion au serveur en cours... Cliquez sur <b>🔄 Actualiser</b> dans quelques secondes.</div>`;
+    // Si une erreur survient mais qu'un cache existe, on conserve le cache
+    const fallbackCachedStr = localStorage.getItem(SCANNER_CACHE_PAYLOAD_KEY);
+    if (fallbackCachedStr) {
+      try {
+        const fallbackData = JSON.parse(fallbackCachedStr);
+        applyScannerData(fallbackData, localStorage.getItem(SCANNER_CACHE_TIME_KEY));
+      } catch (e) {}
+    } else {
+      if (grid) grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 25px; color: #f87171;">⚠️ Connexion au serveur en cours... Cliquez sur <b>🔄 Actualiser</b> dans quelques secondes.</div>`;
+    }
   } finally {
     if (loading) loading.style.display = 'none';
     if (grid) grid.style.opacity = '1';

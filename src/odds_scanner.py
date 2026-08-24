@@ -19,13 +19,34 @@ from datetime import datetime, timezone
 import urllib.request
 import urllib.parse
 import json
+from pathlib import Path
 from src.tennisexplorer_scraper import fetch_tennisexplorer_matches
 
 logger = logging.getLogger("tennis_predictor.odds_scanner")
 
-# Cache global en mémoire : { circuit: { "timestamp": float, "data": dict, "bookmaker": str } }
+# Cache global en mémoire et sur disque (persistant)
 SCANNER_CACHE: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL_SECONDS = 1800  # 30 minutes
+CACHE_TTL_SECONDS = 86400  # 24h par défaut (conservé tant qu'on ne force pas le refresh)
+CACHE_FILE = Path(__file__).resolve().parent.parent / "data" / "processed" / "scanner_cache.json"
+
+
+def _load_disk_cache():
+    global SCANNER_CACHE
+    if not SCANNER_CACHE and CACHE_FILE.exists():
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                SCANNER_CACHE = json.load(f)
+        except Exception:
+            pass
+
+
+def _save_disk_cache():
+    try:
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(SCANNER_CACHE, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"Impossible de sauvegarder le cache disque du scanner: {e}")
 
 # Mappings des tournois connus vers surface / niveau / format
 KNOWN_TOURNAMENT_PATTERNS = {
@@ -463,7 +484,8 @@ def scan_daily_matches(
         SCANNER_CACHE.pop(f"all_tennisexplorer_{bookmaker}", None)
         SCANNER_CACHE.pop(f"all_the_odds_api_{bookmaker}", None)
 
-    # 1. Vérification du cache en mémoire
+    # 1. Vérification du cache en mémoire ou sur disque persistant
+    _load_disk_cache()
     if not force_refresh and cache_lookup_key in SCANNER_CACHE:
         cached_entry = SCANNER_CACHE[cache_lookup_key]
         if (now_ts - cached_entry["timestamp"]) < CACHE_TTL_SECONDS:
@@ -770,5 +792,6 @@ def scan_daily_matches(
         "data": response_payload,
         "bookmaker": bookmaker
     }
+    _save_disk_cache()
 
     return response_payload
