@@ -12,6 +12,7 @@ data/raw/
 data/processed/*.parquet
 data/processed/*.sqlite
 data/processed/*.db
+data/processed/scanner_cache.json
 
 # Whitelist des fichiers modèles indispensables au fonctionnement de l'application
 !data/processed/player_state_atp.pkl

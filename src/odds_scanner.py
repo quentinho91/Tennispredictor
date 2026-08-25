@@ -735,24 +735,26 @@ def scan_daily_matches(
                     # Garder le rapport complet pour affichage instantané dans la popup modale
                     m_item["full_report"] = pred_res
 
-                    # Filtrer les Value Bets strictement sur le marché Vainqueur du Match
+                    # Filtrer les Value Bets validés
                     all_vbs = pred_res.get("recommended_value_bets", [])
-                    winner_vbs = [vb for vb in all_vbs if vb.get("market") == "Vainqueur Match"]
-                    
-                    # Vérification directe des cotes vainqueur
-                    if not winner_vbs:
-                        vb1 = pred_res.get("vb_p1")
-                        vb2 = pred_res.get("vb_p2")
-                        if vb1 and vb1.get("is_value_bet"):
-                            winner_vbs.append(vb1)
-                        if vb2 and vb2.get("is_value_bet"):
-                            winner_vbs.append(vb2)
+                    valid_vbs = [vb for vb in all_vbs if vb.get("is_value_bet")]
 
-                    m_item["all_value_bets"] = winner_vbs
-                    if winner_vbs:
+                    # Si pas de recommended_value_bets mais qu'un marché direct est validé
+                    if not valid_vbs:
+                        for k in ["vb_p1", "vb_p2", "vb_over", "vb_under", "vb_h1", "vb_h2", "vb_tb_yes", "vb_tb_no"]:
+                            vb_item = pred_res.get(k)
+                            if vb_item and vb_item.get("is_value_bet"):
+                                valid_vbs.append(vb_item)
+                                break
+
+                    m_item["all_value_bets"] = valid_vbs
+                    if valid_vbs:
                         m_item["has_value_bet"] = True
-                        m_item["top_value_bet"] = winner_vbs[0]
+                        m_item["top_value_bet"] = valid_vbs[0]
                         total_vbs_found += 1
+                    else:
+                        m_item["has_value_bet"] = False
+                        m_item["top_value_bet"] = None
                 except Exception as pe:
                     logger.warning(f"Erreur prédiction pour {p1_resolved} vs {p2_resolved}: {pe}")
 

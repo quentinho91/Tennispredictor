@@ -375,17 +375,18 @@ def evaluate_market_value(
     match_confidence: Optional[Any] = None
 ) -> Optional[Dict[str, Any]]:
     """
-    Évalue un Value Bet de façon rigoureuse avec Consensus Hybride & Filtrage Actif :
-    1. Retire la marge (overround / vig) du bookmaker si les deux côtés du marché sont renseignés.
-    2. CONSENSUS HYBRIDE (Market Shrinkage) :
-       - P_finale = 70% P_modèle + 30% P_marché
-       - Ancre la prédiction dans la réalité du marché pour éliminer les erreurs d'estimation.
-    3. PROTECTION ANOMALIE DE MARCHÉ :
-       - Si l'écart entre l'IA et le marché dépasse 25%, alerte anomalie (suspicion de blessure / forfait).
-    4. FILTRE ACTIF DE CONFIANCE :
-       - Score < 45% : Blocage total (is_vb = False, Kelly = 0.0).
-       - Score 45-70% : Amortissement Kelly x 0.5 (demi-mise).
-       - Score >= 70% : Pleine exposition Kelly.
+    Évalue un Value Bet avec Consensus Hybride Dynamique & Filtrage Sélectif Anti-Faux Positifs :
+    1. Déduit la probabilité implicite du marché (sans le vig/overround du bookmaker).
+    2. CONSENSUS HYBRIDE ADAPTATIF :
+       - Confiance >= 72% : 65% Modèle + 35% Marché
+       - Confiance 58-72% : 50% Modèle + 50% Marché (ancrage au marché réduisant les faux écarts)
+       - Confiance < 58% : 35% Modèle + 65% Marché
+    3. FILTRAGE STRICT DES VALUE BETS :
+       - Confiance < 58% : BLOCKED (incertitude supérieure à l'avantage théorique).
+       - Confiance 58-72% : Edge >= 6.0%, EV >= 7.0%, Kelly amorti 50%.
+       - Confiance >= 72% : Edge >= 4.5%, EV >= 5.0%, Plein Kelly.
+       - Filtre Outsiders (Cote > 3.80 ou prob < 25%) : Exige Edge >= 8.0%, EV >= 10.0%, Conf >= 65%.
+       - Filtre Ultra-favoris (Cote < 1.15) : Bloqué (risque d'abandon/blessure asymétrique).
     """
     if not odds or odds <= 1.0 or prob <= 0.01 or prob >= 0.99:
         return None
@@ -401,10 +402,28 @@ def evaluate_market_value(
         # Si seule une cote est renseignée, on applique une marge bookmaker standard de 5.5%
         market_prob = (1.0 / odds) / 1.055
 
+    # Extraction du score de confiance
+    conf_score = 70.0
+    if match_confidence is not None:
+        if isinstance(match_confidence, dict):
+            conf_score = float(match_confidence.get("score", 70.0))
+        else:
+            try:
+                conf_score = float(match_confidence)
+            except Exception:
+                conf_score = 70.0
+
     # --------------------------------------------------------------------------
-    # CONSENSUS HYBRIDE : 70% Modèle IA + 30% Marché Bookmaker
+    # CONSENSUS HYBRIDE ADAPTATIF
     # --------------------------------------------------------------------------
-    blended_prob = 0.70 * raw_model_prob + 0.30 * market_prob
+    if conf_score >= 72.0:
+        w_model, w_market = 0.65, 0.35
+    elif conf_score >= 58.0:
+        w_model, w_market = 0.50, 0.50
+    else:
+        w_model, w_market = 0.35, 0.65
+
+    blended_prob = w_model * raw_model_prob + w_market * market_prob
     blended_prob = float(np.clip(blended_prob, 0.01, 0.99))
 
     fair_odds = round(1.0 / blended_prob, 2)
@@ -418,43 +437,77 @@ def evaluate_market_value(
     is_market_anomaly = bool(market_divergence >= 0.25)
 
     # --------------------------------------------------------------------------
-    # FILTRAGE ACTIF PAR LE SCORE DE CONFIANCE
+    # FILTRAGE SÉLECTIF HAUTE CONVICTION
     # --------------------------------------------------------------------------
-    conf_score = 70.0
-    if match_confidence is not None:
-        if isinstance(match_confidence, dict):
-            conf_score = float(match_confidence.get("score", 70.0))
-        else:
-            try:
-                conf_score = float(match_confidence)
-            except Exception:
-                conf_score = 70.0
+    is_vb = False
+    confidence_damping = 0.0
+    confidence_status = "NO_VALUE"
+    confidence_note = ""
 
     if is_market_anomaly:
         is_vb = False
         confidence_damping = 0.0
         confidence_status = "BLOCKED_MARKET_ANOMALY"
         confidence_note = f"Alerte anomalie de marché (écart {market_divergence*100:.0f}%) : Suspicion de blessure ou forfait de dernière minute"
-    elif conf_score < 45.0:
+    elif odds < 1.15:
+        is_vb = False
+        confidence_damping = 0.0
+        confidence_status = "BLOCKED_ULTRA_LOW_ODDS"
+        confidence_note = "Cote ultra-faible (< 1.15) : Ratio risque/rendement insuffisant face aux risques d'abandon"
+    elif conf_score < 58.0:
         is_vb = False
         confidence_damping = 0.0
         confidence_status = "BLOCKED_LOW_CONFIDENCE"
-        confidence_note = "Bloqué par l'indice de confiance (< 45%) : Risque d'estimation élevé"
-    elif conf_score < 70.0:
-        is_vb = bool(edge >= 0.035 and ev >= 0.040)
-        confidence_damping = 0.50
-        confidence_status = "DAMPED_MEDIUM_CONFIDENCE"
-        confidence_note = "Mise amortie (-50%) en raison d'une confiance modérée"
+        confidence_note = f"Bloqué par l'indice de confiance ({conf_score:.1f}% < 58%) : Données insuffisantes ou incertitude élevée"
+    elif odds > 3.80 or blended_prob < 0.25:
+        # Filtre spécifique outsider / grosse cote (évite les pièges à forte variance)
+        if edge >= 0.080 and ev >= 0.100 and conf_score >= 65.0:
+            is_vb = True
+            confidence_damping = 0.40
+            confidence_status = "HIGH_ODDS_VALUE"
+            confidence_note = "Grosse cote validée avec marge de sécurité renforcée (Edge > 8%, EV > 10%)"
+        else:
+            is_vb = False
+            confidence_damping = 0.0
+            confidence_status = "BLOCKED_LONGSHOT"
+            confidence_note = "Grosse cote (> 3.80) non qualifiée : Marge de sécurité insuffisante"
+    elif conf_score < 72.0:
+        # Confiance modérée : nécessite un avantage net (Edge >= 6%, EV >= 7%)
+        if edge >= 0.060 and ev >= 0.070:
+            is_vb = True
+            confidence_damping = 0.50
+            confidence_status = "DAMPED_MEDIUM_CONFIDENCE"
+            confidence_note = "Mise amortie (-50%) : Confiance modérée avec avantage solide (Edge > 6%, EV > 7%)"
+        else:
+            is_vb = False
+            confidence_damping = 0.0
+            confidence_status = "LOW_EV"
+            confidence_note = "Avantage insuffisant pour valider en confiance modérée (requis: Edge >= 6%, EV >= 7%)"
     else:
-        is_vb = bool(edge >= 0.035 and ev >= 0.040)
-        confidence_damping = 1.0
-        confidence_status = "FULL_HIGH_CONFIDENCE"
-        confidence_note = "Consensus Hybride validé : Pleine confiance"
+        # Haute confiance : seuil standard (Edge >= 4.5%, EV >= 5%)
+        if edge >= 0.045 and ev >= 0.050:
+            is_vb = True
+            confidence_damping = 1.0
+            confidence_status = "FULL_HIGH_CONFIDENCE"
+            confidence_note = "Consensus Hybride validé : Pleine confiance (Edge > 4.5%, EV > 5%)"
+        else:
+            is_vb = False
+            confidence_damping = 0.0
+            confidence_status = "LOW_EV"
+            confidence_note = "Avantage insuffisant en pleine confiance (requis: Edge >= 4.5%, EV >= 5%)"
 
     b = odds - 1.0
     kelly_full = max(0.0, min((blended_prob * odds - 1.0) / b, 0.15)) * confidence_damping if b > 0 else 0.0
     kelly_half = max(0.0, min(kelly_full * 0.50, 0.08))
     kelly_quarter = max(0.0, min(kelly_full * 0.25, 0.05))
+
+    badge = "VALUE_BET" if is_vb else (
+        "ANOMALY" if is_market_anomaly else (
+            "BLOCKED" if (edge >= 0.04 and ev >= 0.04 and conf_score < 58.0) else (
+                "LOW_EV" if (edge >= 0.02 and ev >= 0.03) else "NO_VALUE"
+            )
+        )
+    )
 
     return {
         "market": market_name,
@@ -475,7 +528,7 @@ def evaluate_market_value(
         "confidence_note": confidence_note,
         "is_market_anomaly": is_market_anomaly,
         "is_value_bet": is_vb,
-        "badge": "VALUE_BET" if is_vb else ("ANOMALY" if is_market_anomaly else ("BLOCKED" if (edge >= 0.035 and ev >= 0.040 and conf_score < 45.0) else ("LOW_EV" if (edge >= 0.015 and ev >= 0.02) else "NO_VALUE")))
+        "badge": badge
     }
 
 
@@ -1078,16 +1131,16 @@ def _run_background_sync():
         PLAYERS_CACHE.clear()
         gc.collect()
 
-        # 1. Télécharger les matchs récents
-        subprocess.run([sys.executable, str(BASE_DIR / "src" / "00_download_data.py")], check=True, timeout=120)
+        # 1. Télécharger les matchs récents (parallélisé, rapide)
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "00_download_data.py")], check=True, timeout=300)
 
         with SYNC_LOCK:
             SYNC_STATE["step"] = "dataset"
             SYNC_STATE["message"] = "Reconstruction des datasets ATP & WTA (2/3)..."
 
         # 2. Reconstruire le dataset pour ATP et WTA
-        subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "atp"], check=True, timeout=120)
-        subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "wta"], check=True, timeout=120)
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "atp"], check=True, timeout=300)
+        subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "wta"], check=True, timeout=300)
 
         with SYNC_LOCK:
             SYNC_STATE["step"] = "state"
