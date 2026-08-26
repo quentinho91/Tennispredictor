@@ -1940,16 +1940,240 @@ function toggleParlaySelection(index) {
 }
 window.toggleParlaySelection = toggleParlaySelection;
 
+function computeClientParlays(matches) {
+  if (!matches || !Array.isArray(matches) || matches.length === 0) {
+    return { has_parlays: false, max_odds: null, safe: null, value: null };
+  }
+
+  const validCandidates = [];
+  const vbCandidates = [];
+
+  matches.forEach(m => {
+    const pred = m.prediction;
+    if (!pred) return;
+
+    const p1 = m.p1 || '';
+    const p2 = m.p2 || '';
+    const odds1 = m.odds1;
+    const odds2 = m.odds2;
+    const proba1 = pred.proba_p1;
+    const proba2 = pred.proba_p2;
+    const confScore = pred.match_confidence || 75;
+    const tourn = m.sport_title || m.tournament || 'Tournoi';
+    const surf = m.surface || 'Hard';
+    const circuit = (m.circuit || 'atp').toUpperCase();
+    const timeDisp = m.time_display || 'Aujourd\'hui';
+    const mId = m.id || `${p1}_${p2}`;
+
+    let favName = null;
+    let favOdds = null;
+    let favProba = null;
+    let dogName = null;
+
+    if (proba1 !== undefined && proba2 !== undefined && odds1 && odds2) {
+      if (proba1 >= proba2 && parseFloat(odds1) >= 1.12) {
+        favName = p1;
+        favOdds = parseFloat(odds1);
+        favProba = parseFloat(proba1);
+        dogName = p2;
+      } else if (proba2 > proba1 && parseFloat(odds2) >= 1.12) {
+        favName = p2;
+        favOdds = parseFloat(odds2);
+        favProba = parseFloat(proba2);
+        dogName = p1;
+      }
+
+      if (favName && !isNaN(favOdds)) {
+        const relScore = (favProba * 0.70) + (Math.min(confScore, 100) / 100.0 * 0.30);
+        let reason = `Proba IA ${(favProba * 100).toFixed(1)}% vs ${dogName}`;
+        if (favProba >= 0.75) reason = `Favori solide (${(favProba * 100).toFixed(1)}% proba IA)`;
+        else if (favProba >= 0.65) reason = `Avantage net (${(favProba * 100).toFixed(1)}% proba IA)`;
+
+        validCandidates.push({
+          match_id: mId,
+          p1, p2,
+          match_display: `${p1} vs ${p2}`,
+          selection: favName,
+          selection_label: `Victoire ${favName}`,
+          market: "Vainqueur Match",
+          odds: parseFloat(favOdds.toFixed(2)),
+          prob_pct: parseFloat((favProba * 100).toFixed(1)),
+          confidence_score: parseFloat(Number(confScore).toFixed(1)),
+          tournament: tourn,
+          surface: surf,
+          circuit,
+          time_display: timeDisp,
+          reason,
+          reliability_score: relScore,
+          is_value_bet: Boolean(m.has_value_bet)
+        });
+      }
+    }
+
+    if (m.has_value_bet && m.top_value_bet) {
+      const tvb = m.top_value_bet;
+      const vbProb = (tvb.prob > 1 ? tvb.prob / 100 : tvb.prob) || 0.5;
+      const vbOdds = parseFloat(tvb.offered_odds || 2.0);
+      if (vbOdds && !isNaN(vbOdds)) {
+        vbCandidates.push({
+          match_id: mId,
+          p1, p2,
+          match_display: `${p1} vs ${p2}`,
+          selection: tvb.selection || 'Value Bet',
+          selection_label: tvb.selection || 'Value Bet',
+          market: tvb.market || 'Value Bet',
+          odds: parseFloat(vbOdds.toFixed(2)),
+          prob_pct: parseFloat((vbProb * 100).toFixed(1)),
+          confidence_score: parseFloat(Number(tvb.confidence?.score || confScore).toFixed(1)),
+          ev_pct: tvb.ev_pct || 0.0,
+          edge_pct: tvb.edge_pct || 0.0,
+          tournament: tourn,
+          surface: surf,
+          circuit,
+          time_display: timeDisp,
+          reason: `Value Bet (+${tvb.ev_pct || 0}% EV)`,
+          reliability_score: (vbProb * 0.5) + (Math.min(confScore, 100) / 100.0 * 0.3),
+          is_value_bet: true
+        });
+      }
+    }
+  });
+
+  function buildPayload(picks, pType, title, icon, badge, desc) {
+    if (!picks || picks.length < 2) return null;
+    let totalOdds = 1.0;
+    let cumProb = 1.0;
+    let confSum = 0;
+    picks.forEach(p => {
+      totalOdds *= p.odds;
+      cumProb *= (p.prob_pct / 100.0);
+      confSum += p.confidence_score;
+    });
+    totalOdds = parseFloat(totalOdds.toFixed(2));
+    const cumProbPct = parseFloat((cumProb * 100.0).toFixed(1));
+    const fairOdds = parseFloat((1.0 / Math.max(cumProb, 0.001)).toFixed(2));
+    const evPct = parseFloat(((cumProb * totalOdds - 1.0) * 100.0).toFixed(1));
+    const avgConf = parseFloat((confSum / picks.length).toFixed(1));
+    const confLabel = avgConf >= 78 ? "Très haute confiance" : (avgConf >= 65 ? "Bonne confiance" : "Confiance modérée");
+
+    return {
+      type: pType,
+      title, icon, badge,
+      description: desc,
+      selections: picks,
+      count: picks.length,
+      total_odds: totalOdds,
+      combined_prob_pct: cumProbPct,
+      fair_odds: fairOdds,
+      ev_pct: evPct,
+      confidence_score: avgConf,
+      confidence_label: confLabel
+    };
+  }
+
+  // 1. Max Odds
+  const sortedCandidates = [...validCandidates].sort((a, b) => b.reliability_score - a.reliability_score);
+  const maxOddsPicks = [];
+  const seenMatches = new Set();
+  for (const c of sortedCandidates) {
+    if (!seenMatches.has(c.match_id)) {
+      if (maxOddsPicks.length < 2 || c.prob_pct >= 60.0) {
+        maxOddsPicks.push(c);
+        seenMatches.add(c.match_id);
+      }
+      if (maxOddsPicks.length >= 6) break;
+    }
+  }
+  if (maxOddsPicks.length < 2 && sortedCandidates.length >= 2) {
+    maxOddsPicks.push(...sortedCandidates.slice(0, Math.min(4, sortedCandidates.length)));
+  }
+
+  const maxOddsParlay = buildPayload(
+    maxOddsPicks,
+    "max_odds",
+    "Combiné IA Optimisé (Max Cote)",
+    "🔥",
+    "Multiplicateur Maximal",
+    "Empilement optimisé des meilleures sélections de la journée pour maximiser le gain tout en restant très crédible."
+  );
+
+  // 2. Safe
+  const safeSorted = [...validCandidates].sort((a, b) => b.prob_pct - a.prob_pct);
+  const safePicks = [];
+  const seenSafe = new Set();
+  for (const c of safeSorted) {
+    if (!seenSafe.has(c.match_id)) {
+      safePicks.push(c);
+      seenSafe.add(c.match_id);
+      if (safePicks.length >= 3) break;
+    }
+  }
+
+  const safeParlay = buildPayload(
+    safePicks,
+    "safe",
+    "Combiné Sécurité IA",
+    "🛡️",
+    "Haute Probabilité",
+    "Les 2 à 3 favoris les plus indiscutables de la journée pour limiter au maximum la variance."
+  );
+
+  // 3. Value
+  const valueSorted = [...vbCandidates].sort((a, b) => (b.ev_pct || 0) - (a.ev_pct || 0));
+  const valuePicks = [];
+  const seenVb = new Set();
+  for (const c of valueSorted) {
+    if (!seenVb.has(c.match_id)) {
+      valuePicks.push(c);
+      seenVb.add(c.match_id);
+      if (valuePicks.length >= 3) break;
+    }
+  }
+
+  const valueParlay = buildPayload(
+    valuePicks,
+    "value",
+    "Combiné Value Bets EV+",
+    "🚀",
+    "Espérance Positive",
+    "Combinaison des meilleures opportunités mathématiques où les cotes offertes sous-estiment les probabilités réelles."
+  );
+
+  return {
+    has_parlays: Boolean(maxOddsParlay || safeParlay || valueParlay),
+    max_odds: maxOddsParlay,
+    safe: safeParlay,
+    value: valueParlay
+  };
+}
+
+function scrollToDailyParlay() {
+  const container = document.getElementById('daily-parlay-container');
+  if (container) {
+    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    container.style.boxShadow = '0 0 35px 5px rgba(245, 158, 11, 0.5)';
+    setTimeout(() => {
+      container.style.boxShadow = '';
+    }, 1500);
+  }
+}
+window.scrollToDailyParlay = scrollToDailyParlay;
+
 function renderDailyParlay(parlaysData, matchesFallback) {
   const container = document.getElementById('daily-parlay-container');
   if (!container) return;
 
-  if (!parlaysData || !parlaysData.has_parlays) {
+  let effectiveParlays = parlaysData;
+  if (!effectiveParlays || !effectiveParlays.has_parlays) {
+    effectiveParlays = computeClientParlays(matchesFallback || currentScannerMatches);
+  }
+
+  if (!effectiveParlays || !effectiveParlays.has_parlays) {
     container.style.display = 'none';
     return;
   }
 
-  currentDailyParlays = parlaysData;
+  currentDailyParlays = effectiveParlays;
   initActiveParlaySelections();
   container.style.display = 'block';
   renderParlayUI();
@@ -2198,10 +2422,8 @@ function applyScannerData(data, timeStr) {
     }
   }
 
-  // Rendu du Combiné du Jour IA
-  if (data.daily_parlays) {
-    renderDailyParlay(data.daily_parlays, data.matches);
-  }
+  // Rendu du Combiné du Jour IA (généré ou fallback calculé en direct)
+  renderDailyParlay(data.daily_parlays, data.matches);
 
   renderScannerGrid();
 }

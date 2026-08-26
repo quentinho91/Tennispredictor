@@ -108,6 +108,9 @@
               <button type="button" class="filter-btn highlight" data-filter="vb" id="btn-filter-vb">
                 🎯 Value Bets (<span id="count-vb-matches">0</span>)
               </button>
+              <button type="button" class="filter-btn highlight" id="btn-filter-parlay" onclick="scrollToDailyParlay()" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.35)); border-color: rgba(245, 158, 11, 0.6); color: #fbbf24; font-weight: 800;">
+                <span>🎫</span> Combiné du Jour
+              </button>
             </div>
 
             <div class="scanner-actions">
@@ -124,16 +127,10 @@
           </div>
         </div>
 
-        <!-- Tournaments Quick Filter Bar -->
-        <div id="scanner-tourneys-bar" class="scanner-tourneys-bar"></div>
-
-        <!-- Demo / API Key status banner -->
-        <div id="scanner-mode-banner" class="scanner-mode-banner" style="display: none;"></div>
-
         <!-- ============================================================
              SECTION COMBINÉ DU JOUR IA (OPTIMISÉ MAX COTE & SÉCURITÉ)
              ============================================================ -->
-        <div id="daily-parlay-container" class="daily-parlay-container" style="display: none;">
+        <div id="daily-parlay-container" class="daily-parlay-container">
           <div class="parlay-card">
             <!-- Header du Combiné -->
             <div class="parlay-header">
@@ -204,6 +201,12 @@
             </div>
           </div>
         </div>
+
+        <!-- Tournaments Quick Filter Bar -->
+        <div id="scanner-tourneys-bar" class="scanner-tourneys-bar"></div>
+
+        <!-- Demo / API Key status banner -->
+        <div id="scanner-mode-banner" class="scanner-mode-banner" style="display: none;"></div>
 
         <!-- Loading State -->
         <div id="scanner-loading" class="scanner-loading" style="display: none;">
