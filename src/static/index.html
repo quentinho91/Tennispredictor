@@ -130,6 +130,81 @@
         <!-- Demo / API Key status banner -->
         <div id="scanner-mode-banner" class="scanner-mode-banner" style="display: none;"></div>
 
+        <!-- ============================================================
+             SECTION COMBINÉ DU JOUR IA (OPTIMISÉ MAX COTE & SÉCURITÉ)
+             ============================================================ -->
+        <div id="daily-parlay-container" class="daily-parlay-container" style="display: none;">
+          <div class="parlay-card">
+            <!-- Header du Combiné -->
+            <div class="parlay-header">
+              <div class="parlay-title-wrap">
+                <div class="parlay-badge-group">
+                  <span class="parlay-main-icon" id="parlay-main-icon">🔥</span>
+                  <span class="parlay-badge-tag" id="parlay-badge-tag">Multiplicateur Maximal</span>
+                  <span class="parlay-live-indicator"><span class="pulse-dot"></span> Recommandation IA</span>
+                </div>
+                <h3 class="parlay-title" id="parlay-title">Combiné IA Optimisé (Max Cote)</h3>
+                <p class="parlay-desc" id="parlay-desc">Empilement optimisé des meilleures sélections de la journée pour maximiser le gain tout en restant très crédible.</p>
+              </div>
+
+              <!-- Switcher de modes de combiné -->
+              <div class="parlay-mode-switcher">
+                <button type="button" class="parlay-mode-btn active" data-mode="max_odds" onclick="switchParlayMode('max_odds')">
+                  <span>🔥</span> Max Cote
+                </button>
+                <button type="button" class="parlay-mode-btn" data-mode="safe" onclick="switchParlayMode('safe')">
+                  <span>🛡️</span> Sécurité (2-3)
+                </button>
+                <button type="button" class="parlay-mode-btn" data-mode="value" onclick="switchParlayMode('value')">
+                  <span>🚀</span> Value Bets
+                </button>
+              </div>
+            </div>
+
+            <!-- Liste des sélections du combiné -->
+            <div class="parlay-body">
+              <div class="parlay-selections-header">
+                <span class="parlay-selections-count-label" id="parlay-selections-count">Sélections incluses (0)</span>
+                <span class="parlay-tip">💡 Vous pouvez cocher/décocher des matchs pour personnaliser votre combiné</span>
+              </div>
+              <div class="parlay-selections-list" id="parlay-selections-list">
+                <!-- Injected via JavaScript -->
+              </div>
+            </div>
+
+            <!-- Résumé du Ticket (Betting Slip Recap) -->
+            <div class="parlay-slip-footer">
+              <div class="parlay-metrics-grid">
+                <div class="parlay-metric-item highlight-gold">
+                  <span class="p-metric-label">Cote Totale</span>
+                  <span class="p-metric-val" id="parlay-total-odds">@ 1.00</span>
+                </div>
+                <div class="parlay-metric-item">
+                  <span class="p-metric-label">Probabilité IA</span>
+                  <span class="p-metric-val text-emerald" id="parlay-combined-prob">0.0%</span>
+                </div>
+                <div class="parlay-metric-item">
+                  <span class="p-metric-label">Mise Conseillée</span>
+                  <span class="p-metric-val" id="parlay-stake-amount">10.00 €</span>
+                </div>
+                <div class="parlay-metric-item highlight-emerald">
+                  <span class="p-metric-label">Gain Net Estimé</span>
+                  <span class="p-metric-val text-emerald" id="parlay-net-gain">+0.00 €</span>
+                </div>
+              </div>
+
+              <div class="parlay-actions-bar">
+                <div class="parlay-conf-tag" id="parlay-confidence-tag">
+                  🔥 Confiance : <b>82%</b> (Très haute)
+                </div>
+                <button type="button" id="btn-copy-parlay" class="btn-copy-parlay" onclick="copyParlayTicket()">
+                  <span id="btn-copy-icon">📋</span> <span id="btn-copy-text">Copier le ticket</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Loading State -->
         <div id="scanner-loading" class="scanner-loading" style="display: none;">
           <span class="scanner-spinner">⏳</span> Analyse des tournois ATP &amp; WTA et scan des cotes en cours...

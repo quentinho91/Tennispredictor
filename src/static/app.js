@@ -163,8 +163,9 @@ function calculateStake(bankroll, strategy, vbObj) {
 }
 
 function updateAllStakeAmounts() {
-  // 1. Mettre à jour la grille du scanner
+  // 1. Mettre à jour la grille du scanner & combiné du jour
   renderScannerGrid();
+  renderParlayUI();
 
   // 2. Mettre à jour le container value bets de l'analyse manuelle s'il est visible
   const cardBkInput = document.getElementById('user-bankroll-input');
@@ -1897,6 +1898,251 @@ function saveApiKeyAndRefresh() {
 }
 window.saveApiKeyAndRefresh = saveApiKeyAndRefresh;
 
+// ==========================================================================
+// COMBINÉ DU JOUR IA - GESTIONNAIRE & INTERACTIVITÉ
+// ==========================================================================
+let currentDailyParlays = null;
+let activeParlayMode = 'max_odds'; // 'max_odds' | 'safe' | 'value'
+let activeParlaySelections = [];
+let activeParlayCheckedIndices = new Set();
+
+function switchParlayMode(mode) {
+  activeParlayMode = mode;
+  document.querySelectorAll('.parlay-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  initActiveParlaySelections();
+  renderParlayUI();
+}
+window.switchParlayMode = switchParlayMode;
+
+function initActiveParlaySelections() {
+  if (!currentDailyParlays) return;
+  const pData = currentDailyParlays[activeParlayMode];
+  if (pData && pData.selections && pData.selections.length > 0) {
+    activeParlaySelections = pData.selections.map(s => ({ ...s }));
+    activeParlayCheckedIndices = new Set(activeParlaySelections.map((_, i) => i));
+  } else {
+    activeParlaySelections = [];
+    activeParlayCheckedIndices = new Set();
+  }
+}
+
+function toggleParlaySelection(index) {
+  if (activeParlayCheckedIndices.has(index)) {
+    if (activeParlayCheckedIndices.size > 1) {
+      activeParlayCheckedIndices.delete(index);
+    }
+  } else {
+    activeParlayCheckedIndices.add(index);
+  }
+  renderParlayUI();
+}
+window.toggleParlaySelection = toggleParlaySelection;
+
+function renderDailyParlay(parlaysData, matchesFallback) {
+  const container = document.getElementById('daily-parlay-container');
+  if (!container) return;
+
+  if (!parlaysData || !parlaysData.has_parlays) {
+    container.style.display = 'none';
+    return;
+  }
+
+  currentDailyParlays = parlaysData;
+  initActiveParlaySelections();
+  container.style.display = 'block';
+  renderParlayUI();
+}
+
+function renderParlayUI() {
+  const container = document.getElementById('daily-parlay-container');
+  if (!container || !currentDailyParlays) return;
+
+  const pData = currentDailyParlays[activeParlayMode];
+  const titleEl = document.getElementById('parlay-title');
+  const descEl = document.getElementById('parlay-desc');
+  const iconEl = document.getElementById('parlay-main-icon');
+  const badgeEl = document.getElementById('parlay-badge-tag');
+  const listEl = document.getElementById('parlay-selections-list');
+  const countEl = document.getElementById('parlay-selections-count');
+  const totalOddsEl = document.getElementById('parlay-total-odds');
+  const combinedProbEl = document.getElementById('parlay-combined-prob');
+  const stakeEl = document.getElementById('parlay-stake-amount');
+  const netGainEl = document.getElementById('parlay-net-gain');
+  const confTagEl = document.getElementById('parlay-confidence-tag');
+
+  if (!pData || !activeParlaySelections || activeParlaySelections.length === 0) {
+    if (listEl) {
+      listEl.innerHTML = `<div class="parlay-empty-msg" style="padding: 20px; text-align: center; color: #94a3b8; font-size: 13.5px; background: rgba(15,23,42,0.6); border-radius: 12px; border: 1px dashed rgba(255,255,255,0.1);">⚠️ Aucun match correspondant aux critères stricts pour ce profil aujourd'hui. Essayez l'onglet <b>🔥 Max Cote</b>.</div>`;
+    }
+    if (countEl) countEl.textContent = 'Aucune sélection';
+    if (totalOddsEl) totalOddsEl.textContent = '@ 1.00';
+    if (combinedProbEl) combinedProbEl.textContent = '0.0%';
+    if (stakeEl) stakeEl.textContent = '10.00 €';
+    if (netGainEl) netGainEl.textContent = '+0.00 €';
+    return;
+  }
+
+  if (titleEl) titleEl.textContent = pData.title || 'Combiné du Jour IA';
+  if (descEl) descEl.textContent = pData.description || '';
+  if (iconEl) iconEl.textContent = pData.icon || '🔥';
+  if (badgeEl) badgeEl.textContent = pData.badge || 'Recommandation';
+
+  // Calculs dynamiques basés sur les sélections cochées
+  const checkedItems = activeParlaySelections.filter((_, idx) => activeParlayCheckedIndices.has(idx));
+  
+  let dynamicTotalOdds = 1.0;
+  let dynamicCumProb = 1.0;
+  let confSum = 0;
+
+  checkedItems.forEach(item => {
+    dynamicTotalOdds *= item.odds;
+    dynamicCumProb *= (item.prob_pct / 100.0);
+    confSum += (item.confidence_score || 75);
+  });
+
+  if (checkedItems.length === 0) {
+    dynamicTotalOdds = 1.0;
+    dynamicCumProb = 0.0;
+  }
+
+  const dynamicOddsFormatted = dynamicTotalOdds.toFixed(2);
+  const dynamicProbFormatted = (dynamicCumProb * 100.0).toFixed(1);
+  const avgConf = checkedItems.length > 0 ? Math.round(confSum / checkedItems.length) : 75;
+
+  // Calcul de mise depuis bankroll
+  const userBk = getUserBankroll();
+  const userStrat = getUserStrategy();
+  let stakePct = 2.0;
+  if (activeParlayMode === 'safe') stakePct = 2.5;
+  else if (activeParlayMode === 'value') stakePct = 1.5;
+  else if (checkedItems.length >= 4) stakePct = 1.0;
+
+  if (userStrat === 'half') stakePct *= 0.5;
+  else if (userStrat === 'full') stakePct *= 1.5;
+
+  const stakeAmount = Math.max(1, Math.round((userBk * (stakePct / 100.0)) * 2) / 2);
+  const netGain = Math.max(0, (stakeAmount * dynamicTotalOdds) - stakeAmount);
+
+  if (countEl) {
+    countEl.textContent = `Sélections (${checkedItems.length}/${activeParlaySelections.length} actives)`;
+  }
+  if (totalOddsEl) totalOddsEl.textContent = `@ ${dynamicOddsFormatted}`;
+  if (combinedProbEl) combinedProbEl.textContent = `${dynamicProbFormatted}%`;
+  if (stakeEl) stakeEl.innerHTML = `<b>${stakeAmount.toFixed(2)} €</b> <span style="font-size:11px; color:#94a3b8;">(${stakePct.toFixed(1)}%)</span>`;
+  if (netGainEl) netGainEl.textContent = `+${netGain.toFixed(2)} €`;
+  if (confTagEl) {
+    const iconConf = avgConf >= 78 ? '🔥' : (avgConf >= 65 ? '🎯' : '⚖️');
+    const labelConf = avgConf >= 78 ? 'Très haute' : (avgConf >= 65 ? 'Bonne' : 'Modérée');
+    confTagEl.innerHTML = `${iconConf} Confiance : <b>${avgConf}%</b> (${labelConf})`;
+  }
+
+  // Rendu de la liste des sélections
+  if (listEl) {
+    let listHtml = '';
+    activeParlaySelections.forEach((sel, idx) => {
+      const isChecked = activeParlayCheckedIndices.has(idx);
+      const isAtp = (sel.circuit || 'ATP').toUpperCase() === 'ATP';
+      const cPill = isAtp ? `<span class="parlay-circuit atp">🏆 ATP</span>` : `<span class="parlay-circuit wta">👑 WTA</span>`;
+
+      listHtml += `
+        <div class="parlay-item-card ${isChecked ? 'is-checked' : 'is-unchecked'}" onclick="toggleParlaySelection(${idx})">
+          <div class="parlay-item-check">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleParlaySelection(${idx});" />
+          </div>
+
+          <div class="parlay-item-info">
+            <div class="parlay-item-top">
+              ${cPill}
+              <span class="parlay-item-tourney">🏟️ ${escapeHtml(sel.tournament)} • ${escapeHtml(sel.surface)}</span>
+              <span class="parlay-item-time">⏰ ${escapeHtml(sel.time_display)}</span>
+            </div>
+
+            <div class="parlay-item-match" title="Cliquer pour voir le rapport détaillé" onclick="event.stopPropagation(); openMatchDetailModal('${sel.match_id}')">
+              <span class="parlay-match-name">${escapeHtml(sel.match_display)}</span>
+              <span class="parlay-inspect-btn">🔍 Analyse</span>
+            </div>
+
+            <div class="parlay-item-selection-row">
+              <div class="parlay-selection-badge">
+                <span class="parlay-sel-icon">👉</span>
+                <span class="parlay-sel-name"><b>${escapeHtml(sel.selection_label || sel.selection)}</b></span>
+              </div>
+              <div class="parlay-selection-meta">
+                <span class="parlay-sel-prob" title="Probabilité estimée par l'IA">IA : <b>${sel.prob_pct}%</b></span>
+                <span class="parlay-sel-odds">@ ${sel.odds.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div class="parlay-item-reason">
+              <span>💡 ${escapeHtml(sel.reason || 'Avantage statistique et forme validée')}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    listEl.innerHTML = listHtml;
+  }
+}
+
+function copyParlayTicket() {
+  if (!activeParlaySelections || activeParlaySelections.length === 0) return;
+  const checkedItems = activeParlaySelections.filter((_, idx) => activeParlayCheckedIndices.has(idx));
+  if (checkedItems.length === 0) return;
+
+  let totalOdds = 1.0;
+  let cumProb = 1.0;
+  checkedItems.forEach(it => {
+    totalOdds *= it.odds;
+    cumProb *= (it.prob_pct / 100.0);
+  });
+
+  const now = new Date();
+  const dStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+  const userBk = getUserBankroll();
+  const userStrat = getUserStrategy();
+  let stakePct = 2.0;
+  if (activeParlayMode === 'safe') stakePct = 2.5;
+  else if (activeParlayMode === 'value') stakePct = 1.5;
+  else if (checkedItems.length >= 4) stakePct = 1.0;
+  if (userStrat === 'half') stakePct *= 0.5;
+  else if (userStrat === 'full') stakePct *= 1.5;
+
+  const stakeAmount = Math.max(1, Math.round((userBk * (stakePct / 100.0)) * 2) / 2);
+  const netGain = Math.max(0, (stakeAmount * totalOdds) - stakeAmount);
+
+  let text = `🎾 TENNIS PREDICTOR AI • COMBINÉ DU JOUR (${dStr})\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  checkedItems.forEach((it, i) => {
+    text += `${i + 1}. [${it.circuit}] ${it.match_display}\n`;
+    text += `   👉 Choix : ${it.selection_label || it.selection} @ ${it.odds.toFixed(2)} (Proba IA: ${it.prob_pct}%)\n`;
+  });
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `📊 Cote Totale : @ ${totalOdds.toFixed(2)}\n`;
+  text += `🎯 Proba Estimée IA : ${(cumProb * 100).toFixed(1)}%\n`;
+  text += `💶 Mise conseillée : ${stakeAmount.toFixed(2)} € ➔ Gain net estimé : +${netGain.toFixed(2)} €\n`;
+  text += `⚡ Généré par XGBoost Pure & Modèle Markovien Barnett-Clarke`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    const btnText = document.getElementById('btn-copy-text');
+    const btnIcon = document.getElementById('btn-copy-icon');
+    if (btnText && btnIcon) {
+      const origText = btnText.textContent;
+      const origIcon = btnIcon.textContent;
+      btnText.textContent = 'Ticket Copié !';
+      btnIcon.textContent = '✅';
+      setTimeout(() => {
+        btnText.textContent = origText;
+        btnIcon.textContent = origIcon;
+      }, 2500);
+    }
+  }).catch(e => {
+    console.warn('Erreur copie presse-papier', e);
+  });
+}
+window.copyParlayTicket = copyParlayTicket;
+
 function applyScannerData(data, timeStr) {
   if (!data || !data.matches) return;
   currentScannerMatches = data.matches;
@@ -1950,6 +2196,11 @@ function applyScannerData(data, timeStr) {
         <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Modifier</button>
       `;
     }
+  }
+
+  // Rendu du Combiné du Jour IA
+  if (data.daily_parlays) {
+    renderDailyParlay(data.daily_parlays, data.matches);
   }
 
   renderScannerGrid();

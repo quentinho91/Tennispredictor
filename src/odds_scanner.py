@@ -452,6 +452,219 @@ def get_demo_matches(circuit: str = "all") -> List[Dict[str, Any]]:
         return atp_matches + wta_matches
 
 
+def generate_daily_parlays(analyzed_matches: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Génère automatiquement les combinés du jour optimisés par l'IA :
+    1. 'max_odds' : Maximise la cote totale en empilant les sélections les plus fiables (haute probabilité de validation).
+    2. 'safe' : Concentré des 2-3 plus gros favoris avec probabilité maximale.
+    3. 'value' : Combiné des meilleurs Value Bets détectés (si existants).
+    """
+    if not analyzed_matches:
+        return {"max_odds": None, "safe": None, "value": None, "has_parlays": False}
+
+    valid_candidates = []
+    vb_candidates = []
+
+    for m in analyzed_matches:
+        pred = m.get("prediction")
+        if not pred:
+            continue
+        p1 = m.get("p1", "")
+        p2 = m.get("p2", "")
+        odds1 = m.get("odds1")
+        odds2 = m.get("odds2")
+        proba1 = pred.get("proba_p1")
+        proba2 = pred.get("proba_p2")
+        conf_score = pred.get("match_confidence", 75)
+        tourn = m.get("sport_title") or m.get("tournament") or "Tournoi"
+        surf = m.get("surface", "Hard")
+        circuit = (m.get("circuit") or "atp").upper()
+        time_disp = m.get("time_display", "Aujourd'hui")
+        m_id = m.get("id") or f"{p1}_{p2}"
+
+        # 1. Candidat favori match sec
+        if proba1 is not None and proba2 is not None and odds1 and odds2:
+            if proba1 >= proba2 and odds1 >= 1.12:
+                fav_name = p1
+                fav_odds = float(odds1)
+                fav_proba = float(proba1)
+                dog_name = p2
+            elif proba2 > proba1 and odds2 >= 1.12:
+                fav_name = p2
+                fav_odds = float(odds2)
+                fav_proba = float(proba2)
+                dog_name = p1
+            else:
+                fav_name = None
+
+            if fav_name:
+                rel_score = (fav_proba * 0.70) + (min(conf_score, 100) / 100.0 * 0.30)
+                reason = f"Proba IA {round(fav_proba * 100, 1)}% vs {dog_name}"
+                if fav_proba >= 0.75:
+                    reason = f"Favori solide ({round(fav_proba * 100, 1)}% proba IA)"
+                elif fav_proba >= 0.65:
+                    reason = f"Avantage net ({round(fav_proba * 100, 1)}% proba IA)"
+
+                valid_candidates.append({
+                    "match_id": m_id,
+                    "p1": p1,
+                    "p2": p2,
+                    "match_display": f"{p1} vs {p2}",
+                    "selection": fav_name,
+                    "selection_label": f"Victoire {fav_name}",
+                    "market": "Vainqueur Match",
+                    "odds": round(fav_odds, 2),
+                    "prob_pct": round(fav_proba * 100, 1),
+                    "confidence_score": round(float(conf_score), 1),
+                    "tournament": tourn,
+                    "surface": surf,
+                    "circuit": circuit,
+                    "time_display": time_disp,
+                    "reason": reason,
+                    "reliability_score": rel_score,
+                    "is_value_bet": bool(m.get("has_value_bet", False))
+                })
+
+        # 2. Candidat Value Bet
+        if m.get("has_value_bet") and m.get("top_value_bet"):
+            tvb = m["top_value_bet"]
+            vb_prob = tvb.get("prob", 50.0) / 100.0 if tvb.get("prob", 50.0) > 1 else tvb.get("prob", 0.5)
+            vb_odds = tvb.get("offered_odds", 2.0)
+            if vb_odds and not math.isnan(float(vb_odds)):
+                vb_candidates.append({
+                    "match_id": m_id,
+                    "p1": p1,
+                    "p2": p2,
+                    "match_display": f"{p1} vs {p2}",
+                    "selection": tvb.get("selection", "Value Bet"),
+                    "selection_label": tvb.get("selection", "Value Bet"),
+                    "market": tvb.get("market", "Value Bet"),
+                    "odds": round(float(vb_odds), 2),
+                    "prob_pct": round(float(vb_prob * 100), 1),
+                    "confidence_score": round(float(tvb.get("confidence", {}).get("score", conf_score)), 1),
+                    "ev_pct": tvb.get("ev_pct", 0.0),
+                    "edge_pct": tvb.get("edge_pct", 0.0),
+                    "tournament": tourn,
+                    "surface": surf,
+                    "circuit": circuit,
+                    "time_display": time_disp,
+                    "reason": f"Value Bet (+{tvb.get('ev_pct', 0)}% EV)",
+                    "reliability_score": (vb_prob * 0.5) + (min(conf_score, 100) / 100.0 * 0.3) + (min(tvb.get('ev_pct', 0), 20) / 100.0 * 0.2),
+                    "is_value_bet": True
+                })
+
+    # Fonction helper pour assembler un ticket combiné
+    def build_parlay_payload(picks: List[Dict[str, Any]], p_type: str, title: str, icon: str, badge: str, desc: str) -> Optional[Dict[str, Any]]:
+        if len(picks) < 2:
+            return None
+
+        total_odds = 1.0
+        cum_prob = 1.0
+        conf_sum = 0.0
+
+        for p in picks:
+            total_odds *= p["odds"]
+            cum_prob *= (p["prob_pct"] / 100.0)
+            conf_sum += p["confidence_score"]
+
+        total_odds = round(total_odds, 2)
+        cum_prob_pct = round(cum_prob * 100.0, 1)
+        fair_odds = round(1.0 / max(cum_prob, 0.001), 2)
+        ev_pct = round((cum_prob * total_odds - 1.0) * 100.0, 1)
+        avg_conf = round(conf_sum / len(picks), 1)
+
+        conf_label = "Très haute confiance" if avg_conf >= 78 else ("Bonne confiance" if avg_conf >= 65 else "Confiance modérée")
+
+        return {
+            "type": p_type,
+            "title": title,
+            "icon": icon,
+            "badge": badge,
+            "description": desc,
+            "selections": picks,
+            "count": len(picks),
+            "total_odds": total_odds,
+            "combined_prob_pct": cum_prob_pct,
+            "fair_odds": fair_odds,
+            "ev_pct": ev_pct,
+            "confidence_score": avg_conf,
+            "confidence_label": conf_label
+        }
+
+    # 1. PARLAY MAX ODDS (Max Multiplicateur / Probable)
+    sorted_candidates = sorted(valid_candidates, key=lambda x: x["reliability_score"], reverse=True)
+    max_odds_picks = []
+    seen_matches = set()
+    for c in sorted_candidates:
+        if c["match_id"] not in seen_matches:
+            if len(max_odds_picks) < 2 or c["prob_pct"] >= 60.0:
+                max_odds_picks.append(c)
+                seen_matches.add(c["match_id"])
+            if len(max_odds_picks) >= 6:
+                break
+
+    if len(max_odds_picks) < 2 and len(sorted_candidates) >= 2:
+        max_odds_picks = sorted_candidates[:min(4, len(sorted_candidates))]
+
+    max_odds_parlay = build_parlay_payload(
+        picks=max_odds_picks,
+        p_type="max_odds",
+        title="Combiné IA Optimisé (Max Cote)",
+        icon="🔥",
+        badge="Multiplicateur Maximal",
+        desc="Empilement optimisé des meilleures sélections de la journée pour maximiser le gain tout en restant très crédible."
+    )
+
+    # 2. PARLAY SAFE (2-3 Matchs Ultra-Sécurisés)
+    safe_sorted = sorted(valid_candidates, key=lambda x: x["prob_pct"], reverse=True)
+    safe_picks = []
+    seen_safe = set()
+    for c in safe_sorted:
+        if c["match_id"] not in seen_safe:
+            safe_picks.append(c)
+            seen_safe.add(c["match_id"])
+            if len(safe_picks) >= 3:
+                break
+
+    safe_parlay = build_parlay_payload(
+        picks=safe_picks,
+        p_type="safe",
+        title="Combiné Sécurité IA",
+        icon="🛡️",
+        badge="Haute Probabilité",
+        desc="Les 2 à 3 favoris les plus indiscutables de la journée pour limiter au maximum la variance."
+    )
+
+    # 3. PARLAY VALUE (Meilleurs Value Bets)
+    sorted_vbs = sorted(vb_candidates, key=lambda x: x.get("ev_pct", 0.0), reverse=True)
+    value_picks = []
+    seen_vbs = set()
+    for c in sorted_vbs:
+        if c["match_id"] not in seen_vbs:
+            value_picks.append(c)
+            seen_vbs.add(c["match_id"])
+            if len(value_picks) >= 3:
+                break
+
+    value_parlay = build_parlay_payload(
+        picks=value_picks,
+        p_type="value",
+        title="Combiné Value Bets EV+",
+        icon="🚀",
+        badge="Espérance Positive",
+        desc="Combinaison des meilleures opportunités mathématiques où les cotes offertes sous-estiment les probabilités réelles."
+    )
+
+    has_any = bool(max_odds_parlay or safe_parlay or value_parlay)
+
+    return {
+        "has_parlays": has_any,
+        "max_odds": max_odds_parlay,
+        "safe": safe_parlay,
+        "value": value_parlay
+    }
+
+
 def scan_daily_matches(
     circuit: str = "all",
     bookmaker: str = "bet365",
@@ -465,11 +678,11 @@ def scan_daily_matches(
     """
     Exécute le scan quotidien des matchs (ATP + WTA combinés ou séparés) :
     1. Vérifie le cache en mémoire (TTL: 30 min).
-    2. Récupère les matchs via TennisExplorer (100% de couverture: US Open Qualifs, Winston-Salem, WTA, Challengers)
-       ou The Odds API (selon la source choisie).
-    3. Résout automatiquement les contextes tournois/surfaces/formats et les noms de joueurs.
+    2. Récupère les matchs via TennisExplorer ou The Odds API.
+    3. Résout automatiquement les contextes et noms des joueurs.
     4. Exécute l'analyse prédictive ML + Markov pour chaque match.
-    5. Retourne les matchs triés et enrichis pour la vue dashboard et popup modal.
+    5. Génère automatiquement les Combinés du Jour (Max Cote, Safe, Value).
+    6. Retourne les matchs et combinés enrichis.
     """
     circuit_key = circuit.lower()
     source_key = source.lower() if source else "tennisexplorer"
@@ -615,7 +828,6 @@ def scan_daily_matches(
     raw_matches = filtered_raw_matches
 
     # 3. Résolution des noms et analyse prédictive des matchs isolée par circuit
-    # pour garantir que les ressources ATP et WTA ne sont JAMAIS chargées en mémoire ensemble.
     import gc
 
     analyzed_matches = []
@@ -732,14 +944,11 @@ def scan_daily_matches(
                         "individual_probas": pred_res.get("individual_probas"),
                         "shap_explanation": pred_res.get("shap_explanation")
                     }
-                    # Garder le rapport complet pour affichage instantané dans la popup modale
                     m_item["full_report"] = pred_res
 
-                    # Filtrer les Value Bets validés
                     all_vbs = pred_res.get("recommended_value_bets", [])
                     valid_vbs = [vb for vb in all_vbs if vb.get("is_value_bet")]
 
-                    # Si pas de recommended_value_bets mais qu'un marché direct est validé
                     if not valid_vbs:
                         for k in ["vb_p1", "vb_p2", "vb_over", "vb_under", "vb_h1", "vb_h2", "vb_tb_yes", "vb_tb_no"]:
                             vb_item = pred_res.get(k)
@@ -760,7 +969,6 @@ def scan_daily_matches(
 
             analyzed_matches.append(m_item)
 
-        # Libération mémoire après le circuit
         del res
         del known_players
         del player_state
@@ -769,6 +977,9 @@ def scan_daily_matches(
     now_utc = datetime.now(timezone.utc)
     now_datetime = datetime.now()
     last_update_str = f"{now_datetime.strftime('%H:%M')}"
+
+    # 4. Génération intelligente des Combinés du Jour
+    daily_parlays = generate_daily_parlays(analyzed_matches)
 
     response_payload = {
         "success": True,
@@ -786,7 +997,8 @@ def scan_daily_matches(
         "wta_count": wta_count,
         "value_bets_count": total_vbs_found,
         "quota_info": quota_info,
-        "matches": analyzed_matches
+        "matches": analyzed_matches,
+        "daily_parlays": daily_parlays
     }
 
     SCANNER_CACHE[cache_lookup_key] = {
