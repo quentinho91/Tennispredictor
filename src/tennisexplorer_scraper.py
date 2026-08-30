@@ -13,7 +13,7 @@ import re
 import logging
 import urllib.request
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger("tennis_predictor.tennisexplorer_scraper")
@@ -57,6 +57,7 @@ KNOWN_TOURNAMENT_PATTERNS = {
 def deduce_tournament_meta(tourney_name: str, circuit: str = "atp") -> Dict[str, Any]:
     """Déduit automatiquement la surface, le niveau, et le format du tournoi."""
     title_lower = tourney_name.lower().strip()
+    is_qualif = "qualif" in title_lower or "qualification" in title_lower
     
     meta = {
         "surface": "Hard",
@@ -66,30 +67,30 @@ def deduce_tournament_meta(tourney_name: str, circuit: str = "atp") -> Dict[str,
         "round": "R32"
     }
 
-    # Grand Chelem / Qualifs
+    # Grand Chelem (tableau principal = best of 5 pour ATP, qualifs = best of 3)
     if "us open" in title_lower or "us-open" in title_lower:
         meta["surface"] = "Hard"
         meta["level"] = "G"
         meta["indoor"] = 0
-        meta["best_of"] = 5 if circuit == "atp" else 3
+        meta["best_of"] = 3 if (circuit == "wta" or is_qualif) else 5
         return meta
 
     if "australian open" in title_lower:
         meta["surface"] = "Hard"
         meta["level"] = "G"
-        meta["best_of"] = 5 if circuit == "atp" else 3
+        meta["best_of"] = 3 if (circuit == "wta" or is_qualif) else 5
         return meta
 
     if "roland garros" in title_lower or "french open" in title_lower:
         meta["surface"] = "Clay"
         meta["level"] = "G"
-        meta["best_of"] = 5 if circuit == "atp" else 3
+        meta["best_of"] = 3 if (circuit == "wta" or is_qualif) else 5
         return meta
 
     if "wimbledon" in title_lower:
         meta["surface"] = "Grass"
         meta["level"] = "G"
-        meta["best_of"] = 5 if circuit == "atp" else 3
+        meta["best_of"] = 3 if (circuit == "wta" or is_qualif) else 5
         return meta
 
     # Check known patterns
@@ -98,7 +99,7 @@ def deduce_tournament_meta(tourney_name: str, circuit: str = "atp") -> Dict[str,
             meta["surface"] = pat_meta["surface"]
             meta["level"] = pat_meta["level"]
             meta["indoor"] = pat_meta["indoor"]
-            if circuit == "atp":
+            if circuit == "atp" and not is_qualif:
                 meta["best_of"] = pat_meta.get("best_of_men", 3)
             else:
                 meta["best_of"] = 3
@@ -119,47 +120,36 @@ def deduce_tournament_meta(tourney_name: str, circuit: str = "atp") -> Dict[str,
     return meta
 
 
-def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Télécharge et extrait l'ensemble des matchs du jour depuis TennisExplorer.
-    Supporte les matchs de Grand Chelem (dont Qualifs US Open), ATP 250 (Winston-Salem), WTA, Challengers.
-    """
-    if date_str:
-        # Format YYYY-MM-DD
-        try:
-            dt = datetime.strptime(date_str, "%Y-%m-%d")
-            url = f"https://www.tennisexplorer.com/matches/?type=all&year={dt.year}&month={dt.month}&day={dt.day}"
-        except Exception:
-            url = "https://www.tennisexplorer.com/matches/?type=all"
-    else:
-        url = "https://www.tennisexplorer.com/matches/?type=all"
-
+def _scrape_tennisexplorer_single_day(
+    target_dt: datetime,
+    is_today: bool = True,
+    is_tomorrow: bool = False
+) -> List[Dict[str, Any]]:
+    """Scrape et extrait les matchs d'une date spécifique depuis TennisExplorer."""
+    url = f"https://www.tennisexplorer.com/matches/?type=all&year={target_dt.year}&month={target_dt.month}&day={target_dt.day}"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "fr,fr-FR;q=0.9,en-US;q=0.8,en;q=0.7"
     }
 
-    logger.info(f"Scraping des matchs depuis TennisExplorer: {url}")
+    logger.info(f"Scraping des matchs depuis TennisExplorer ({target_dt.strftime('%Y-%m-%d')}): {url}")
     req = urllib.request.Request(url, headers=headers)
     
     try:
         with urllib.request.urlopen(req, timeout=12) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
     except Exception as e:
-        logger.error(f"Erreur réseau lors de la récupération TennisExplorer: {e}")
+        logger.error(f"Erreur réseau lors de la récupération TennisExplorer ({target_dt.strftime('%Y-%m-%d')}): {e}")
         return []
 
     soup = BeautifulSoup(html, "html.parser")
     tables = soup.find_all("table", class_="result")
     if not tables:
-        logger.warning("Aucune table 'result' trouvée sur TennisExplorer")
         return []
 
-    # La table principale des matchs est généralement la 2ème table (index 1) ou toutes les tables combinées
-    # On parcourt les tables pour extraire tous les matchs
-    raw_matches = []
-    seen_match_keys = set()
+    extracted = []
+    seen_in_day = set()
 
     for table in tables:
         rows = table.find_all("tr")
@@ -169,7 +159,12 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
         current_tourney = "Tournoi Tennis"
         current_circuit = "atp"
         current_href = ""
+        # Flags de filtrage initialisés explicitement au début de chaque table
+        # pour éviter un NameError si une table commence sans ligne d'en-tête
         is_double = False
+        is_challenger = False
+        is_itf = False
+        is_amateur = False
 
         i = 0
         while i < len(rows):
@@ -214,8 +209,6 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                     time_val = time_td.get_text(strip=True) if time_td else ""
                     if "Live" in time_val:
                         time_val = time_val.split("Live")[0].strip()
-                    if not time_val:
-                        time_val = "Aujourd'hui"
 
                     # Noms des joueurs
                     p1_a = p1_td.find("a")
@@ -264,29 +257,78 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                         i += 2
                         continue
 
-                    # Clé unique pour éviter les doublons
+                    # Clé unique pour éviter les doublons dans le même scan
                     match_key = f"{p1_clean.lower()}_{p2_clean.lower()}_{current_tourney.lower()}"
-                    if match_key not in seen_match_keys and p1_clean and p2_clean:
-                        seen_match_keys.add(match_key)
+                    if match_key not in seen_in_day and p1_clean and p2_clean:
+                        seen_in_day.add(match_key)
 
                         # Contexte tournoi
                         meta = deduce_tournament_meta(current_tourney, circuit=current_circuit)
                         
-                        # Affichage du nom de tournoi avec précision (ex: US Open (Qualifs))
+                        # Détection précise : Est-ce une qualification ou le tableau principal ?
+                        is_qualif = (
+                            "qualif" in current_tourney.lower() 
+                            or "qualification" in current_tourney.lower() 
+                            or "qualif" in current_href.lower() 
+                            or "qualification" in current_href.lower()
+                        )
+                        
                         display_title = current_tourney
-                        if "us open" in current_tourney.lower():
-                            display_title = f"{current_circuit.upper()} US Open (Qualifs)"
-                        elif "winston" in current_tourney.lower():
-                            display_title = "ATP Winston-Salem"
-                        elif "monterrey" in current_tourney.lower():
-                            display_title = "WTA Monterrey Open"
-                        elif "cleveland" in current_tourney.lower():
-                            display_title = "WTA Cleveland"
-                        elif "philadelphia" in current_tourney.lower():
-                            display_title = "WTA Philadelphia"
+                        t_lower = current_tourney.lower()
+                        href_lower = current_href.lower()
 
-                        raw_matches.append({
-                            "id": f"te_{len(raw_matches)}_{re.sub(r'[^a-zA-Z0-9]', '', p1_clean)[:8]}",
+                        if "us open" in t_lower or "us-open" in href_lower:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            display_title = f"{current_circuit.upper()} US Open{qualif_suffix}"
+                        elif "australian open" in t_lower or "australian-open" in href_lower:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            display_title = f"{current_circuit.upper()} Australian Open{qualif_suffix}"
+                        elif "roland garros" in t_lower or "french open" in t_lower or "french-open" in href_lower:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            display_title = f"{current_circuit.upper()} Roland Garros{qualif_suffix}"
+                        elif "wimbledon" in t_lower or "wimbledon" in href_lower:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            display_title = f"{current_circuit.upper()} Wimbledon{qualif_suffix}"
+                        elif "winston" in t_lower:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            display_title = f"ATP Winston-Salem{qualif_suffix}"
+                        elif "monterrey" in t_lower:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            display_title = f"WTA Monterrey Open{qualif_suffix}"
+                        elif "cleveland" in t_lower:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            display_title = f"WTA Cleveland{qualif_suffix}"
+                        elif "philadelphia" in t_lower:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            display_title = f"WTA Philadelphia{qualif_suffix}"
+                        else:
+                            qualif_suffix = " (Qualifs)" if is_qualif else ""
+                            clean_t = current_tourney
+                            if not clean_t.upper().startswith("ATP") and not clean_t.upper().startswith("WTA"):
+                                display_title = f"{current_circuit.upper()} {clean_t}{qualif_suffix}"
+                            else:
+                                display_title = f"{clean_t}{qualif_suffix}"
+
+                        # Gestion de l'horodatage et des matchs de nuit
+                        tm = re.match(r"^(\d{1,2}):(\d{2})", time_val)
+                        if tm:
+                            h, m_int = int(tm.group(1)), int(tm.group(2))
+                            commence_iso = f"{target_dt.year:04d}-{target_dt.month:02d}-{target_dt.day:02d}T{h:02d}:{m_int:02d}:00"
+                            if is_tomorrow:
+                                if h < 9:  # Match de la nuit (ex: 01:00, 02:30, 03:00)
+                                    time_display = f"Nuit {time_val}"
+                                else:
+                                    time_display = f"Demain {time_val}"
+                            else:
+                                time_display = time_val
+                        else:
+                            # Heure inconnue (ex: "--:--") → placé en fin de journée pour
+                            # ne pas polluer le tri chronologique des matchs avec heure connue
+                            commence_iso = f"{target_dt.year:04d}-{target_dt.month:02d}-{target_dt.day:02d}T23:59:00"
+                            time_display = time_val or ("Aujourd'hui" if is_today else "Demain")
+
+                        extracted.append({
+                            "id": f"te_{len(extracted)}_{re.sub(r'[^a-zA-Z0-9]', '', p1_clean)[:8]}",
                             "circuit": current_circuit,
                             "sport_title": display_title,
                             "tournament": current_tourney,
@@ -294,8 +336,8 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                             "level": meta["level"],
                             "best_of": meta["best_of"],
                             "indoor": meta["indoor"],
-                            "commence_time": "",
-                            "time_display": time_val,
+                            "commence_time": commence_iso,
+                            "time_display": time_display,
                             "p1_raw": p1_clean,
                             "p2_raw": p2_clean,
                             "p1": p1_clean,
@@ -316,6 +358,40 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
                     continue
             i += 1
 
+    return extracted
+
+
+def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] = None, include_night_matches: bool = True) -> List[Dict[str, Any]]:
+    """
+    Télécharge et extrait l'ensemble des matchs du jour (et de la nuit suivante) depuis TennisExplorer.
+    Supporte les matchs de Grand Chelem (US Open, etc.), ATP (Winston-Salem, etc.), WTA (Monterrey, Cleveland, etc.), Challengers.
+    Récupère automatiquement la session de nuit (ex: matchs à 01h00, 02h30, 03h00 du lendemain matin).
+    """
+    if date_str:
+        try:
+            dt_primary = datetime.strptime(date_str, "%Y-%m-%d")
+        except Exception:
+            dt_primary = datetime.now()
+    else:
+        dt_primary = datetime.now()
+
+    raw_matches = _scrape_tennisexplorer_single_day(dt_primary, is_today=True, is_tomorrow=False)
+
+    # Récupérer également la journée suivante pour inclure la session de nuit et les matchs matinaux
+    if include_night_matches:
+        dt_tomorrow = dt_primary + timedelta(days=1)
+        tomorrow_matches = _scrape_tennisexplorer_single_day(dt_tomorrow, is_today=False, is_tomorrow=True)
+        
+        seen_keys = {f"{m['p1'].lower()}_{m['p2'].lower()}_{m['tournament'].lower()}" for m in raw_matches}
+        for tm in tomorrow_matches:
+            k = f"{tm['p1'].lower()}_{tm['p2'].lower()}_{tm['tournament'].lower()}"
+            if k not in seen_keys:
+                seen_keys.add(k)
+                raw_matches.append(tm)
+
+    # Trier chronologiquement par date / heure de début
+    raw_matches.sort(key=lambda x: x.get("commence_time") or "9999-99-99T99:99:00")
+
     # Filtrer par circuit si demandé
     c_req = circuit.lower()
     if c_req == "atp":
@@ -327,3 +403,4 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
 
     logger.info(f"TennisExplorer: {len(filtered)} matchs extraits avec succès ({len([m for m in filtered if m['circuit'] == 'atp'])} ATP, {len([m for m in filtered if m['circuit'] == 'wta'])} WTA)")
     return filtered
+

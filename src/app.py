@@ -5,7 +5,10 @@ et détection de Value Bets avec calcul de mise Kelly.
 """
 
 import os
+import re
 import sys
+import json
+import difflib
 import datetime
 import threading
 from pathlib import Path
@@ -76,7 +79,6 @@ def get_circuit_players(circuit: str) -> List[Dict[str, Any]]:
     if c not in PLAYERS_CACHE:
         p_file = BASE_DIR / "data" / "processed" / f"players_{c}.json"
         if p_file.exists():
-            import json
             with open(p_file, "r", encoding="utf-8") as f:
                 PLAYERS_CACHE[c] = json.load(f)
         else:
@@ -115,9 +117,21 @@ def get_status():
     players_atp = get_circuit_players("atp")
     players_wta = get_circuit_players("wta")
     last_update = _get_last_data_update_str()
+
+    # Calcul de la date ISO pour le frontend (affichage dynamique de la sync)
+    last_update_iso = None
+    p = BASE_DIR / "data" / "processed" / "player_state_atp.pkl"
+    if p.exists():
+        try:
+            mtime = p.stat().st_mtime
+            last_update_iso = datetime.datetime.fromtimestamp(mtime).isoformat()
+        except Exception:
+            pass
+
     return {
         "status": "online",
         "last_data_update": last_update,
+        "last_data_update_iso": last_update_iso,
         "atp": {
             "players_count": len(players_atp),
             "circuit": "ATP Tour"
@@ -136,7 +150,6 @@ TOURNAMENTS_DATA: List[Dict[str, Any]] = []
 def get_tournaments() -> List[Dict[str, Any]]:
     global TOURNAMENTS_DATA
     if not TOURNAMENTS_DATA and TOURNAMENTS_FILE.exists():
-        import json
         with open(TOURNAMENTS_FILE, "r", encoding="utf-8") as f:
             TOURNAMENTS_DATA = json.load(f)
     return TOURNAMENTS_DATA
@@ -192,7 +205,6 @@ TOURNAMENT_CANONICAL = {
 
 
 def canonical_tourney_key(name: str) -> str:
-    import re
     lower = name.lower().strip()
     if lower in TOURNAMENT_CANONICAL:
         return TOURNAMENT_CANONICAL[lower].lower()
@@ -264,7 +276,6 @@ def search_tournaments(q: str = Query("", min_length=0), limit: int = 12):
     return unique_results
 
 
-import difflib
 
 
 @app.get("/api/players")
@@ -898,6 +909,8 @@ def compute_detailed_analytics(
         come_w, come_tot = 0, 0
         tb_cnt, tb_won, sets_cnt = 0, 0, 0
         match_3sets = 0
+        total_games_sum = 0
+        matches_with_score = 0
         for m in matches:
             sc = m.get("score", "")
             w = m.get("is_win", False)
@@ -920,11 +933,22 @@ def compute_detailed_analytics(
                         if w: come_w += 1
                 except Exception:
                     pass
+            # Comptage des jeux depuis le score (ex: "6-4 7-5" -> 22 jeux)
+            match_games = 0
             for s in sets:
                 sets_cnt += 1
                 if "7-6" in s or "6-7" in s or "(" in s:
                     tb_cnt += 1
                     if "7-6" in s: tb_won += 1
+                try:
+                    g1 = int(s.split("-")[0].split("(")[0])
+                    g2 = int(s.split("-")[1].split("(")[0])
+                    match_games += g1 + g2
+                except Exception:
+                    pass
+            if match_games > 0:
+                total_games_sum += match_games
+                matches_with_score += 1
 
         w_s1_pct = round((s1_wins / max(1, s1_tot)) * 100, 1) if s1_tot else round(car_pct * 0.95, 1)
         close_pct = round((close_w / max(1, close_tot)) * 100, 1) if close_tot else 85.0
@@ -933,15 +957,22 @@ def compute_detailed_analytics(
         tb_won_pct = round((tb_won / max(1, tb_cnt)) * 100, 1) if tb_cnt else 50.0
         match_3s_pct = round((match_3sets / max(1, len(matches))) * 100, 1) if matches else 35.0
 
+        # Jeux réels calculés depuis les scores (fallback sur valeurs ATP/WTA moyennes)
+        avg_games_per_match = round(total_games_sum / matches_with_score, 1) if matches_with_score > 0 else 23.5
+        avg_games_per_set = round(total_games_sum / max(1, sets_cnt), 1) if sets_cnt > 0 else 9.3
+        # Marge de jeux : positif si le joueur gagne en moyenne plus de jeux que l'adversaire
+        game_margin_val = round((car_pct / 100.0 - 0.5) * avg_games_per_set * 2, 1)
+        game_margin_str = f"+{game_margin_val}" if game_margin_val >= 0 else str(game_margin_val)
+
         return {
             "win_set1": w_s1_pct,
             "straight_sets": round(car_pct * 0.85, 1),
             "after_win_set1": close_pct,
             "after_loss_set1": come_pct,
-            "games_won_per_set": 4.8 if car_pct > 55 else 4.4,
-            "games_total_per_set": 9.3,
-            "games_per_match": 23.5,
-            "game_margin": "+1.8" if car_pct > 55 else "-0.4",
+            "games_won_per_set": round(avg_games_per_set * (car_pct / 100.0), 1),
+            "games_total_per_set": avg_games_per_set,
+            "games_per_match": avg_games_per_match,
+            "game_margin": game_margin_str,
             "pct_sets_tb": tb_pct,
             "pct_tb_won": tb_won_pct,
             "tb_in_match": round(tb_pct * 2.1, 1),
@@ -975,13 +1006,18 @@ def compute_detailed_analytics(
     def compute_fatigue_data(matches):
         m_7d = sum(m.get("duration", 90) for m in matches[:3])
         m_30d = sum(m.get("duration", 90) for m in matches[:8])
-        charge = min(95, max(35, int((m_7d / 600.0) * 75)))
+        # charge : 0 min sur 7j -> 0%, 600 min (5h) sur 7j -> 75%
+        charge = min(95, max(20, int((m_7d / 600.0) * 75)))
+        # Fraîcheur physique : inverse de la charge (plus on joue, moins on est frais)
+        frais_pct = max(20, min(95, 100 - charge))
+        # Niveau de fatigue : proportionnel à la charge (avec plancher à 10%)
+        fatigue_pct = max(10, min(90, charge))
         return {
             "charge": charge,
             "min_7d": m_7d,
             "min_30d": m_30d,
-            "frais_pct": 61,
-            "fatigue_pct": 59
+            "frais_pct": frais_pct,
+            "fatigue_pct": fatigue_pct
         }
 
     fatigue1 = compute_fatigue_data(m1_list)
@@ -1580,7 +1616,7 @@ def get_daily_scanner(
     refresh: bool = False
 ):
     """
-    Scan quotidien des matchs avec TennisExplorer (100% tournois, qualifs US Open, Winston-Salem) ou The Odds API,
+    Scan quotidien des matchs avec TennisExplorer (100% tournois ATP/WTA, US Open, Winston-Salem, sessions de nuit) ou The Odds API,
     résolution automatique des contextes et détection instantanée des Value Bets.
     """
     c_lower = circuit.lower()

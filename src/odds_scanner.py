@@ -26,8 +26,19 @@ logger = logging.getLogger("tennis_predictor.odds_scanner")
 
 # Cache global en mémoire et sur disque (persistant)
 SCANNER_CACHE: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL_SECONDS = 86400  # 24h par défaut (conservé tant qu'on ne force pas le refresh)
 CACHE_FILE = Path(__file__).resolve().parent.parent / "data" / "processed" / "scanner_cache.json"
+
+
+def _get_smart_cache_ttl() -> int:
+    """
+    Retourne un TTL de cache adaptatif selon l'heure locale :
+    - Nuit (23h → 08h) : 4h  → pas de matchs en cours, inutile de scraper souvent
+    - Journée (08h → 23h) : 30 min → les matchs terminent vite, le cache doit s'actualiser
+    """
+    h = datetime.now().hour
+    if 8 <= h < 23:
+        return 30 * 60      # 30 minutes
+    return 4 * 60 * 60     # 4 heures
 
 
 def _load_disk_cache():
@@ -701,7 +712,7 @@ def scan_daily_matches(
     _load_disk_cache()
     if not force_refresh and cache_lookup_key in SCANNER_CACHE:
         cached_entry = SCANNER_CACHE[cache_lookup_key]
-        if (now_ts - cached_entry["timestamp"]) < CACHE_TTL_SECONDS:
+        if (now_ts - cached_entry["timestamp"]) < _get_smart_cache_ttl():
             logger.info(f"Retour des matchs scannés depuis le cache ({source_key}, âge: {int(now_ts - cached_entry['timestamp'])}s)")
             cached_data = dict(cached_entry["data"])
             cached_data["cached"] = True
@@ -974,6 +985,9 @@ def scan_daily_matches(
         del player_state
         gc.collect()
 
+    # Trier chronologiquement l'ensemble des matchs analysés
+    analyzed_matches.sort(key=lambda x: (x.get("commence_time") or "9999-99-99T99:99:00", x.get("time_display") or "99:99"))
+
     now_utc = datetime.now(timezone.utc)
     now_datetime = datetime.now()
     last_update_str = f"{now_datetime.strftime('%H:%M')}"
@@ -988,7 +1002,7 @@ def scan_daily_matches(
         "bookmaker": bookmaker,
         "is_demo_mode": is_demo_mode,
         "cached": False,
-        "cache_ttl_minutes": int(CACHE_TTL_SECONDS / 60),
+        "cache_ttl_minutes": int(_get_smart_cache_ttl() / 60),
         "timestamp_epoch": now_ts,
         "timestamp_iso": now_utc.isoformat(),
         "last_update": last_update_str,

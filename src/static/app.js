@@ -7,7 +7,6 @@ let selectedP1 = '';
 let selectedP2 = '';
 
 // DOM Elements
-// DOM Elements
 const circuitBtns = document.querySelectorAll('.circuit-btn');
 const p1Input = document.getElementById('p1-input');
 const p2Input = document.getElementById('p2-input');
@@ -1802,6 +1801,7 @@ const ODDS_API_KEY_STORAGE = 'tennis_odds_api_key';
 const SCANNER_SOURCE_STORAGE = 'tennis_scanner_source';
 const SCANNER_CACHE_PAYLOAD_KEY = 'tp_cached_scanner_payload';
 const SCANNER_CACHE_TIME_KEY = 'tp_cached_scanner_time';
+const SCANNER_CACHE_DATE_KEY = 'tp_cached_scanner_date'; // YYYY-MM-DD du scan
 
 let currentScannerMatches = [];
 let currentScannerFilter = 'all'; // 'all' | 'atp' | 'wta' | 'vb'
@@ -2397,7 +2397,7 @@ function applyScannerData(data, timeStr) {
       banner.style.background = 'rgba(59, 130, 246, 0.09)';
       banner.style.color = '#93c5fd';
       banner.innerHTML = `
-        <span>🎾 <b>Scanner Tournois ATP &amp; WTA Actif</b> • Cotes <b>Betclic</b> • US Open (Qualifs), Winston-Salem, Monterrey &amp; Cleveland.</span>
+        <span>🎾 <b>Scanner Tournois ATP &amp; WTA Actif</b> • Cotes <b>Betclic</b> • Matchs du jour &amp; sessions de nuit • US Open, Winston-Salem, Monterrey &amp; Cleveland.</span>
         <button type="button" class="hist-reload-btn" onclick="openApiKeyModal()" style="font-size:11px; background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2);">⚙️ Clé The Odds API</button>
       `;
     } else if (data.is_demo_mode) {
@@ -2438,10 +2438,20 @@ async function loadDailyScanner(forceRefresh = false) {
   if (!forceRefresh) {
     const cachedPayloadStr = localStorage.getItem(SCANNER_CACHE_PAYLOAD_KEY);
     const cachedTimeStr = localStorage.getItem(SCANNER_CACHE_TIME_KEY);
+    const cachedDateStr = localStorage.getItem(SCANNER_CACHE_DATE_KEY);
     if (cachedPayloadStr) {
       try {
         const cachedData = JSON.parse(cachedPayloadStr);
-        if (cachedData && cachedData.matches && cachedData.matches.length > 0) {
+        // Expiration du cache : si les données datent d'un autre jour, on force un rafraîchissement
+        const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const cacheIsStale = cachedDateStr && cachedDateStr !== todayStr;
+        if (cacheIsStale) {
+          // Données d'hier ou plus : vider le cache et recharger
+          localStorage.removeItem(SCANNER_CACHE_PAYLOAD_KEY);
+          localStorage.removeItem(SCANNER_CACHE_TIME_KEY);
+          localStorage.removeItem(SCANNER_CACHE_DATE_KEY);
+          console.info('[Scanner] Cache expiré (date différente), rechargement automatique...');
+        } else if (cachedData && cachedData.matches && cachedData.matches.length > 0) {
           if (loading) loading.style.display = 'none';
           if (grid) grid.style.opacity = '1';
           applyScannerData(cachedData, cachedTimeStr || ('Actualisé ' + (cachedData.last_update || '')));
@@ -2481,10 +2491,11 @@ async function loadDailyScanner(forceRefresh = false) {
       const m = String(now.getMinutes()).padStart(2, '0');
       const localTimeStr = `Actualisé ${h}:${m}`;
 
-      // Sauvegarde persistante dans le localStorage
+      // Sauvegarde persistante dans le localStorage (avec date pour la détection de péremption)
       try {
         localStorage.setItem(SCANNER_CACHE_PAYLOAD_KEY, JSON.stringify(data));
         localStorage.setItem(SCANNER_CACHE_TIME_KEY, localTimeStr);
+        localStorage.setItem(SCANNER_CACHE_DATE_KEY, new Date().toISOString().slice(0, 10));
       } catch (storageErr) {
         console.warn('Quota localStorage dépassé ou indisponible', storageErr);
       }
@@ -2677,9 +2688,10 @@ function renderMatchCardHtml(m) {
       </div>
     `;
   } else {
+    const bkLabel = (m.bookmaker && !m.bookmaker.toLowerCase().includes('demo')) ? escapeHtml(m.bookmaker) : 'Betclic';
     vbHtml = `
       <div class="scan-no-vb-msg">
-        ⚖️ Cotes équilibrées (Marge Bet365)
+        ⚖️ Cotes équilibrées — Marge ${bkLabel}
       </div>
     `;
   }
@@ -2693,9 +2705,26 @@ function renderMatchCardHtml(m) {
     try {
       const dt = new Date(m.commence_time);
       if (!isNaN(dt.getTime())) {
-        matchTimeDisplay = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const now = new Date();
+        const isToday = dt.getDate() === now.getDate() && dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear();
+        const tmrw = new Date(now);
+        tmrw.setDate(tmrw.getDate() + 1);
+        const isTomorrow = dt.getDate() === tmrw.getDate() && dt.getMonth() === tmrw.getMonth() && dt.getFullYear() === tmrw.getFullYear();
+        const timeOnly = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+        if (isToday) {
+          matchTimeDisplay = timeOnly;
+        } else if (isTomorrow && dt.getHours() < 9) {
+          matchTimeDisplay = `🌙 Nuit ${timeOnly}`;
+        } else if (isTomorrow) {
+          matchTimeDisplay = `Demain ${timeOnly}`;
+        } else {
+          matchTimeDisplay = `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')} ${timeOnly}`;
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      matchTimeDisplay = m.time_display || 'Aujourd\'hui';
+    }
   }
 
   return `
