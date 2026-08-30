@@ -377,13 +377,29 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
 
     raw_matches = _scrape_tennisexplorer_single_day(dt_primary, is_today=True, is_tomorrow=False)
 
-    # Récupérer également la journée suivante pour inclure la session de nuit et les matchs matinaux
+    # Récupérer uniquement la session de nuit de la même journée (décalage horaire US : 00h00 à 08h30 du lendemain matin)
     if include_night_matches:
         dt_tomorrow = dt_primary + timedelta(days=1)
         tomorrow_matches = _scrape_tennisexplorer_single_day(dt_tomorrow, is_today=False, is_tomorrow=True)
         
         seen_keys = {f"{m['p1'].lower()}_{m['p2'].lower()}_{m['tournament'].lower()}" for m in raw_matches}
         for tm in tomorrow_matches:
+            # Ne conserver STRICTEMENT que les matchs de la session de nuit (décalage horaire US / International : 00h00 à 08h30)
+            # qui font partie intégrante de la même session/journée de tournoi
+            commence = tm.get("commence_time", "")
+            is_night_match = False
+            if "T" in commence:
+                try:
+                    h_val = int(commence.split("T")[1].split(":")[0])
+                    # Heure entre 00h00 et 08h30 (ex: 01:00, 02:30, 04:00) -> session de nuit US
+                    if h_val < 9:
+                        is_night_match = True
+                except Exception:
+                    pass
+
+            if not is_night_match:
+                continue
+
             k = f"{tm['p1'].lower()}_{tm['p2'].lower()}_{tm['tournament'].lower()}"
             if k not in seen_keys:
                 seen_keys.add(k)

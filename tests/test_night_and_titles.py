@@ -31,12 +31,20 @@ class TestNightMatchesAndTournamentTitles(unittest.TestCase):
                 self.assertNotIn("Qualifs", t_title, f"Unexpected Qualifs in {t_title}")
                 self.assertIn("US Open", t_title)
 
-    def test_night_matches_presence(self):
-        # Verify that night session matches (commence_time next day early morning) are extracted
+    def test_no_tomorrow_daytime_matches(self):
+        # Verify that only today's matches and tonight's US session (< 09:00 AM tomorrow) are returned
+        now = datetime.now()
+        today_date_str = now.strftime("%Y-%m-%d")
         matches = fetch_tennisexplorer_matches(circuit="all")
-        # Check if commence_time is populated
+
         for m in matches:
-            self.assertTrue(m.get("commence_time"), "commence_time should not be empty")
+            commence = m.get("commence_time")
+            if commence and "T" in commence:
+                date_part, time_part = commence.split("T")
+                if date_part != today_date_str:
+                    # If date is tomorrow, hour must be < 9 (night session)
+                    h = int(time_part.split(":")[0])
+                    self.assertLess(h, 9, f"Match {m['p1']} vs {m['p2']} at {commence} is from tomorrow daytime/evening and should not be included.")
 
 
 if __name__ == "__main__":

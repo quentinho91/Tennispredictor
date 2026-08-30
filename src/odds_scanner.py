@@ -15,7 +15,7 @@ import time
 import math
 import logging
 from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import urllib.request
 import urllib.parse
 import json
@@ -783,8 +783,24 @@ def scan_daily_matches(
                         time_display = "Aujourd'hui"
                         if commence_raw:
                             try:
-                                dt = datetime.fromisoformat(commence_raw.replace("Z", "+00:00"))
-                                time_display = f"{dt.strftime('%H:%M')}"
+                                dt_utc = datetime.fromisoformat(commence_raw.replace("Z", "+00:00"))
+                                dt_local = dt_utc.astimezone()
+                                now_local = datetime.now().astimezone()
+                                today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+                                tomorrow_night_cutoff = today_start + timedelta(days=1, hours=9)  # Max 09h00 le lendemain matin
+
+                                # Ignorer les matchs postérieurs à la session de nuit de la journée
+                                if dt_local > tomorrow_night_cutoff:
+                                    continue
+                                if dt_local < (today_start - timedelta(hours=3)):
+                                    continue
+
+                                if dt_local.date() == now_local.date():
+                                    time_display = dt_local.strftime("%H:%M")
+                                elif dt_local.date() > now_local.date() and dt_local.hour < 9:
+                                    time_display = f"Nuit {dt_local.strftime('%H:%M')}"
+                                else:
+                                    time_display = dt_local.strftime("%H:%M")
                             except Exception:
                                 pass
 
