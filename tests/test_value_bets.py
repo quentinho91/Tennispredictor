@@ -86,19 +86,19 @@ class TestValueBetSelectiveRules(unittest.TestCase):
         self.assertFalse(vb_noisy_longshot["is_value_bet"])
         self.assertEqual(vb_noisy_longshot["confidence_status"], "BLOCKED_LONGSHOT")
 
-    def test_ultra_low_odds_filter(self):
-        """Ultra-low odds (< 1.15) must be blocked due to asymmetric retirement/injury risk."""
-        vb_heavy_fav = evaluate_market_value(
-            prob=0.95,
-            odds=1.10,
-            opp_odds=8.0,
+    def test_low_odds_filter(self):
+        """Low odds (< 1.50) must be blocked due to asymmetric risk/reward."""
+        vb_low_odds = evaluate_market_value(
+            prob=0.85,
+            odds=1.40,
+            opp_odds=3.20,
             market_name="Vainqueur Match",
             selection="Heavy Fav",
             match_confidence={"score": 85.0}
         )
-        self.assertIsNotNone(vb_heavy_fav)
-        self.assertFalse(vb_heavy_fav["is_value_bet"])
-        self.assertEqual(vb_heavy_fav["confidence_status"], "BLOCKED_ULTRA_LOW_ODDS")
+        self.assertIsNotNone(vb_low_odds)
+        self.assertFalse(vb_low_odds["is_value_bet"])
+        self.assertEqual(vb_low_odds["confidence_status"], "BLOCKED_LOW_ODDS")
 
 
 if __name__ == "__main__":

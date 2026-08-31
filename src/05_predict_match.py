@@ -85,6 +85,15 @@ ELO_LAG        = fe.ELO_TREND_LAG
 RANK_MOM_DAYS  = fe.RANK_MOMENTUM_DAYS
 LATE_ROUNDS    = fe.LATE_ROUNDS
 ELO_INIT       = fe.ELO_INIT
+# Shared functions (previously duplicated, now imported from module-level)
+get_altitude          = fe.get_altitude
+get_tourney_country   = fe.get_tourney_country
+get_cpi               = fe.get_cpi
+_speed_wr             = fe.speed_wr
+ALTITUDES             = fe.ALTITUDES
+get_decayed_elo       = fe.get_decayed_elo
+compute_travel_strain = fe.compute_travel_strain
+COUNTRY_CONTINENT     = fe.COUNTRY_CONTINENT
 
 
 # --------------------------------------------------------------------------
@@ -153,40 +162,133 @@ def ask_float(prompt, default=None):
         return None
 
 
+def remove_overround_proportional(odds1, odds2):
+    """Méthode proportionnelle classique de retrait de la marge (Multiplicative Overround)."""
+    total = 1.0 / odds1 + 1.0 / odds2
+    return (1.0 / odds1) / total, (1.0 / odds2) / total
+
+
+def remove_overround_shin(odds1, odds2, tol=1e-6, max_iter=50):
+    """
+    Méthode de Shin (1992/1993) pour dé-vigger un marché 2-issues en modélisant
+    le biais favori-outsider (Favorite-Longshot Bias) et l'asymétrie d'information.
+    """
+    pi1 = 1.0 / odds1
+    pi2 = 1.0 / odds2
+    beta = pi1 + pi2  # somme des probabilités brutes avec marge
+
+    if beta <= 1.0:
+        return pi1 / beta, pi2 / beta
+
+    # Recherche dichotomique du paramètre z (proportion de parieurs informés)
+    z_low, z_high = 0.0, 0.4
+    z_opt = 0.0
+
+    for _ in range(max_iter):
+        z_mid = (z_low + z_high) / 2.0
+        # Somme des probabilités implicites normalisées selon Shin
+        term1 = np.sqrt(z_mid**2 + 4.0 * (1.0 - z_mid) * (pi1**2 / beta))
+        term2 = np.sqrt(z_mid**2 + 4.0 * (1.0 - z_mid) * (pi2**2 / beta))
+        diff = (term1 + term2) - 2.0
+
+        if abs(diff) < tol:
+            z_opt = z_mid
+            break
+        elif diff > 0:
+            z_low = z_mid
+        else:
+            z_high = z_mid
+        z_opt = z_mid
+
+    # Calcul des vraies probabilités de Shin
+    denom = 2.0 * (1.0 - z_opt) if (1.0 - z_opt) > 1e-6 else 2.0
+    p1_shin = (np.sqrt(z_opt**2 + 4.0 * (1.0 - z_opt) * (pi1**2 / beta)) - z_opt) / denom
+    p2_shin = (np.sqrt(z_opt**2 + 4.0 * (1.0 - z_opt) * (pi2**2 / beta)) - z_opt) / denom
+    tot_shin = p1_shin + p2_shin
+    return p1_shin / tot_shin, p2_shin / tot_shin
+
+
 def remove_overround(odds1, odds2):
-    total = 1 / odds1 + 1 / odds2
-    return (1 / odds1) / total, (1 / odds2) / total
+    """Fallback standard : utilise la méthode de Shin par défaut."""
+    try:
+        return remove_overround_shin(odds1, odds2)
+    except Exception:
+        return remove_overround_proportional(odds1, odds2)
+
+
+def compute_bayesian_consensus(p_model, p_market, market_weight=0.30):
+    """
+    Combine les log-odds du modèle statistique pur et du marché de-viggé :
+    logit(P_consensus) = (1 - w) * logit(P_model) + w * logit(P_market)
+    """
+    p_mod = np.clip(p_model, 1e-5, 1.0 - 1e-5)
+    p_mkt = np.clip(p_market, 1e-5, 1.0 - 1e-5)
+    logit_mod = np.log(p_mod / (1.0 - p_mod))
+    logit_mkt = np.log(p_mkt / (1.0 - p_mkt))
+    logit_cons = (1.0 - market_weight) * logit_mod + market_weight * logit_mkt
+    return float(1.0 / (1.0 + np.exp(-logit_cons)))
+
+
+def compute_kelly_stake(prob, odds, fraction=0.25, max_cap=0.05):
+    """
+    Calcule la mise optimale via le critère de Kelly fractionnaire :
+    f* = (p * b - q) / b où b = odds - 1
+    """
+    b = odds - 1.0
+    if b <= 0:
+        return 0.0
+    q = 1.0 - prob
+    kelly_full = (prob * b - q) / b
+    if kelly_full <= 0:
+        return 0.0
+    return min(kelly_full * fraction, max_cap)
 
 
 def display_value_bet_analysis(p1, p2, p_p1, p_p2, odds1, odds2, edge_threshold=0.03):
-    """Affiche une analyse détaillée de rentabilité et value bet avec seuils et gestion Kelly."""
+    """Affiche une analyse détaillée de rentabilité et value bet avec dé-vigging Shin, Consensus Bayésien et Kelly."""
     if not (odds1 and odds2 and odds1 > 1.0 and odds2 > 1.0):
         return
 
-    pm1, pm2 = remove_overround(odds1, odds2)
+    # Dé-vigging
+    pm1_prop, pm2_prop = remove_overround_proportional(odds1, odds2)
+    pm1_shin, pm2_shin = remove_overround_shin(odds1, odds2)
+
+    # Probabilité consensus bayésien
+    p_cons1 = compute_bayesian_consensus(p_p1, pm1_shin, market_weight=0.30)
+    p_cons2 = 1.0 - p_cons1
+
+    # Espérance mathématique et Avantage net (Edge) vs Marché Dé-viggé Shin
     ev1 = p_p1 * odds1 - 1.0
     ev2 = p_p2 * odds2 - 1.0
-    edge1 = p_p1 - pm1
-    edge2 = p_p2 - pm2
+    edge1 = p_p1 - pm1_shin
+    edge2 = p_p2 - pm2_shin
 
     cote_seuil1 = 1.0 / p_p1 if p_p1 > 0 else 999.0
     cote_seuil2 = 1.0 / p_p2 if p_p2 > 0 else 999.0
 
-    print("\n" + "=" * 75)
-    print("  ANALYSE VALUE BET & RENTABILITE")
-    print("=" * 75)
-    print(f"  {'Joueur':<24} {'Cote':>6} {'Cote Min':>9} {'P(Modele)':>10} {'P(Marche)':>10} {'Edge':>8} {'EV':>8}")
-    print("  " + "-" * 88)
-    
-    is_vb1 = (edge1 >= edge_threshold and ev1 >= edge_threshold)
-    is_vb2 = (edge2 >= edge_threshold and ev2 >= edge_threshold)
+    print("\n" + "=" * 90)
+    print("  ANALYSE QUANTITATIVE : VALUE BET, MARGE DU BOOKMAKER & CONSENSUS")
+    print("=" * 90)
+    print(f"  {'Joueur':<22} {'Cote':>6} {'Cote Min':>9} {'P(Modele)':>10} {'P(Shin)':>10} {'P(Consensus)':>13} {'Edge':>7} {'EV':>7}")
+    print("  " + "-" * 90)
 
-    statut1 = "[VALUE BET]" if is_vb1 else ("[EV TROP FAIBLE]" if edge1 > 0 else "[PAS DE VALUE]")
-    statut2 = "[VALUE BET]" if is_vb2 else ("[EV TROP FAIBLE]" if edge2 > 0 else "[PAS DE VALUE]")
+    MIN_ODDS_VB = 1.50
+    is_vb1 = (edge1 >= edge_threshold and ev1 >= edge_threshold and odds1 >= MIN_ODDS_VB)
+    is_vb2 = (edge2 >= edge_threshold and ev2 >= edge_threshold and odds2 >= MIN_ODDS_VB)
 
-    print(f"  {p1:<24} {odds1:>6.2f} {cote_seuil1:>9.2f} {p_p1:>10.1%} {pm1:>10.1%} {edge1:>+7.1%} {ev1:>+7.1%}  {statut1}")
-    print(f"  {p2:<24} {odds2:>6.2f} {cote_seuil2:>9.2f} {p_p2:>10.1%} {pm2:>10.1%} {edge2:>+7.1%} {ev2:>+7.1%}  {statut2}")
-    print("  " + "-" * 88)
+    if odds1 < MIN_ODDS_VB and (edge1 >= edge_threshold and ev1 >= edge_threshold):
+        statut1 = "[COTE TROP FAIBLE (< 1.50)]"
+    else:
+        statut1 = "[VALUE BET]" if is_vb1 else ("[EV TROP FAIBLE]" if edge1 > 0 else "[PAS DE VALUE]")
+
+    if odds2 < MIN_ODDS_VB and (edge2 >= edge_threshold and ev2 >= edge_threshold):
+        statut2 = "[COTE TROP FAIBLE (< 1.50)]"
+    else:
+        statut2 = "[VALUE BET]" if is_vb2 else ("[EV TROP FAIBLE]" if edge2 > 0 else "[PAS DE VALUE]")
+
+    print(f"  {p1:<22} {odds1:>6.2f} {cote_seuil1:>9.2f} {p_p1:>10.1%} {pm1_shin:>10.1%} {p_cons1:>13.1%} {edge1:>+6.1%} {ev1:>+6.1%}  {statut1}")
+    print(f"  {p2:<22} {odds2:>6.2f} {cote_seuil2:>9.2f} {p_p2:>10.1%} {pm2_shin:>10.1%} {p_cons2:>13.1%} {edge2:>+6.1%} {ev2:>+6.1%}  {statut2}")
+    print("  " + "-" * 90)
 
     if is_vb1 or is_vb2:
         bet_p = p1 if ev1 > ev2 else p2
@@ -194,27 +296,27 @@ def display_value_bet_analysis(p1, p2, p_p1, p_p2, odds1, odds2, edge_threshold=
         bet_prob = p_p1 if ev1 > ev2 else p_p2
         bet_ev = ev1 if ev1 > ev2 else ev2
         bet_edge = edge1 if ev1 > ev2 else edge2
-        
-        b = bet_o - 1.0
-        kelly_full = (bet_prob * bet_o - 1.0) / b if b > 0 else 0.0
-        kelly_quarter = max(0.0, min(kelly_full * 0.25, 0.05)) # borné à 5% max de bankroll
 
-        print(f"\n  >>> DECISION : *** VALUE BET DETECTE SUR {bet_p.upper()} ***")
-        print(f"      - Cote offerte : {bet_o:.2f} (Cote minimale requise pour rentabilite : {1.0/bet_prob:.2f})")
-        print(f"      - Esperance mathematique nette (EV) : {bet_ev:+.1%}")
-        print(f"      - Avantage net sur le marche (Edge) : {bet_edge:+.1%}")
-        print(f"      - Mise recommandee (Quarter-Kelly) : {kelly_quarter*100:.1f}% de votre bankroll")
+        k_quarter = compute_kelly_stake(bet_prob, bet_o, fraction=0.25, max_cap=0.05)
+        k_eighth = compute_kelly_stake(bet_prob, bet_o, fraction=0.125, max_cap=0.03)
+
+        print(f"\n  >>> DÉCISION : *** VALUE BET DÉTECTÉ SUR {bet_p.upper()} ***")
+        print(f"      • Cote offerte : {bet_o:.2f} (Cote minimale requise : {1.0/bet_prob:.2f})")
+        print(f"      • Espérance mathématique nette (EV) : {bet_ev:+.1%}")
+        print(f"      • Avantage net sur le marché (Edge Shin) : {bet_edge:+.1%}")
+        print(f"      • Mise recommandée (Quarter-Kelly) : {k_quarter*100:.1f}% de votre bankroll")
+        print(f"      • Mise prudente (Eighth-Kelly) : {k_eighth*100:.1f}% de votre bankroll")
     elif max(edge1, edge2) > 0 or max(ev1, ev2) > 0:
         best_p = p1 if ev1 > ev2 else p2
         best_ev = max(ev1, ev2)
         best_edge = max(edge1, edge2)
         best_prob = p_p1 if ev1 > ev2 else p_p2
         min_cote = (1.0 + edge_threshold) / best_prob
-        print(f"\n  >>> DECISION : [PAS DE VALUE BET] (Rendement net EV = {best_ev:+.1%} sur {best_p} insuffisant, seuil requis = +{edge_threshold*100:.0f}%)")
-        print(f"      - Explication : Bien qu'il y ait un avantage de {best_edge:+.1%} sur le marche, la marge du bookmaker absorbe le gain net.")
-        print(f"      - Conseil : Ne pas parier. Attendre une cote d'au moins {min_cote:.2f} sur {best_p}.")
+        print(f"\n  >>> DÉCISION : [PAS DE VALUE BET] (Rendement net EV = {best_ev:+.1%} sur {best_p} insuffisant, seuil requis = +{edge_threshold*100:.0f}%)")
+        print(f"      • Explication : La marge du bookmaker (overround) absorbe le faible avantage statistique.")
+        print(f"      • Conseil : Ne pas parier. Attendre une cote d'au moins {min_cote:.2f} sur {best_p}.")
     else:
-        print(f"\n  >>> DECISION : [AUCUN VALUE BET] Les cotes proposees sont trop basses par rapport aux probabilites reelles.")
+        print(f"\n  >>> DÉCISION : [AUCUN VALUE BET] Les cotes proposées sont trop basses par rapport aux probabilités réelles du modèle.")
 
 
 # --------------------------------------------------------------------------
@@ -569,27 +671,8 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     tourney_countries = state.get("tourney_countries", {})
     player_ioc_dict = state.get("player_ioc_dict", {})
 
-    def get_cpi(t_name, t_year, t_surf):
-        if t_name in tourney_cpi_yearly:
-            hist = [tourney_cpi_yearly[t_name][y] for y in range(t_year-3, t_year) if y in tourney_cpi_yearly[t_name]]
-            if hist:
-                return sum(hist) / len(hist)
-        if t_surf == 'Hard': return 8.5
-        elif t_surf == 'Clay': return 5.5
-        elif t_surf == 'Grass': return 10.5
-        return 8.0
-
-    def _speed_wr(results_dict, p):
-        lst = results_dict.get(p, [])[-30:]
-        if not lst: return 0.5
-        return sum(w for d, w in lst) / len(lst)
-
-    def get_altitude(t_name):
-        alt_map = {'Gstaad': 1050, 'Kitzbuhel': 762, 'Bogota': 2640, 'Quito': 2850, 'Madrid': 667, 'Denver': 1609}
-        return alt_map.get(t_name, 0)
-
-    def get_tourney_country(t_name):
-        return tourney_countries.get(t_name, "UNKNOWN")
+    # get_cpi, _speed_wr, get_altitude, get_tourney_country are now imported
+    # from 02_feature_engineering.py module-level (see imports at top of file)
 
     rr1 = rr.get(p1, [])
     rr2 = rr.get(p2, [])
@@ -616,7 +699,6 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
 
     feat = {}
 
-    get_decayed_elo = getattr(fe, "get_decayed_elo", lambda b, d, ld: b)
     last_p1 = last_pd.get(p1)
     last_p2 = last_pd.get(p2)
 
@@ -691,7 +773,7 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     cr2 = career_ret.get(p2, 0) / cm2 if cm2 > 0 else 0.0
     feat["career_retirement_rate_diff"]  = cr1 - cr2
 
-    t_cpi = get_cpi(tourney_name, match_date.year, surf)
+    t_cpi = get_cpi(tourney_name, match_date.year, surf, tourney_cpi_yearly)
     feat["tourney_cpi"] = t_cpi
     feat["fast_court_winrate_diff"] = _speed_wr(fast_results, p1) - _speed_wr(fast_results, p2)
     feat["medium_court_winrate_diff"] = _speed_wr(medium_results, p1) - _speed_wr(medium_results, p2)
@@ -709,17 +791,12 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["home_advantage_diff"] = p1_home - p2_home
 
     # Travel & Schedule Strain
-    compute_strain = getattr(fe, "compute_travel_strain", None)
-    if compute_strain:
-        last_tc = state.get("last_tourney_country", {})
-        last_tid = state.get("last_tourney_id", {})
-        strain1, short_sc1 = compute_strain(p1, day, tourney_name, t_country, surf, last_tid, last_pd, last_tc, last_surf)
-        strain2, short_sc2 = compute_strain(p2, day, tourney_name, t_country, surf, last_tid, last_pd, last_tc, last_surf)
-        feat["travel_strain_diff"] = strain1 - strain2
-        feat["short_rest_surface_change_diff"] = short_sc1 - short_sc2
-    else:
-        feat["travel_strain_diff"] = 0.0
-        feat["short_rest_surface_change_diff"] = 0.0
+    last_tc = state.get("last_tourney_country", {})
+    last_tid = state.get("last_tourney_id", {})
+    strain1, short_sc1 = compute_travel_strain(p1, day, tourney_name, t_country, surf, last_tid, last_pd, last_tc, last_surf)
+    strain2, short_sc2 = compute_travel_strain(p2, day, tourney_name, t_country, surf, last_tid, last_pd, last_tc, last_surf)
+    feat["travel_strain_diff"] = strain1 - strain2
+    feat["short_rest_surface_change_diff"] = short_sc1 - short_sc2
 
     # Game Dominance EMA
     def _calc_ema(hist, n):
@@ -981,7 +1058,7 @@ def build_row(feat, feature_cols):
     """Construit un DataFrame 1-ligne avec le même encodage que l'entraînement."""
     df = pd.DataFrame([feat])
     cat_cols = ["surface", "tourney_level", "round", "hand_matchup", "indoor"]
-    df = pd.get_dummies(df, columns=[c for c in cat_cols if c in df.columns])
+    df = pd.get_dummies(df, columns=[c for c in cat_cols if c in df.columns], dtype=float)
     cat_prefixes = tuple(c + "_" for c in cat_cols)
     for col in feature_cols:
         if col not in df.columns:

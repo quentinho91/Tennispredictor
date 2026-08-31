@@ -56,26 +56,54 @@ def get_parser():
     parser.add_argument("--test-months", type=int, default=6, help="Nombre de mois pour le test (défaut: 6)")
     parser.add_argument("--ref-date", default=None, help="Date de référence (AAAA-MM-JJ). Défaut: date max du dataset.")
     parser.add_argument("--half-life-years", type=float, default=7.0, help="Demi-vie en années pour la pondération temporelle (0 pour désactiver, défaut: 7.0)")
+    parser.add_argument("--oof-splits", type=int, default=5, help="Nombre de plis pour les prédictions Out-Of-Fold du meta-learner (défaut: 5, 0 pour désactiver)")
     return parser
 
 
-DEFAULT_PARAMS = dict(
+DEFAULT_PARAMS_XGB = dict(
     max_depth=4, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8,
     min_child_weight=5, reg_lambda=1.5, reg_alpha=0.0, gamma=0.0,
 )
 
+DEFAULT_PARAMS_LGB = dict(
+    learning_rate=0.03, max_depth=5, num_leaves=31, subsample=0.8,
+    colsample_bytree=0.8, min_child_samples=25, reg_lambda=2.0, reg_alpha=0.2,
+)
 
-def load_best_params(circuit="atp"):
-    path = PROCESSED_DIR / f"best_params_{circuit}.json"
-    if path.exists():
+DEFAULT_PARAMS_CAT = dict(
+    learning_rate=0.03, depth=5, l2_leaf_reg=3.5,
+)
+
+DEFAULT_PARAMS = DEFAULT_PARAMS_XGB
+
+
+def load_best_params(circuit="atp", model_type="xgb"):
+    path_specific = PROCESSED_DIR / f"best_params_{model_type}_{circuit}.json"
+    path_legacy = PROCESSED_DIR / f"best_params_{circuit}.json"
+
+    if path_specific.exists():
         try:
-            with open(path) as f:
+            with open(path_specific) as f:
                 params = json.load(f)
-            print(f"Hyperparamètres chargés depuis {path}")
+            print(f"Hyperparamètres {model_type.upper()} chargés depuis {path_specific}")
             return params
         except Exception:
             pass
-    return DEFAULT_PARAMS
+
+    if model_type == "xgb" and path_legacy.exists():
+        try:
+            with open(path_legacy) as f:
+                params = json.load(f)
+            print(f"Hyperparamètres XGB chargés depuis {path_legacy}")
+            return params
+        except Exception:
+            pass
+
+    if model_type == "lgb":
+        return DEFAULT_PARAMS_LGB
+    elif model_type == "cat":
+        return DEFAULT_PARAMS_CAT
+    return DEFAULT_PARAMS_XGB
 
 
 def load_data(circuit="atp"):
@@ -93,7 +121,7 @@ def prepare_xy(df):
     for c in cat_cols:
         if c in df.columns:
             df[c] = df[c].replace("nan", np.nan)
-    df = pd.get_dummies(df, columns=cat_cols, dummy_na=True)
+    df = pd.get_dummies(df, columns=cat_cols, dummy_na=True, dtype=float)
 
     drop_cols = ["match_id", "tourney_date", "target", "retirement"]
     feature_cols = [c for c in df.columns if c not in drop_cols]
@@ -106,9 +134,15 @@ def prepare_xy(df):
 def dynamic_temporal_split(df, X, y, calib_months=12, test_months=6, ref_date=None):
     """
     Découpage temporel glissant dynamique :
-    - Train : tout l'historique jusqu'à (ref_date - calib_months - test_months)
-    - Calib : fenêtre de calib_months avant le test set
-    - Test  : les test_months les plus récents
+    - Train      : tout l'historique jusqu'à (ref_date - calib_months - test_months)
+    - Early-stop : les premiers 75% de la fenêtre calib (pour early stopping + stacking)
+    - Calib-only : les derniers 25% de la fenêtre calib (exclusivement pour la calibration)
+    - Test       : les test_months les plus récents
+
+    NOTE : séparer early-stop et calibration limite le "double-dipping" où
+    le même sous-ensemble servait à l'early stopping des 3 modèles, au
+    stacking, ET au choix de calibration, créant un risque d'optimisme
+    structurel corrélé.
     """
     if ref_date is None:
         ref_date = df["tourney_date"].max()
@@ -117,17 +151,26 @@ def dynamic_temporal_split(df, X, y, calib_months=12, test_months=6, ref_date=No
 
     test_start = ref_date - pd.DateOffset(months=test_months)
     calib_start = test_start - pd.DateOffset(months=calib_months)
+    # Split calib into early_stop (75%) and calib_only (25%)
+    calib_only_months = max(3, calib_months // 4)
+    calib_only_start = test_start - pd.DateOffset(months=calib_only_months)
 
     train_mask = df["tourney_date"] < calib_start
+    early_stop_mask = (df["tourney_date"] >= calib_start) & (df["tourney_date"] < calib_only_start)
+    calib_only_mask = (df["tourney_date"] >= calib_only_start) & (df["tourney_date"] < test_start)
+    # Full calib = early_stop + calib_only (for backward compatibility)
     calib_mask = (df["tourney_date"] >= calib_start) & (df["tourney_date"] < test_start)
     test_mask = df["tourney_date"] >= test_start
 
     print(f"\n--- Découpage Temporel Glissant (Réf: {ref_date.strftime('%Y-%m-%d')}) ---")
-    print(f"  • Train : < {calib_start.strftime('%Y-%m-%d')} ({train_mask.sum():,} matchs)")
-    print(f"  • Calib : {calib_start.strftime('%Y-%m-%d')} à {test_start.strftime('%Y-%m-%d')} ({calib_mask.sum():,} matchs)")
-    print(f"  • Test  : >= {test_start.strftime('%Y-%m-%d')} ({test_mask.sum():,} matchs)")
+    print(f"  • Train      : < {calib_start.strftime('%Y-%m-%d')} ({train_mask.sum():,} matchs)")
+    print(f"  • Early-stop : {calib_start.strftime('%Y-%m-%d')} à {calib_only_start.strftime('%Y-%m-%d')} ({early_stop_mask.sum():,} matchs)")
+    print(f"  • Calib-only : {calib_only_start.strftime('%Y-%m-%d')} à {test_start.strftime('%Y-%m-%d')} ({calib_only_mask.sum():,} matchs)")
+    print(f"  • Test       : >= {test_start.strftime('%Y-%m-%d')} ({test_mask.sum():,} matchs)")
 
     return (X[train_mask], y[train_mask], train_mask,
+            X[early_stop_mask], y[early_stop_mask],
+            X[calib_only_mask], y[calib_only_mask],
             X[calib_mask], y[calib_mask],
             X[test_mask], y[test_mask],
             df.loc[test_mask])
@@ -205,79 +248,203 @@ def evaluate(y_true, p_pred, label):
     return {"log_loss": ll, "brier": brier, "accuracy": acc, "auc": auc}
 
 
+def _fit_isotonic(p_train, y_train):
+    """Fit global isotonic regression."""
+    cal = IsotonicRegression(out_of_bounds="clip")
+    cal.fit(p_train, y_train)
+    return cal
+
+
+def _fit_temperature(p_train, y_train):
+    """Fit temperature scaling and return (T_opt, cal_info_dict)."""
+    def nll_temp(T):
+        logits = np.log(p_train / (1.0 - p_train)) / T
+        p_t = 1.0 / (1.0 + np.exp(-logits))
+        return log_loss(y_train, np.clip(p_t, 1e-6, 1.0 - 1e-6))
+    res_t = minimize_scalar(nll_temp, bounds=(0.5, 3.0), method="bounded")
+    T_opt = float(res_t.x)
+    return T_opt
+
+
+def _apply_temperature(p, T_opt):
+    """Apply temperature scaling to probabilities."""
+    logits = np.log(p / (1.0 - p)) / T_opt
+    return np.clip(1.0 / (1.0 + np.exp(-logits)), 0.001, 0.999)
+
+
+def _fit_bucket(p_train, y_train, bucket_edges, fallback_iso):
+    """Fit per-bucket isotonic calibrators."""
+    bucket_cals = {}
+    for i in range(len(bucket_edges) - 1):
+        lo, hi = bucket_edges[i], bucket_edges[i + 1]
+        m = (p_train >= lo) & (p_train < hi)
+        if m.sum() >= 25:
+            b_cal = IsotonicRegression(out_of_bounds="clip")
+            b_cal.fit(p_train[m], y_train[m])
+            bucket_cals[(lo, hi)] = b_cal
+        else:
+            bucket_cals[(lo, hi)] = None
+    return bucket_cals
+
+
+def _apply_bucket(p, bucket_cals, bucket_edges, fallback_iso):
+    """Apply bucket calibration to probabilities."""
+    p_out = np.copy(p)
+    for (lo, hi), b_cal in bucket_cals.items():
+        m = (p >= lo) & (p < hi)
+        if b_cal is not None and m.sum() > 0:
+            p_out[m] = b_cal.predict(p[m])
+        elif m.sum() > 0:
+            p_out[m] = fallback_iso.predict(p[m])
+    return np.clip(p_out, 0.001, 0.999)
+
+
 def calibrate_predictions(p_calib, y_calib, p_test, label_prefix="Ensemble"):
     """
-    Calibre les probabilités en comparant Isotonic Regression, Temperature Scaling et Bucket Calibration.
+    Calibre les probabilités en comparant Isotonic Regression, Temperature Scaling
+    et Bucket Calibration. La sélection de la meilleure méthode se fait par
+    validation croisée 3-fold sur le calib set (au lieu d'une évaluation in-sample
+    qui favoriserait systématiquement l'Isotonic, plus flexible).
     """
     y_calib_arr = np.array(y_calib)
     p_calib_clamped = np.clip(p_calib, 1e-6, 1.0 - 1e-6)
     p_test_clamped = np.clip(p_test, 1e-6, 1.0 - 1e-6)
-
-    # 1. Global Isotonic
-    cal_iso = IsotonicRegression(out_of_bounds="clip")
-    cal_iso.fit(p_calib_clamped, y_calib_arr)
-    p_iso_test = np.clip(cal_iso.predict(p_test_clamped), 0.001, 0.999)
-    metrics_iso = evaluate(y_calib_arr, cal_iso.predict(p_calib_clamped), f"{label_prefix} + Iso (Calib)")
-
-    # 2. Temperature Scaling
-    def nll_temp(T):
-        logits = np.log(p_calib_clamped / (1.0 - p_calib_clamped)) / T
-        p_t = 1.0 / (1.0 + np.exp(-logits))
-        return log_loss(y_calib_arr, np.clip(p_t, 1e-6, 1.0 - 1e-6))
-
-    res_t = minimize_scalar(nll_temp, bounds=(0.5, 3.0), method="bounded")
-    T_opt = float(res_t.x)
-    logits_test = np.log(p_test_clamped / (1.0 - p_test_clamped)) / T_opt
-    p_temp_test = np.clip(1.0 / (1.0 + np.exp(-logits_test)), 0.001, 0.999)
-    logits_cal = np.log(p_calib_clamped / (1.0 - p_calib_clamped)) / T_opt
-    metrics_temp = evaluate(y_calib_arr, 1.0 / (1.0 + np.exp(-logits_cal)), f"{label_prefix} + Temp (T={T_opt:.2f})")
-
-    # 3. Bucket Calibration
     bucket_edges = [0.0, 0.20, 0.35, 0.50, 0.65, 0.80, 1.01]
-    bucket_cals = {}
-    for i in range(len(bucket_edges) - 1):
-        lo, hi = bucket_edges[i], bucket_edges[i + 1]
-        m = (p_calib_clamped >= lo) & (p_calib_clamped < hi)
-        if m.sum() >= 25:
-            b_cal = IsotonicRegression(out_of_bounds="clip")
-            b_cal.fit(p_calib_clamped[m], y_calib_arr[m])
-            bucket_cals[(lo, hi)] = b_cal
-        else:
-            bucket_cals[(lo, hi)] = None
 
-    p_bucket_test = np.copy(p_test_clamped)
-    for (lo, hi), b_cal in bucket_cals.items():
-        m_test = (p_test_clamped >= lo) & (p_test_clamped < hi)
-        if b_cal is not None and m_test.sum() > 0:
-            p_bucket_test[m_test] = b_cal.predict(p_test_clamped[m_test])
-        elif m_test.sum() > 0:
-            p_bucket_test[m_test] = cal_iso.predict(p_test_clamped[m_test])
-    p_bucket_test = np.clip(p_bucket_test, 0.001, 0.999)
+    # ---------- 1. Cross-validated method selection ----------
+    # Evaluate each calibration method via 3-fold CV to avoid in-sample bias
+    # (Isotonic can overfit the calib set due to its nonparametric flexibility)
+    kf = KFold(n_splits=3, shuffle=True, random_state=42)
+    cv_scores = {"global": [], "temperature": [], "bucket": [], "raw": []}
 
-    # Choix optimal basé sur le LogLoss de calibration
-    options = {
-        "temperature": (p_temp_test, metrics_temp["log_loss"], {"type": "temperature_scaling", "temperature": T_opt}),
-        "global": (p_iso_test, metrics_iso["log_loss"], cal_iso),
-        "bucket": (p_bucket_test, metrics_iso["log_loss"] + 0.001, {"type": "bucket", "calibrators": bucket_cals, "bucket_edges": bucket_edges, "fallback": cal_iso}),
-        "raw": (p_test_clamped, log_loss(y_calib_arr, p_calib_clamped), None)
-    }
-    best_name = min(options, key=lambda k: options[k][1])
-    best_p_test, _, best_cal_obj = options[best_name]
-    return best_p_test, best_cal_obj, best_name
+    for fold_train_idx, fold_val_idx in kf.split(p_calib_clamped):
+        p_fold_train = p_calib_clamped[fold_train_idx]
+        y_fold_train = y_calib_arr[fold_train_idx]
+        p_fold_val = p_calib_clamped[fold_val_idx]
+        y_fold_val = y_calib_arr[fold_val_idx]
+
+        # Raw (no calibration)
+        cv_scores["raw"].append(log_loss(y_fold_val, p_fold_val))
+
+        # Global Isotonic
+        fold_iso = _fit_isotonic(p_fold_train, y_fold_train)
+        p_iso_val = np.clip(fold_iso.predict(p_fold_val), 0.001, 0.999)
+        cv_scores["global"].append(log_loss(y_fold_val, p_iso_val))
+
+        # Temperature Scaling
+        T_fold = _fit_temperature(p_fold_train, y_fold_train)
+        p_temp_val = _apply_temperature(p_fold_val, T_fold)
+        cv_scores["temperature"].append(log_loss(y_fold_val, p_temp_val))
+
+        # Bucket Calibration
+        fold_iso_fallback = fold_iso  # reuse fold isotonic as fallback
+        fold_bucket_cals = _fit_bucket(p_fold_train, y_fold_train, bucket_edges, fold_iso_fallback)
+        p_bucket_val = _apply_bucket(p_fold_val, fold_bucket_cals, bucket_edges, fold_iso_fallback)
+        cv_scores["bucket"].append(log_loss(y_fold_val, p_bucket_val))
+
+    # Print CV results
+    print(f"\n  Calibration CV (3-fold) log-loss :")
+    for method, scores in cv_scores.items():
+        mean_score = np.mean(scores)
+        print(f"    {method:<15} : {mean_score:.4f} (±{np.std(scores):.4f})")
+
+    best_name = min(cv_scores, key=lambda k: np.mean(cv_scores[k]))
+
+    # ---------- 2. Refit best method on full calib set, apply to test ----------
+    # Global isotonic (always needed as bucket fallback)
+    cal_iso = _fit_isotonic(p_calib_clamped, y_calib_arr)
+
+    if best_name == "global":
+        p_best_test = np.clip(cal_iso.predict(p_test_clamped), 0.001, 0.999)
+        best_cal_obj = cal_iso
+        evaluate(y_calib_arr, cal_iso.predict(p_calib_clamped), f"{label_prefix} + Iso (Calib)")
+    elif best_name == "temperature":
+        T_opt = _fit_temperature(p_calib_clamped, y_calib_arr)
+        p_best_test = _apply_temperature(p_test_clamped, T_opt)
+        best_cal_obj = {"type": "temperature_scaling", "temperature": T_opt}
+        evaluate(y_calib_arr, _apply_temperature(p_calib_clamped, T_opt), f"{label_prefix} + Temp (T={T_opt:.2f})")
+    elif best_name == "bucket":
+        bucket_cals = _fit_bucket(p_calib_clamped, y_calib_arr, bucket_edges, cal_iso)
+        p_best_test = _apply_bucket(p_test_clamped, bucket_cals, bucket_edges, cal_iso)
+        best_cal_obj = {"type": "bucket", "calibrators": bucket_cals, "bucket_edges": bucket_edges, "fallback": cal_iso}
+        # Compute and display actual bucket log-loss on calib set
+        p_bucket_calib = _apply_bucket(p_calib_clamped, bucket_cals, bucket_edges, cal_iso)
+        evaluate(y_calib_arr, p_bucket_calib, f"{label_prefix} + Bucket (Calib)")
+    else:  # raw
+        p_best_test = p_test_clamped
+        best_cal_obj = None
+        evaluate(y_calib_arr, p_calib_clamped, f"{label_prefix} + Raw (Calib)")
+
+    return p_best_test, best_cal_obj, best_name
+
+
+def generate_oof_predictions(X_train, y_train, sample_weights, xgb_params, lgb_params, cat_params, n_splits=5):
+    """
+    Génère de véritables prédictions Out-Of-Fold (OOF) pour les 3 modèles de base
+    sur l'ensemble d'entraînement X_train via K-Fold CV.
+    """
+    print(f"\n--- Génération des métadonnées OOF Stacking ({n_splits}-Fold CV sur {len(X_train):,} matchs) ---")
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    oof_xgb = np.zeros(len(X_train))
+    oof_lgb = np.zeros(len(X_train))
+    oof_cat = np.zeros(len(X_train))
+
+    y_arr = np.array(y_train)
+    X_mat = X_train.values
+
+    for fold, (train_idx, val_idx) in enumerate(kf.split(X_mat, y_arr), 1):
+        X_tr, y_tr = X_train.iloc[train_idx], y_train.iloc[train_idx]
+        X_va, y_va = X_train.iloc[val_idx], y_train.iloc[val_idx]
+        w_tr = sample_weights[train_idx] if sample_weights is not None else None
+
+        # XGBoost
+        m_xgb = xgb.XGBClassifier(
+            n_estimators=700, eval_metric="logloss", early_stopping_rounds=30,
+            n_jobs=-1, tree_method="hist", **xgb_params
+        )
+        m_xgb.fit(X_tr, y_tr, sample_weight=w_tr, eval_set=[(X_va, y_va)], verbose=False)
+        oof_xgb[val_idx] = m_xgb.predict_proba(X_va)[:, 1]
+
+        # LightGBM
+        m_lgb = lgb.LGBMClassifier(
+            n_estimators=700, random_state=42, n_jobs=-1, verbose=-1, **lgb_params
+        )
+        m_lgb.fit(X_tr, y_tr, sample_weight=w_tr, eval_set=[(X_va, y_va)], callbacks=[lgb.early_stopping(30, verbose=False)])
+        oof_lgb[val_idx] = m_lgb.predict_proba(X_va)[:, 1]
+
+        # CatBoost
+        m_cat = CatBoostClassifier(
+            iterations=700, random_seed=42, early_stopping_rounds=30,
+            verbose=False, thread_count=-1, **cat_params
+        )
+        m_cat.fit(X_tr, y_tr, sample_weight=w_tr, eval_set=(X_va, y_va))
+        oof_cat[val_idx] = m_cat.predict_proba(X_va)[:, 1]
+
+        print(f"  • Pli {fold}/{n_splits} OOF calculé")
+
+    M_oof = np.column_stack([oof_xgb, oof_lgb, oof_cat])
+    return M_oof
 
 
 if __name__ == "__main__":
     args = get_parser().parse_args()
     print(f"\n{'='*75}")
     print(f"  ENTRAÎNEMENT STACKING MULTI-MODÈLES ({args.circuit.upper()})")
-    print(f"  Architectures : XGBoost + LightGBM + CatBoost + Méta-Learner Stacking")
+    print(f"  Architectures : XGBoost + LightGBM + CatBoost + Méta-Learner Stacking OOF")
     print(f"{'='*75}")
 
     df = load_data(circuit=args.circuit)
     X, y, feature_cols = prepare_xy(df)
 
     # Découpage temporel glissant
-    X_train, y_train, train_mask, X_calib, y_calib, X_test, y_test, df_test = dynamic_temporal_split(
+    # early_stop : pour early stopping des modèles + stacking (75% de la fenêtre calib)
+    # calib_only : exclusivement pour la calibration (25% de la fenêtre calib)
+    # calib      : union des deux (pour prédictions OOF du stacking -> calibration)
+    (X_train, y_train, train_mask,
+     X_early_stop, y_early_stop,
+     X_calib_only, y_calib_only,
+     X_calib, y_calib,
+     X_test, y_test, df_test) = dynamic_temporal_split(
         df, X, y,
         calib_months=args.calib_months,
         test_months=args.test_months,
@@ -287,6 +454,8 @@ if __name__ == "__main__":
     # Nettoyage et sélection des features
     feature_cols = filter_features(X_train, y_train, feature_cols, correlation_threshold=0.95)
     X_train = X_train[feature_cols]
+    X_early_stop = X_early_stop[feature_cols]
+    X_calib_only = X_calib_only[feature_cols]
     X_calib = X_calib[feature_cols]
     X_test = X_test[feature_cols]
 
@@ -296,7 +465,9 @@ if __name__ == "__main__":
     if sample_weights is not None:
         print(f"Pondération temporelle active : demi-vie = {args.half_life_years} ans (poids moyen = {sample_weights.mean():.3f})")
 
-    best_params = load_best_params(circuit=args.circuit)
+    params_xgb = load_best_params(circuit=args.circuit, model_type="xgb")
+    params_lgb = load_best_params(circuit=args.circuit, model_type="lgb")
+    params_cat = load_best_params(circuit=args.circuit, model_type="cat")
 
     # -----------------------------------------------------------------------
     # 1. MODÈLE 1 : XGBoost Classifier
@@ -308,15 +479,16 @@ if __name__ == "__main__":
         early_stopping_rounds=30,
         n_jobs=-1,
         tree_method="hist",
-        **best_params,
+        **params_xgb,
     )
     xgb_model.fit(
         X_train, y_train,
         sample_weight=sample_weights,
-        eval_set=[(X_calib, y_calib)],
+        eval_set=[(X_early_stop, y_early_stop)],
         verbose=False
     )
     p_xgb_calib = xgb_model.predict_proba(X_calib)[:, 1]
+    p_xgb_calib_only = xgb_model.predict_proba(X_calib_only)[:, 1]
     p_xgb_test = xgb_model.predict_proba(X_test)[:, 1]
 
     # -----------------------------------------------------------------------
@@ -325,25 +497,19 @@ if __name__ == "__main__":
     print("\n[2/3] Entraînement de LightGBM Classifier...")
     lgb_model = lgb.LGBMClassifier(
         n_estimators=700,
-        learning_rate=0.03,
-        max_depth=5,
-        num_leaves=31,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        min_child_samples=25,
-        reg_lambda=2.0,
-        reg_alpha=0.2,
         random_state=42,
         n_jobs=-1,
-        verbose=-1
+        verbose=-1,
+        **params_lgb,
     )
     lgb_model.fit(
         X_train, y_train,
         sample_weight=sample_weights,
-        eval_set=[(X_calib, y_calib)],
+        eval_set=[(X_early_stop, y_early_stop)],
         callbacks=[lgb.early_stopping(30, verbose=False)]
     )
     p_lgb_calib = lgb_model.predict_proba(X_calib)[:, 1]
+    p_lgb_calib_only = lgb_model.predict_proba(X_calib_only)[:, 1]
     p_lgb_test = lgb_model.predict_proba(X_test)[:, 1]
 
     # -----------------------------------------------------------------------
@@ -352,44 +518,53 @@ if __name__ == "__main__":
     print("\n[3/3] Entraînement de CatBoost Classifier...")
     cat_model = CatBoostClassifier(
         iterations=700,
-        learning_rate=0.03,
-        depth=5,
-        l2_leaf_reg=3.5,
         random_seed=42,
         early_stopping_rounds=30,
         verbose=False,
-        thread_count=-1
+        thread_count=-1,
+        **params_cat,
     )
     cat_model.fit(
         X_train, y_train,
         sample_weight=sample_weights,
-        eval_set=(X_calib, y_calib)
+        eval_set=(X_early_stop, y_early_stop)
     )
     p_cat_calib = cat_model.predict_proba(X_calib)[:, 1]
+    p_cat_calib_only = cat_model.predict_proba(X_calib_only)[:, 1]
     p_cat_test = cat_model.predict_proba(X_test)[:, 1]
 
     # -----------------------------------------------------------------------
-    # 4. MÉTA-LEARNER STACKING (Régression Logistique Blending)
+    # 4. MÉTA-LEARNER STACKING (Entraîné sur OOF Train ou Calib)
     # -----------------------------------------------------------------------
-    print("\n--- Entraînement du Méta-Learner (Stacking Logistic Regression) ---")
-    M_calib = np.column_stack([p_xgb_calib, p_lgb_calib, p_cat_calib])
+    print("\n--- Entraînement du Méta-Learner Stacking (Logistic Regression) ---")
+    if args.oof_splits >= 2:
+        M_oof_train = generate_oof_predictions(
+            X_train, y_train, sample_weights, params_xgb, params_lgb, params_cat, n_splits=args.oof_splits
+        )
+        meta_learner = LogisticRegression(C=1.0, fit_intercept=True, random_state=42)
+        meta_learner.fit(M_oof_train, y_train, sample_weight=sample_weights)
+        print("  • Méta-Learner ajusté avec succès sur les prédictions Out-Of-Fold historiques.")
+    else:
+        M_calib = np.column_stack([p_xgb_calib, p_lgb_calib, p_cat_calib])
+        meta_learner = LogisticRegression(C=1.0, fit_intercept=True, random_state=42)
+        meta_learner.fit(M_calib, y_calib)
+        print("  • Méta-Learner ajusté sur la tranche calib (mode rapide).")
+
     M_test = np.column_stack([p_xgb_test, p_lgb_test, p_cat_test])
-
-    meta_learner = LogisticRegression(C=1.0, fit_intercept=True, random_state=42)
-    meta_learner.fit(M_calib, y_calib)
-
     coefs = meta_learner.coef_[0]
     weights_norm = np.maximum(0, coefs) / (np.maximum(0, coefs).sum() + 1e-12)
     print(f"  • Poids relatifs : XGBoost = {weights_norm[0]*100:.1f}% | LightGBM = {weights_norm[1]*100:.1f}% | CatBoost = {weights_norm[2]*100:.1f}%")
 
-    p_ensemble_calib_raw = meta_learner.predict_proba(M_calib)[:, 1]
     p_ensemble_test_raw = meta_learner.predict_proba(M_test)[:, 1]
 
     # -----------------------------------------------------------------------
     # 5. CALIBRATION DE L'ENSEMBLE
     # -----------------------------------------------------------------------
+    M_calib_only = np.column_stack([p_xgb_calib_only, p_lgb_calib_only, p_cat_calib_only])
+    p_ensemble_calib_only_raw = meta_learner.predict_proba(M_calib_only)[:, 1]
+
     p_ensemble_test_calib, calibrator_obj, best_calib_name = calibrate_predictions(
-        p_ensemble_calib_raw, y_calib, p_ensemble_test_raw, label_prefix="Ensemble"
+        p_ensemble_calib_only_raw, y_calib_only, p_ensemble_test_raw, label_prefix="Ensemble"
     )
     print(f"=> Meilleure calibration retenue : {best_calib_name}")
 

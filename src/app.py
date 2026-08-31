@@ -460,11 +460,11 @@ def evaluate_market_value(
         confidence_damping = 0.0
         confidence_status = "BLOCKED_MARKET_ANOMALY"
         confidence_note = f"Alerte anomalie de marché (écart {market_divergence*100:.0f}%) : Suspicion de blessure ou forfait de dernière minute"
-    elif odds < 1.15:
+    elif odds < 1.50:
         is_vb = False
         confidence_damping = 0.0
-        confidence_status = "BLOCKED_ULTRA_LOW_ODDS"
-        confidence_note = "Cote ultra-faible (< 1.15) : Ratio risque/rendement insuffisant face aux risques d'abandon"
+        confidence_status = "BLOCKED_LOW_ODDS"
+        confidence_note = "Cote trop faible (< 1.50) : Non éligible Value Bet (ratio risque/gain asymétrique)"
     elif conf_score < 58.0:
         is_vb = False
         confidence_damping = 0.0

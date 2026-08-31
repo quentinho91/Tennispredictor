@@ -88,6 +88,119 @@ SERVE_RETURN_KEYS = ("ace_rate", "df_rate", "first_in_pct", "first_won_pct",
                       "second_won_pct", "bp_saved_pct",
                       "return_pts_won_pct", "bp_converted_pct", "grind_index")  # 6 service + 2 retour + 1 rythme
 
+# ---------------------------------------------------------------------------
+# Fonctions partagées entre 02_feature_engineering.py et 05_predict_match.py
+# (extraites au niveau module pour éviter les duplications et les divergences)
+# ---------------------------------------------------------------------------
+
+ALTITUDES = {
+    "Bogota": 2640, "Quito": 2850, "Johannesburg": 1750, "Gstaad": 1050,
+    "Kitzbuhel": 762, "Sao Paulo": 760, "Madrid": 667, "Sofia": 590,
+    "Santiago": 570, "Munich": 520, "Denver": 1609
+}
+
+
+def get_altitude(t_name):
+    """Return altitude in meters for known high-altitude tournament cities."""
+    if not isinstance(t_name, str):
+        return 0
+    for city, alt in ALTITUDES.items():
+        if city.lower() in t_name.lower():
+            return alt
+    return 0
+
+
+def get_tourney_country(t_name):
+    """Map tournament name to country code."""
+    if not isinstance(t_name, str): return "UNKNOWN"
+    t = t_name.lower()
+    if any(x in t for x in ["us open", "miami", "cincinnati", "indian wells", "washington", "dallas", "delray", "houston", "atlanta", "winston-salem", "newport"]): return "USA"
+    if any(x in t for x in ["roland garros", "paris", "marseille", "montpellier", "lyon", "metz"]): return "FRA"
+    if any(x in t for x in ["madrid", "barcelona", "mallorca"]): return "ESP"
+    if any(x in t for x in ["australian open", "brisbane", "sydney", "adelaide", "perth"]): return "AUS"
+    if any(x in t for x in ["wimbledon", "queen", "eastbourne", "london"]): return "GBR"
+    if any(x in t for x in ["rome", "turin", "milan", "naples"]): return "ITA"
+    if any(x in t for x in ["munich", "halle", "hamburg", "stuttgart"]): return "GER"
+    if any(x in t for x in ["geneva", "basel", "gstaad"]): return "SUI"
+    if any(x in t for x in ["buenos aires", "cordoba"]): return "ARG"
+    if any(x in t for x in ["shanghai", "beijing", "chengdu", "zhuhai", "hangzhou"]): return "CHN"
+    if "tokyo" in t: return "JPN"
+    if any(x in t for x in ["toronto", "montreal"]): return "CAN"
+    if "vienna" in t: return "AUT"
+    if "dubai" in t: return "UAE"
+    if "doha" in t: return "QAT"
+    if "stockholm" in t or "bastad" in t: return "SWE"
+    if "s-hertogenbosch" in t or "rotterdam" in t: return "NED"
+    return "UNKNOWN"
+
+
+def get_cpi(t_name, t_year, t_surf, tourney_cpi_yearly):
+    """Court Pace Index from historical ace-rate data (uses only past years)."""
+    if t_name in tourney_cpi_yearly:
+        hist = [tourney_cpi_yearly[t_name][y] for y in range(t_year-3, t_year) if y in tourney_cpi_yearly[t_name]]
+        if hist:
+            return sum(hist) / len(hist)
+    if t_surf == 'Hard': return 8.5
+    elif t_surf == 'Clay': return 5.5
+    elif t_surf == 'Grass': return 10.5
+    return 8.0
+
+
+def speed_wr(results_dict, p):
+    """Win-rate on fast/medium/slow/altitude courts (last 30 results)."""
+    lst = results_dict.get(p, [])[-30:]
+    if not lst: return 0.5
+    return sum(w for d, w in lst) / len(lst)
+
+
+COUNTRY_CONTINENT = {
+    "USA": "NA", "CAN": "NA", "MEX": "NA",
+    "ARG": "SA", "BRA": "SA", "CHI": "SA", "COL": "SA", "ECU": "SA",
+    "FRA": "EU", "ESP": "EU", "GBR": "EU", "ITA": "EU", "GER": "EU", "SUI": "EU",
+    "AUT": "EU", "SWE": "EU", "NED": "EU", "BEL": "EU", "POR": "EU", "CRO": "EU",
+    "SRB": "EU", "GRE": "EU", "CZE": "EU", "POL": "EU", "ROU": "EU", "BUL": "EU",
+    "MON": "EU", "RUS": "EU",
+    "CHN": "AS", "JPN": "AS", "UAE": "AS", "QAT": "AS", "KOR": "AS", "IND": "AS", "KAZ": "AS", "SAU": "AS", "SGP": "AS",
+    "AUS": "OC", "NZL": "OC",
+    "RSA": "AF", "MAR": "AF", "TUN": "AF", "EGY": "AF"
+}
+
+
+def compute_travel_strain(player, day, t1_id, t_country, surf, last_tourney_id_dict, last_play_date_dict, last_tourney_country_dict, last_surface_dict):
+    """Calcule la fatigue de déplacement et le changement de surface rapide."""
+    prev_t_id = last_tourney_id_dict.get(player)
+    if prev_t_id == t1_id or player not in last_play_date_dict:
+        return 0.0, 0.0
+
+    days_rest = day - last_play_date_dict[player]
+    if days_rest > 7:
+        return 0.0, 0.0
+
+    prev_country = last_tourney_country_dict.get(player, "UNKNOWN")
+    prev_cont = COUNTRY_CONTINENT.get(prev_country)
+    curr_cont = COUNTRY_CONTINENT.get(t_country)
+
+    diff_continent = int(prev_cont is not None and curr_cont is not None and prev_cont != curr_cont)
+    diff_country = int(prev_country not in ("UNKNOWN", t_country) and t_country != "UNKNOWN")
+    diff_surface = int(last_surface_dict.get(player) is not None and last_surface_dict[player] != surf)
+
+    strain = 0.0
+    if days_rest <= 4:
+        strain += 1.5
+    elif days_rest <= 7:
+        strain += 0.5
+
+    if diff_continent:
+        strain += 2.0
+    elif diff_country:
+        strain += 0.75
+
+    if diff_surface:
+        strain += 1.25
+
+    short_sc = 1.0 if (days_rest <= 4 and diff_surface) else 0.0
+    return strain, short_sc
+
 
 def elo_expected(ra, rb):
     return 1.0 / (1.0 + 10 ** ((rb - ra) / 400.0))
@@ -338,83 +451,11 @@ def build_features(df, circuit="atp", state_only=False):
         weights = [(1.0 - alpha)**(k - 1 - i) for i in range(k)]
         return float(np.average(recent, weights=weights))
 
-    def get_tourney_country(t_name):
-        if not isinstance(t_name, str): return "UNKNOWN"
-        t = t_name.lower()
-        if any(x in t for x in ["us open", "miami", "cincinnati", "indian wells", "washington", "dallas", "delray", "houston", "atlanta", "winston-salem", "newport"]): return "USA"
-        if any(x in t for x in ["roland garros", "paris", "marseille", "montpellier", "lyon", "metz"]): return "FRA"
-        if any(x in t for x in ["madrid", "barcelona", "mallorca"]): return "ESP"
-        if any(x in t for x in ["australian open", "brisbane", "sydney", "adelaide", "perth"]): return "AUS"
-        if any(x in t for x in ["wimbledon", "queen", "eastbourne", "london"]): return "GBR"
-        if any(x in t for x in ["rome", "turin", "milan", "naples"]): return "ITA"
-        if any(x in t for x in ["munich", "halle", "hamburg", "stuttgart"]): return "GER"
-        if any(x in t for x in ["geneva", "basel", "gstaad"]): return "SUI"
-        if any(x in t for x in ["buenos aires", "cordoba"]): return "ARG"
-        if any(x in t for x in ["shanghai", "beijing", "chengdu", "zhuhai", "hangzhou"]): return "CHN"
-        if "tokyo" in t: return "JPN"
-        if any(x in t for x in ["toronto", "montreal"]): return "CAN"
-        if "vienna" in t: return "AUT"
-        if "dubai" in t: return "UAE"
-        if "doha" in t: return "QAT"
-        if "stockholm" in t or "bastad" in t: return "SWE"
-        if "s-hertogenbosch" in t or "rotterdam" in t: return "NED"
-        return "UNKNOWN"
+    # get_tourney_country is now a module-level function (see top of file)
 
     
-    COUNTRY_CONTINENT = {
-        "USA": "NA", "CAN": "NA", "MEX": "NA",
-        "ARG": "SA", "BRA": "SA", "CHI": "SA", "COL": "SA", "ECU": "SA",
-        "FRA": "EU", "ESP": "EU", "GBR": "EU", "ITA": "EU", "GER": "EU", "SUI": "EU",
-        "AUT": "EU", "SWE": "EU", "NED": "EU", "BEL": "EU", "POR": "EU", "CRO": "EU",
-        "SRB": "EU", "GRE": "EU", "CZE": "EU", "POL": "EU", "ROU": "EU", "BUL": "EU",
-        "MON": "EU", "RUS": "EU",
-        "CHN": "AS", "JPN": "AS", "UAE": "AS", "QAT": "AS", "KOR": "AS", "IND": "AS", "KAZ": "AS", "SAU": "AS", "SGP": "AS",
-        "AUS": "OC", "NZL": "OC",
-        "RSA": "AF", "MAR": "AF", "TUN": "AF", "EGY": "AF"
-    }
-
-    def compute_travel_strain(player, day, t1_id, t_country, surf, last_tourney_id_dict, last_play_date_dict, last_tourney_country_dict, last_surface_dict):
-        prev_t_id = last_tourney_id_dict.get(player)
-        if prev_t_id == t1_id or player not in last_play_date_dict:
-            return 0.0, 0.0
-
-        days_rest = day - last_play_date_dict[player]
-        if days_rest > 7:
-            return 0.0, 0.0
-
-        prev_country = last_tourney_country_dict.get(player, "UNKNOWN")
-        prev_cont = COUNTRY_CONTINENT.get(prev_country)
-        curr_cont = COUNTRY_CONTINENT.get(t_country)
-
-        diff_continent = int(prev_cont is not None and curr_cont is not None and prev_cont != curr_cont)
-        diff_country = int(prev_country not in ("UNKNOWN", t_country) and t_country != "UNKNOWN")
-        diff_surface = int(last_surface_dict.get(player) is not None and last_surface_dict[player] != surf)
-
-        strain = 0.0
-        if days_rest <= 4:
-            strain += 1.5
-        elif days_rest <= 7:
-            strain += 0.5
-
-        if diff_continent:
-            strain += 2.0
-        elif diff_country:
-            strain += 0.75
-
-        if diff_surface:
-            strain += 1.25
-
-        short_sc = 1.0 if (days_rest <= 4 and diff_surface) else 0.0
-        return strain, short_sc
-
-    ALTITUDES = {"Bogota": 2640, "Quito": 2850, "Johannesburg": 1750, "Gstaad": 1050, "Kitzbuhel": 762, "Sao Paulo": 760, "Madrid": 667, "Sofia": 590, "Santiago": 570, "Munich": 520}
-    
-    def get_altitude(t_name):
-        if not isinstance(t_name, str): return 0
-        for city, alt in ALTITUDES.items():
-            if city.lower() in t_name.lower():
-                return alt
-        return 0
+    # COUNTRY_CONTINENT and compute_travel_strain are now module-level (see top of file)
+    # ALTITUDES and get_altitude are now module-level (see top of file)
 
     # ================= Tableaux de sortie pré-alloués =================
 
@@ -471,20 +512,8 @@ def build_features(df, circuit="atp", state_only=False):
         serve_diff_20 = None
 
     
-    def get_cpi(t_name, t_year, t_surf):
-        if t_name in tourney_cpi_yearly:
-            hist = [tourney_cpi_yearly[t_name][y] for y in range(t_year-3, t_year) if y in tourney_cpi_yearly[t_name]]
-            if hist:
-                return sum(hist) / len(hist)
-        if t_surf == 'Hard': return 8.5
-        elif t_surf == 'Clay': return 5.5
-        elif t_surf == 'Grass': return 10.5
-        return 8.0
-        
-    def _speed_wr(results_dict, p):
-        lst = results_dict.get(p, [])[-30:]
-        if not lst: return 0.5
-        return sum(w for d, w in lst) / len(lst)
+    # get_cpi and _speed_wr are now module-level functions (see top of file)
+    _speed_wr = speed_wr  # local alias for backward compatibility within this function
 
     t0 = time.time()
     for i in range(n):
@@ -543,7 +572,7 @@ def build_features(df, circuit="atp", state_only=False):
             out["consistency_diff"][i] = _consistency(rr2, 20) - _consistency(rr1, 20)  # std plus bas = plus régulier
 
             # CPI Features
-            t_cpi = get_cpi(t_name, t_year, surf)
+            t_cpi = get_cpi(t_name, t_year, surf, tourney_cpi_yearly)
             out["tourney_cpi"][i] = t_cpi
             out["fast_court_winrate_diff"][i] = _speed_wr(fast_results, p1) - _speed_wr(fast_results, p2)
             out["medium_court_winrate_diff"][i] = _speed_wr(medium_results, p1) - _speed_wr(medium_results, p2)
@@ -965,7 +994,7 @@ def build_features(df, circuit="atp", state_only=False):
             return_elo_surface[surf][p1] -= k_ret1 * delta2_s
 
         # Update court speeds results
-        t_cpi_val = get_cpi(t_name, t_year, surf)
+        t_cpi_val = get_cpi(t_name, t_year, surf, tourney_cpi_yearly)
         if t_cpi_val >= 9.5:
             fast_results[p1].append((day, 1 if p1_won else 0)); _trim(fast_results[p1], 30)
             fast_results[p2].append((day, 0 if p1_won else 1)); _trim(fast_results[p2], 30)
