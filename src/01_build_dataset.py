@@ -105,6 +105,21 @@ def basic_clean(df):
     df["surface"] = df["surface"].astype(str)
     df["surface"] = df["surface"].replace({"nan": None})
 
+    # Normalisation de indoor
+    if "indoor" in df.columns:
+        def _clean_indoor(val):
+            if pd.isna(val):
+                return None
+            s = str(val).strip().upper()
+            if s in ("I", "1", "1.0", "TRUE", "INDOOR"):
+                return "I"
+            if s in ("O", "0", "0.0", "FALSE", "OUTDOOR"):
+                return "O"
+            return None
+        df["indoor"] = df["indoor"].apply(_clean_indoor)
+    else:
+        df["indoor"] = None
+
     n_before = len(df)
     df = df[df["tourney_date"].dt.year >= MIN_YEAR]
     print(f"Filtre MIN_YEAR={MIN_YEAR}: {n_before} -> {len(df)} matchs")
@@ -140,10 +155,8 @@ def to_symmetric(df):
         "round": df["round"],
         "retirement": df["retirement"],
         "score": df["score"],  # gardé brut, toujours écrit du point de vue du VAINQUEUR
-                                 # (donc du point de vue p1 seulement si p1_is_winner==True,
-                                 # sinon il faut inverser chaque set — fait dans 02_feature_engineering.py)
         "minutes": pd.to_numeric(df["minutes"], errors="coerce"),
-        "indoor": df["indoor"],  # 'I' / 'O' / NaN
+        "indoor": df["indoor"],
     })
 
     cols_map = [
@@ -168,11 +181,7 @@ def to_symmetric(df):
         ("entry", "winner_entry", "loser_entry"),
     ]
 
-    # Colonnes qui doivent être numériques. Selon les fichiers sources (tour
-    # principal / qualifs / challengers / futures), certaines valeurs sont
-    # parfois stockées en texte -> ça casse l'écriture en parquet si on ne
-    # force pas le type explicitement (colonne "object" avec un mélange de
-    # str et de float en interne).
+    # Colonnes qui doivent être numériques
     numeric_bases = {"ht", "age", "rank", "rank_points", "ace", "df", "svpt",
                       "1stIn", "1stWon", "2ndWon", "SvGms", "bpSaved", "bpFaced", "seed"}
 
@@ -181,12 +190,22 @@ def to_symmetric(df):
             w_series = pd.to_numeric(df[wcol], errors="coerce")
             l_series = pd.to_numeric(df[lcol], errors="coerce")
         else:
-            w_series, l_series = df[wcol], df[lcol]
+            w_series = df[wcol].astype(object).where(df[wcol].notna(), None).apply(lambda x: str(x) if x is not None else None)
+            l_series = df[lcol].astype(object).where(df[lcol].notna(), None).apply(lambda x: str(x) if x is not None else None)
         out[f"p1_{base}"] = np.where(p1_is_winner, w_series, l_series)
         out[f"p2_{base}"] = np.where(p1_is_winner, l_series, w_series)
         if base in numeric_bases:
             out[f"p1_{base}"] = pd.to_numeric(out[f"p1_{base}"], errors="coerce")
             out[f"p2_{base}"] = pd.to_numeric(out[f"p2_{base}"], errors="coerce")
+        else:
+            out[f"p1_{base}"] = out[f"p1_{base}"].astype(object).where(out[f"p1_{base}"].notna(), None).apply(lambda x: str(x) if x is not None else None)
+            out[f"p2_{base}"] = out[f"p2_{base}"].astype(object).where(out[f"p2_{base}"].notna(), None).apply(lambda x: str(x) if x is not None else None)
+
+    # Nettoyage des colonnes chaînes de caractères pour garantir un type PyArrow cohérent
+    str_cols = ["tourney_id", "tourney_name", "surface", "tourney_level", "round", "score", "indoor"]
+    for col in str_cols:
+        if col in out.columns:
+            out[col] = out[col].astype(object).where(out[col].notna(), None).apply(lambda x: str(x) if x is not None else None)
 
     out["target"] = p1_is_winner.astype(int)  # 1 si player_1 gagne
     return out
