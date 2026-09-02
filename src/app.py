@@ -445,7 +445,13 @@ def evaluate_market_value(
     # DÉTECTION D'ANOMALIE DE MARCHÉ (Suspicion de blessure / forfait de dernière minute)
     # --------------------------------------------------------------------------
     market_divergence = abs(raw_model_prob - market_prob)
-    is_market_anomaly = bool(market_divergence >= 0.25)
+    # N'activer l'anomalie que si les deux cotes opposées sont disponibles
+    # (sinon l'estimation à 5.5% de marge est trop imprécise pour être fiable)
+    # De plus, on exige que les deux cotes soient dans une plage réaliste [1.05 - 15]
+    # pour éviter les faux positifs sur les gros favoris (cote < 1.10) ou inconnus
+    _both_odds_known = bool(opp_odds and opp_odds > 1.0)
+    _realistic_match = bool(odds <= 10.0 and (opp_odds or 2.0) <= 10.0)
+    is_market_anomaly = bool(market_divergence >= 0.25 and _both_odds_known and _realistic_match)
 
     # --------------------------------------------------------------------------
     # FILTRAGE SÉLECTIF HAUTE CONVICTION
@@ -483,17 +489,18 @@ def evaluate_market_value(
             confidence_status = "BLOCKED_LONGSHOT"
             confidence_note = "Grosse cote (> 3.80) non qualifiée : Marge de sécurité insuffisante"
     elif conf_score < 72.0:
-        # Confiance modérée : nécessite un avantage net (Edge >= 6%, EV >= 7%)
-        if edge >= 0.060 and ev >= 0.070:
+        # Confiance modérée : avantage net requis (Edge >= 4.5%, EV >= 5.5%)
+        # Le consensus 50/50 atténue déjà suffisamment les faux positifs
+        if edge >= 0.045 and ev >= 0.055:
             is_vb = True
-            confidence_damping = 0.50
+            confidence_damping = 0.60
             confidence_status = "DAMPED_MEDIUM_CONFIDENCE"
-            confidence_note = "Mise amortie (-50%) : Confiance modérée avec avantage solide (Edge > 6%, EV > 7%)"
+            confidence_note = "Mise amortie (-40%) : Confiance modérée avec avantage solide (Edge > 4.5%, EV > 5.5%)"
         else:
             is_vb = False
             confidence_damping = 0.0
             confidence_status = "LOW_EV"
-            confidence_note = "Avantage insuffisant pour valider en confiance modérée (requis: Edge >= 6%, EV >= 7%)"
+            confidence_note = "Avantage insuffisant pour valider en confiance modérée (requis: Edge >= 4.5%, EV >= 5.5%)"
     else:
         # Haute confiance : seuil standard (Edge >= 4.5%, EV >= 5%)
         if edge >= 0.045 and ev >= 0.050:
@@ -1279,6 +1286,30 @@ def predict_match(req: PredictionRequest):
     p_p1 = float(p_raw[1])
     p_p2 = float(p_raw[0])
 
+    # --------------------------------------------------------------------------
+    # AMORTISSEMENT JOUEUR INCONNU
+    # Quand un joueur n'est pas dans la base (ELO par défaut = 1500, 0 matchs
+    # récents), XGBoost sature à 0% ou 100% car toutes ses features sont neutres.
+    # On borne la proba vers 50% pour refléter l'incertitude réelle.
+    # --------------------------------------------------------------------------
+    _rr_state = state.get("recent_results", {})
+    _elo_state = state.get("elo", {})
+    _rr1_len = len(_rr_state.get(p1, []))
+    _rr2_len = len(_rr_state.get(p2, []))
+    _elo1_known = p1 in _elo_state
+    _elo2_known = p2 in _elo_state
+
+    # Un joueur est "inconnu" s'il a 0 matchs récents ET n'est pas dans la base elo
+    _p1_unknown = (not _elo1_known) or (_rr1_len == 0 and not _elo1_known)
+    _p2_unknown = (not _elo2_known) or (_rr2_len == 0 and not _elo2_known)
+
+    if _p1_unknown or _p2_unknown:
+        # Mélange 50/50 entre la prédiction brute et 0.5 (incertitude maximale)
+        # Le poids du modèle augmente si au moins l'autre joueur est connu
+        _dampen_w = 0.40  # 40% modèle, 60% neutre (50/50)
+        p_p1 = _dampen_w * p_p1 + (1.0 - _dampen_w) * 0.5
+        p_p2 = 1.0 - p_p1
+
     m_r = feat.get("_markov_res", {})
     t_cpi_val = feat.get("tourney_cpi", 8.5)
     t_alt_val = feat.get("tourney_altitude", 0)
@@ -1351,6 +1382,17 @@ def predict_match(req: PredictionRequest):
         }
 
     confidence = compute_confidence(p_p1, feat, state, p1, p2)
+
+    # Si un joueur est inconnu, pénaliser la confiance pour bloquer les faux value bets
+    if _p1_unknown or _p2_unknown:
+        unknown_penalty = 25.0  # réduit de ~25 points pour passer sous le seuil 58%
+        confidence["score"] = max(confidence["score"] - unknown_penalty, 30.0)
+        if confidence["score"] < 45.0:
+            confidence["level"] = "low"
+            confidence["label"] = "Incertitude élevée (joueur inconnu)"
+        elif confidence["score"] < 58.0:
+            confidence["level"] = "medium"
+            confidence["label"] = "Confiance modérée (données partielles)"
 
     # --------------------------------------------------------------------------
     # MARCHÉS ALTERNATIFS & VALUE BETS SÉLECTIFS (FILTRAGE ANTI-FAUX POSITIFS)
@@ -1468,8 +1510,10 @@ def predict_match(req: PredictionRequest):
         "circuit": req.circuit.upper(),
         "proba_p1": round(p_p1, 4),
         "proba_p2": round(p_p2, 4),
-        "fair_odds_p1": round(1.0 / p_p1, 2) if p_p1 > 0 else 999.0,
-        "fair_odds_p2": round(1.0 / p_p2, 2) if p_p2 > 0 else 999.0,
+        "proba_p1_display": round(max(p_p1, 0.01) * 100, 1),
+        "proba_p2_display": round(max(p_p2, 0.01) * 100, 1),
+        "fair_odds_p1": round(1.0 / max(p_p1, 0.001), 2),
+        "fair_odds_p2": round(1.0 / max(p_p2, 0.001), 2),
         "offered_odds_p1": req.odds1,
         "offered_odds_p2": req.odds2,
         "vb_p1": vb_p1,

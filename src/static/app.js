@@ -2657,8 +2657,9 @@ function renderMatchCardHtml(m) {
   const topVb = m.top_value_bet;
   const isAtp = m.circuit === 'atp';
 
-  const proba1 = m.prediction ? (m.prediction.proba_p1 * 100).toFixed(0) : '-';
-  const proba2 = m.prediction ? (m.prediction.proba_p2 * 100).toFixed(0) : '-';
+  const _clampProba = (p) => Math.max(1, Math.min(99, Math.round(p * 100)));
+  const proba1 = m.prediction ? _clampProba(m.prediction.proba_p1) : '-';
+  const proba2 = m.prediction ? _clampProba(m.prediction.proba_p2) : '-';
   const isP1Fav = m.prediction ? (m.prediction.proba_p1 >= m.prediction.proba_p2) : false;
 
   let vbHtml = '';
