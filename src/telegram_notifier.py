@@ -24,6 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BASE_DIR / "src"))
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass
+
 logger = logging.getLogger("tennis_predictor.telegram")
 
 TELEGRAM_API_URL = "https://api.telegram.org/bot{token}/{method}"
