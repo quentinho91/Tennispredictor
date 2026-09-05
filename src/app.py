@@ -433,8 +433,13 @@ def evaluate_market_value(
             except Exception:
                 conf_score = 70.0
 
+    # Probabilités et indicateurs
+    raw_ev = (raw_model_prob * odds) - 1.0
+    raw_edge = raw_model_prob - market_prob
+    fair_odds = round(1.0 / raw_model_prob, 2)
+
     # --------------------------------------------------------------------------
-    # CONSENSUS HYBRIDE ADAPTATIF
+    # CONSENSUS HYBRIDE POUR LE SIZING (Ancrage Marché prudent)
     # --------------------------------------------------------------------------
     if conf_score >= 72.0:
         w_model, w_market = 0.65, 0.35
@@ -445,25 +450,18 @@ def evaluate_market_value(
 
     blended_prob = w_model * raw_model_prob + w_market * market_prob
     blended_prob = float(np.clip(blended_prob, 0.01, 0.99))
-
-    fair_odds = round(1.0 / blended_prob, 2)
-    ev = (blended_prob * odds) - 1.0
-    edge = blended_prob - market_prob
+    blended_ev = (blended_prob * odds) - 1.0
 
     # --------------------------------------------------------------------------
     # DÉTECTION D'ANOMALIE DE MARCHÉ (Suspicion de blessure / forfait de dernière minute)
     # --------------------------------------------------------------------------
     market_divergence = abs(raw_model_prob - market_prob)
-    # N'activer l'anomalie que si les deux cotes opposées sont disponibles
-    # (sinon l'estimation à 5.5% de marge est trop imprécise pour être fiable)
-    # De plus, on exige que les deux cotes soient dans une plage réaliste [1.05 - 15]
-    # pour éviter les faux positifs sur les gros favoris (cote < 1.10) ou inconnus
     _both_odds_known = bool(opp_odds and opp_odds > 1.0)
     _realistic_match = bool(odds <= 10.0 and (opp_odds or 2.0) <= 10.0)
     is_market_anomaly = bool(market_divergence >= 0.25 and _both_odds_known and _realistic_match)
 
     # --------------------------------------------------------------------------
-    # FILTRAGE SÉLECTIF HAUTE CONVICTION
+    # FILTRAGE SÉLECTIF HAUTE CONVICTION (DÉTECTION BASÉE SUR LE MODÈLE RÉEL)
     # --------------------------------------------------------------------------
     is_vb = False
     confidence_damping = 0.0
@@ -485,9 +483,9 @@ def evaluate_market_value(
         confidence_damping = 0.0
         confidence_status = "BLOCKED_LOW_CONFIDENCE"
         confidence_note = f"Bloqué par l'indice de confiance ({conf_score:.1f}% < 58%) : Données insuffisantes ou incertitude élevée"
-    elif odds > 3.80 or blended_prob < 0.25:
+    elif odds > 3.80 or raw_model_prob < 0.25:
         # Filtre spécifique outsider / grosse cote (évite les pièges à forte variance)
-        if edge >= 0.080 and ev >= 0.100 and conf_score >= 65.0:
+        if raw_edge >= 0.080 and raw_ev >= 0.100 and conf_score >= 65.0:
             is_vb = True
             confidence_damping = 0.40
             confidence_status = "HIGH_ODDS_VALUE"
@@ -498,25 +496,24 @@ def evaluate_market_value(
             confidence_status = "BLOCKED_LONGSHOT"
             confidence_note = "Grosse cote (> 3.80) non qualifiée : Marge de sécurité insuffisante"
     elif conf_score < 72.0:
-        # Confiance modérée : avantage net requis (Edge >= 4.5%, EV >= 5.5%)
-        # Le consensus 50/50 atténue déjà suffisamment les faux positifs
-        if edge >= 0.045 and ev >= 0.055:
+        # Confiance modérée : avantage net requis (Edge >= 5.0%, EV >= 5.5%)
+        if raw_edge >= 0.050 and raw_ev >= 0.055:
             is_vb = True
             confidence_damping = 0.50
             confidence_status = "DAMPED_MEDIUM_CONFIDENCE"
-            confidence_note = "Mise amortie (-50%) : Confiance modérée avec avantage solide (Edge > 4.5%, EV > 5.5%)"
+            confidence_note = "Mise amortie (-50%) : Confiance modérée avec avantage solide (Edge > 5%, EV > 5.5%)"
         else:
             is_vb = False
             confidence_damping = 0.0
             confidence_status = "LOW_EV"
-            confidence_note = "Avantage insuffisant pour valider en confiance modérée (requis: Edge >= 4.5%, EV >= 5.5%)"
+            confidence_note = "Avantage insuffisant pour valider en confiance modérée (requis: Edge >= 5%, EV >= 5.5%)"
     else:
         # Haute confiance : seuil standard (Edge >= 4.5%, EV >= 5%)
-        if edge >= 0.045 and ev >= 0.050:
+        if raw_edge >= 0.045 and raw_ev >= 0.050:
             is_vb = True
             confidence_damping = 1.0
             confidence_status = "FULL_HIGH_CONFIDENCE"
-            confidence_note = "Consensus Hybride validé : Pleine confiance (Edge > 4.5%, EV > 5%)"
+            confidence_note = "Consensus validé : Pleine confiance (Edge > 4.5%, EV > 5%)"
         else:
             is_vb = False
             confidence_damping = 0.0
@@ -524,14 +521,15 @@ def evaluate_market_value(
             confidence_note = "Avantage insuffisant en pleine confiance (requis: Edge >= 4.5%, EV >= 5%)"
 
     b = odds - 1.0
-    kelly_full = max(0.0, min((blended_prob * odds - 1.0) / b, 0.15)) * confidence_damping if b > 0 else 0.0
+    effective_ev = blended_ev if blended_ev > 0 else raw_ev * 0.35
+    kelly_full = max(0.0, min(effective_ev / b, 0.15)) * confidence_damping if b > 0 else 0.0
     kelly_half = max(0.0, min(kelly_full * 0.50, 0.08))
     kelly_quarter = max(0.0, min(kelly_full * 0.25, 0.05))
 
     badge = "VALUE_BET" if is_vb else (
         "ANOMALY" if is_market_anomaly else (
-            "BLOCKED" if (edge >= 0.04 and ev >= 0.04 and conf_score < 58.0) else (
-                "LOW_EV" if (edge >= 0.02 and ev >= 0.03) else "NO_VALUE"
+            "BLOCKED" if (raw_edge >= 0.04 and raw_ev >= 0.04 and conf_score < 58.0) else (
+                "LOW_EV" if (raw_edge >= 0.02 and raw_ev >= 0.03) else "NO_VALUE"
             )
         )
     )
@@ -539,13 +537,14 @@ def evaluate_market_value(
     return {
         "market": market_name,
         "selection": selection,
-        "prob": round(blended_prob * 100, 1),
+        "prob": round(raw_model_prob * 100, 1),
         "prob_model_raw": round(raw_model_prob * 100, 1),
+        "prob_blended": round(blended_prob * 100, 1),
         "prob_market": round(market_prob * 100, 1),
         "fair_odds": fair_odds,
         "offered_odds": odds,
-        "ev_pct": round(ev * 100, 1),
-        "edge_pct": round(edge * 100, 1),
+        "ev_pct": round(raw_ev * 100, 1),
+        "edge_pct": round(raw_edge * 100, 1),
         "kelly_pct": round(kelly_quarter * 100, 1) if is_vb else 0.0,
         "kelly_quarter_pct": round(kelly_quarter * 100, 1) if is_vb else 0.0,
         "kelly_half_pct": round(kelly_half * 100, 1) if is_vb else 0.0,
@@ -1396,12 +1395,17 @@ def predict_match(req: PredictionRequest):
         scores["data_quality"] = (p1_known + p2_known) / 2.0
 
         # --- 4. Accord XGBoost ↔ Markov ---
+        # Le modèle Markov est un indicateur point-par-point complémentaire.
+        # XGBoost (119 features) peut légitimement diverger sur les dynamiques de match.
+        # La divergence modère la confiance sans la sanctionner excessivement.
         p_markov = float(m_r.get("proba_a", 0.5))
-        agreement = 1.0 - min(abs(p_xgb - p_markov) / 0.20, 1.0)  # ±20% = max désaccord
-        scores["model_agreement"] = max(0.0, agreement)
+        diff_markov = abs(p_xgb - p_markov)
+        scores["model_agreement"] = max(0.25, 1.0 - (diff_markov / 0.35))
 
         # --- Score pondéré global ---
-        weights = {"data_quality": 0.35, "model_agreement": 0.25, "elo": 0.25, "h2h": 0.15}
+        # Données (40%) et Elo (30%) constituent le socle de solidité.
+        # H2H (15%) et Accord Markov (15%) complètent l'évaluation.
+        weights = {"data_quality": 0.40, "elo": 0.30, "h2h": 0.15, "model_agreement": 0.15}
         global_score = sum(weights[k] * v for k, v in scores.items())
         global_score = float(np.clip(global_score, 0.0, 1.0))
 
