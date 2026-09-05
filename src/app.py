@@ -23,6 +23,7 @@ import numpy as np
 
 # Configuration chemin & imports
 BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BASE_DIR / "src"))
 
 import importlib.util
@@ -71,6 +72,14 @@ def get_cached_resources(circuit: str):
 # Démarrage rapide et léger (aucun modèle lourd préchargé)
 @app.on_event("startup")
 def startup_event():
+    req_file = BASE_DIR / "data" / "processed" / "player_state_atp.pkl"
+    if not req_file.exists():
+        print("[INIT] Modeles absents au demarrage, telechargement depuis GitHub Release...")
+        try:
+            from download_release import download_release_assets
+            download_release_assets()
+        except Exception as e:
+            print(f"[INIT] Note: Erreur telechargement release au demarrage : {e}")
     print("[INIT] Serveur Tennis Match Predictor pret !")
 
 
@@ -493,9 +502,9 @@ def evaluate_market_value(
         # Le consensus 50/50 atténue déjà suffisamment les faux positifs
         if edge >= 0.045 and ev >= 0.055:
             is_vb = True
-            confidence_damping = 0.60
+            confidence_damping = 0.50
             confidence_status = "DAMPED_MEDIUM_CONFIDENCE"
-            confidence_note = "Mise amortie (-40%) : Confiance modérée avec avantage solide (Edge > 4.5%, EV > 5.5%)"
+            confidence_note = "Mise amortie (-50%) : Confiance modérée avec avantage solide (Edge > 4.5%, EV > 5.5%)"
         else:
             is_vb = False
             confidence_damping = 0.0
@@ -1165,23 +1174,51 @@ def _run_background_sync():
     try:
         with SYNC_LOCK:
             SYNC_STATE["running"] = True
-            SYNC_STATE["step"] = "download"
-            SYNC_STATE["message"] = "Téléchargement des matchs récents (1/3)..."
+            SYNC_STATE["step"] = "release_download"
+            SYNC_STATE["message"] = "Téléchargement des modèles et états les plus récents (GitHub Release)..."
             SYNC_STATE["error"] = None
 
-        # Libérer le cache et la mémoire avant de lancer les sous-processus
+        # Libérer le cache et la mémoire avant synchronisation
         CACHE.clear()
         PLAYERS_CACHE.clear()
+        TOURNAMENTS_DATA.clear()
         gc.collect()
 
-        # 1. Télécharger les matchs récents (parallélisé, rapide)
+        # 1. Tenter la synchronisation ultra-rapide (<5s, ~15 Mo RAM) depuis la release GitHub latest_model
+        release_synced = False
+        try:
+            from download_release import download_release_assets
+            release_synced = download_release_assets(force=True, timeout=45)
+        except Exception as e_dl:
+            print(f"[SYNC] Téléchargement release impossible ({e_dl}), basculement sur pipeline local...")
+
+        if release_synced:
+            # Réinitialisation des caches pour prise en compte immédiate des nouveaux modèles
+            CACHE.clear()
+            PLAYERS_CACHE.clear()
+            TOURNAMENTS_DATA.clear()
+            gc.collect()
+            now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
+            with SYNC_LOCK:
+                SYNC_STATE["running"] = False
+                SYNC_STATE["step"] = "done"
+                SYNC_STATE["success"] = True
+                SYNC_STATE["message"] = "Modèles et données US Open / Tournois synchronisés avec succès depuis la dernière release !"
+                SYNC_STATE["timestamp"] = now_str
+            return
+
+        # 2. Pipeline local de secours si la release n'est pas joignable
+        with SYNC_LOCK:
+            SYNC_STATE["step"] = "download"
+            SYNC_STATE["message"] = "Téléchargement des matchs récents (1/3)..."
+
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "00_download_data.py")], check=True, timeout=300)
 
         with SYNC_LOCK:
             SYNC_STATE["step"] = "dataset"
             SYNC_STATE["message"] = "Reconstruction des datasets ATP & WTA (2/3)..."
 
-        # 2. Reconstruire le dataset pour ATP et WTA
+        # 3. Reconstruire le dataset pour ATP et WTA
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "atp"], check=True, timeout=300)
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "01_build_dataset.py"), "--circuit", "wta"], check=True, timeout=300)
 
@@ -1189,13 +1226,14 @@ def _run_background_sync():
             SYNC_STATE["step"] = "state"
             SYNC_STATE["message"] = "Recalcul des classements et statistiques (3/3)..."
 
-        # 3. Recalculer l'état des joueurs en mode ultra-léger (state-only)
+        # 4. Recalculer l'état des joueurs en mode ultra-léger (state-only)
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "atp", "--state-only"], check=True, timeout=300)
         subprocess.run([sys.executable, str(BASE_DIR / "src" / "02_feature_engineering.py"), "--circuit", "wta", "--state-only"], check=True, timeout=300)
 
         # Réinitialisation des caches et nettoyage mémoire pour prise en compte immédiate
         CACHE.clear()
         PLAYERS_CACHE.clear()
+        TOURNAMENTS_DATA.clear()
         gc.collect()
 
         now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
@@ -1325,41 +1363,45 @@ def predict_match(req: PredictionRequest):
     def compute_confidence(p_xgb, feat, state, p1, p2):
         scores = {}
 
-        # --- 1. Ecart Elo ---
-        elo1 = state["elo"].get(p1, 1500)
-        elo2 = state["elo"].get(p2, 1500)
+        # --- 1. Fiabilité Elo & Clarté de l'avantage ---
+        # Si les deux joueurs sont établis sur le circuit (présents dans l'historique Elo),
+        # l'estimation Elo est fiable (base 0.70). Un écart Elo net apporte un bonus de clarté.
+        elo_dict = state.get("elo", {})
+        elo1 = elo_dict.get(p1, 1500)
+        elo2 = elo_dict.get(p2, 1500)
         elo_gap = abs(elo1 - elo2)
-        # 0-50 pts = très incertain, 50-150 = moyen, 150-300 = bon, 300+ = fort
-        if elo_gap >= 300:
-            scores["elo"] = 1.0
-        elif elo_gap >= 150:
-            scores["elo"] = 0.7 + (elo_gap - 150) / 500
-        elif elo_gap >= 50:
-            scores["elo"] = 0.3 + (elo_gap - 50) / 333
-        else:
-            scores["elo"] = elo_gap / 166.7
+        elo1_known = p1 in elo_dict
+        elo2_known = p2 in elo_dict
 
-        # --- 2. Volume H2H ---
-        h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
-        h_total = h12[0] + h12[1]
-        scores["h2h"] = min(h_total / 8.0, 1.0)  # 8+ matchs H2H = confiance max
+        if elo1_known and elo2_known:
+            scores["elo"] = 0.70 + min(elo_gap / 350.0, 0.30)
+        elif elo1_known or elo2_known:
+            scores["elo"] = 0.45 + min(elo_gap / 500.0, 0.25)
+        else:
+            scores["elo"] = 0.20
+
+        # --- 2. Historique des Face-à-Face (H2H) ---
+        # L'absence de H2H est fréquente et neutre (base 0.60), les confrontations directes passées enrichissent l'analyse.
+        h12 = state.get("h2h", {}).get(p1, {}).get(p2, [0, 0])
+        h_total = (h12[0] + h12[1]) if len(h12) >= 2 else 0
+        scores["h2h"] = min(0.60 + (h_total * 0.10), 1.0)  # 0 match -> 0.60, 4+ matchs -> 1.0
 
         # --- 3. Volume de données joueur (matchs récents) ---
         rr = state.get("recent_results", {})
         rr1_len = len(rr.get(p1, []))
         rr2_len = len(rr.get(p2, []))
-        # Pénalise si l'un des joueurs a très peu de données
-        p1_known = min(rr1_len / 20.0, 1.0)
-        p2_known = min(rr2_len / 20.0, 1.0)
+        # 15+ matchs récents dans le pipeline = volume optimal
+        p1_known = min(rr1_len / 15.0, 1.0)
+        p2_known = min(rr2_len / 15.0, 1.0)
         scores["data_quality"] = (p1_known + p2_known) / 2.0
 
         # --- 4. Accord XGBoost ↔ Markov ---
         p_markov = float(m_r.get("proba_a", 0.5))
         agreement = 1.0 - min(abs(p_xgb - p_markov) / 0.20, 1.0)  # ±20% = max désaccord
-        scores["model_agreement"] = agreement
+        scores["model_agreement"] = max(0.0, agreement)
 
         # --- Score pondéré global ---
-        weights = {"elo": 0.35, "h2h": 0.10, "data_quality": 0.30, "model_agreement": 0.25}
+        weights = {"data_quality": 0.35, "model_agreement": 0.25, "elo": 0.25, "h2h": 0.15}
         global_score = sum(weights[k] * v for k, v in scores.items())
         global_score = float(np.clip(global_score, 0.0, 1.0))
 
@@ -1367,7 +1409,7 @@ def predict_match(req: PredictionRequest):
         if global_score >= 0.72:
             label = "Haute confiance"
             level = "high"
-        elif global_score >= 0.45:
+        elif global_score >= 0.58:
             label = "Confiance modérée"
             level = "medium"
         else:
@@ -1648,7 +1690,10 @@ def predict_match(req: PredictionRequest):
 # --------------------------------------------------------------------------
 # Scanner Quotidien des Cotes (Bet365 / The Odds API)
 # --------------------------------------------------------------------------
-from src.odds_scanner import scan_daily_matches
+try:
+    from src.odds_scanner import scan_daily_matches
+except ModuleNotFoundError:
+    from odds_scanner import scan_daily_matches
 
 
 @app.get("/api/scanner")

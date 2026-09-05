@@ -973,7 +973,7 @@ def scan_daily_matches(
                     }
                     m_item["full_report"] = pred_res
 
-                    all_vbs = pred_res.get("recommended_value_bets", [])
+                    all_vbs = pred_res.get("recommended_value_bets") or pred_res.get("all_value_bets") or []
                     valid_vbs = [vb for vb in all_vbs if vb.get("is_value_bet")]
 
                     if not valid_vbs:
@@ -982,6 +982,10 @@ def scan_daily_matches(
                             if vb_item and vb_item.get("is_value_bet"):
                                 valid_vbs.append(vb_item)
                                 break
+                        if not valid_vbs:
+                            for vb in pred_res.get("all_value_bets", []):
+                                if vb.get("is_value_bet"):
+                                    valid_vbs.append(vb)
 
                     m_item["all_value_bets"] = valid_vbs
                     if valid_vbs:

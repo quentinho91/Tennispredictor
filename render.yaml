@@ -2,7 +2,7 @@ services:
   - type: web
     name: tennis-predictor
     runtime: python
-    buildCommand: pip install --no-cache-dir -r requirements.txt
+    buildCommand: pip install --no-cache-dir -r requirements.txt && python src/download_release.py
     startCommand: python app.py
     envVars:
       - key: PYTHON_VERSION
