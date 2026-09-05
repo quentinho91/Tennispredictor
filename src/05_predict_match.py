@@ -94,6 +94,9 @@ ALTITUDES             = fe.ALTITUDES
 get_decayed_elo       = fe.get_decayed_elo
 compute_travel_strain = fe.compute_travel_strain
 COUNTRY_CONTINENT     = fe.COUNTRY_CONTINENT
+compute_rust_factor   = getattr(fe, "compute_rust_factor", None)
+compute_slump_indicator = getattr(fe, "compute_slump_indicator", None)
+compute_bo5_stats     = getattr(fe, "compute_bo5_stats", None)
 
 
 # --------------------------------------------------------------------------
@@ -660,6 +663,9 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     last_h2h_d  = state.get("last_h2h_day", {})
     last_h2h_r  = state.get("last_h2h_result", {})
     srv_hist    = state.get("serve_return_hist", {})
+    matches_since_break = state.get("matches_since_long_break", {})
+    bo5_m_dict  = state.get("bo5_matches", {})
+    bo5_w_dict  = state.get("bo5_wins", {})
 
     tourney_cpi_yearly = state.get("tourney_cpi_yearly", {})
     fast_results = state.get("fast_results", {})
@@ -1033,6 +1039,35 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["markov_p_win"]          = m_res["proba_a"]
     feat["markov_hold_diff"]      = m_res["hold_proba_a"] - m_res["hold_proba_b"]
     feat["markov_expected_games"] = m_res["expected_total_games"]
+
+    # --- Nouvelles features Modélisation (Rust, Bo5, Slump) ---
+    # 1. Rust Factor (Reprise de blessure)
+    m_since_b1 = matches_since_break.get(p1, 999)
+    m_since_b2 = matches_since_break.get(p2, 999)
+    rust1, _ = compute_rust_factor(day, last_p1, m_since_b1) if compute_rust_factor else (0.0, 999)
+    rust2, _ = compute_rust_factor(day, last_p2, m_since_b2) if compute_rust_factor else (0.0, 999)
+    feat["returning_from_break_diff"]  = rust1 - rust2
+    feat["is_returning_from_break_p1"] = rust1
+    feat["is_returning_from_break_p2"] = rust2
+    feat["_rust_p1"] = rust1
+    feat["_rust_p2"] = rust2
+
+    # 2. Best-of-5 (Grand Chelem)
+    bo5_wr1, bo5_exp1 = compute_bo5_stats(bo5_m_dict.get(p1, 0), bo5_w_dict.get(p1, 0), bo_i) if compute_bo5_stats else (0.5, 0.0)
+    bo5_wr2, bo5_exp2 = compute_bo5_stats(bo5_m_dict.get(p2, 0), bo5_w_dict.get(p2, 0), bo_i) if compute_bo5_stats else (0.5, 0.0)
+    feat["bo5_winrate_diff"]    = bo5_wr1 - bo5_wr2
+    feat["bo5_experience_diff"] = bo5_exp1 - bo5_exp2
+    feat["_bo5_wr_p1"] = bo5_wr1
+    feat["_bo5_wr_p2"] = bo5_wr2
+
+    # 3. Slump (Spirale négative)
+    slump1, slump_sev1 = compute_slump_indicator(rr1, streak.get(p1, 0)) if compute_slump_indicator else (0.0, 0.0)
+    slump2, slump_sev2 = compute_slump_indicator(rr2, streak.get(p2, 0)) if compute_slump_indicator else (0.0, 0.0)
+    feat["slump_diff"]     = slump_sev1 - slump_sev2
+    feat["is_in_slump_p1"] = slump1
+    feat["is_in_slump_p2"] = slump2
+    feat["_slump_p1"] = slump1
+    feat["_slump_p2"] = slump2
 
     # Markov analytics pour l'affichage
     feat["_markov_res"]           = m_res

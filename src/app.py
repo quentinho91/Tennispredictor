@@ -1347,17 +1347,51 @@ def predict_match(req: PredictionRequest):
         p_p1 = _dampen_w * p_p1 + (1.0 - _dampen_w) * 0.5
         p_p2 = 1.0 - p_p1
 
+    # --------------------------------------------------------------------------
+    # FACTEUR ROUILLE (Reprise de blessure / pause > 75 jours avec < 3 matchs)
+    # --------------------------------------------------------------------------
+    _r1 = feat.get("_rust_p1", 0.0)
+    _r2 = feat.get("_rust_p2", 0.0)
+    if _r1 > 0 and _r2 == 0:
+        p_p1 = max(0.05, p_p1 - 0.035)
+        p_p2 = 1.0 - p_p1
+    elif _r2 > 0 and _r1 == 0:
+        p_p2 = max(0.05, p_p2 - 0.035)
+        p_p1 = 1.0 - p_p2
+
+    # --------------------------------------------------------------------------
+    # FACTEUR SLUMP (Spirale négative récente contre des adversaires moins bien classés)
+    # --------------------------------------------------------------------------
+    _s1 = feat.get("_slump_p1", 0.0)
+    _s2 = feat.get("_slump_p2", 0.0)
+    if _s1 > 0 and _s2 == 0:
+        p_p1 = max(0.05, p_p1 - 0.030)
+        p_p2 = 1.0 - p_p1
+    elif _s2 > 0 and _s1 == 0:
+        p_p2 = max(0.05, p_p2 - 0.030)
+        p_p1 = 1.0 - p_p2
+
+    # --------------------------------------------------------------------------
+    # FORMAT GRAND CHELEM (Best-of-5 vs Best-of-3)
+    # --------------------------------------------------------------------------
+    if req.best_of == 5:
+        _bo5_diff = feat.get("bo5_winrate_diff", 0.0)
+        _bo5_adj = float(np.clip(_bo5_diff * 0.08, -0.025, 0.025))
+        p_p1 = float(np.clip(p_p1 + _bo5_adj, 0.05, 0.95))
+        p_p2 = 1.0 - p_p1
+
     m_r = feat.get("_markov_res", {})
     t_cpi_val = feat.get("tourney_cpi", 8.5)
     t_alt_val = feat.get("tourney_altitude", 0)
 
     # --------------------------------------------------------------------------
     # INDICATEUR DE CONFIANCE
-    # Basé sur 4 signaux indépendants :
+    # Basé sur 4 signaux indépendants + ajustements contextuels :
     #  1. Ecart Elo (écart élevé = prédiction plus fiable)
     #  2. Volume H2H (matchs directs connus = contexte riche)
     #  3. Qualité des données joueur (matchs récents disponibles)
     #  4. Accord XGBoost vs Markov (les deux modèles convergent-ils ?)
+    #  5. Facteurs d'incertitude : reprise de blessure (rust) & spirale négative (slump)
     # --------------------------------------------------------------------------
     def compute_confidence(p_xgb, feat, state, p1, p2):
         scores = {}
@@ -1407,6 +1441,15 @@ def predict_match(req: PredictionRequest):
         # H2H (15%) et Accord Markov (15%) complètent l'évaluation.
         weights = {"data_quality": 0.40, "elo": 0.30, "h2h": 0.15, "model_agreement": 0.15}
         global_score = sum(weights[k] * v for k, v in scores.items())
+
+        # --- 5. Ajustements contextuels Rust & Slump ---
+        _rust_active = (feat.get("_rust_p1", 0) > 0 or feat.get("_rust_p2", 0) > 0)
+        _slump_active = (feat.get("_slump_p1", 0) > 0 or feat.get("_slump_p2", 0) > 0)
+        if _rust_active:
+            global_score = max(0.20, global_score - 0.07)  # Pénalité d'incertitude physique de reprise
+        if _slump_active:
+            global_score = max(0.20, global_score - 0.08)  # Pénalité sur favoris en crise récente
+
         global_score = float(np.clip(global_score, 0.0, 1.0))
 
         # --- Label ---
@@ -1550,10 +1593,43 @@ def predict_match(req: PredictionRequest):
 
     h12 = state["h2h"].get(p1, {}).get(p2, [0, 0])
 
+    # Alertes contextuelles Data Science (Rust, Slump, Grand Slam)
+    context_alerts = []
+    if feat.get("_rust_p1", 0) > 0:
+        context_alerts.append(f"⚠️ {p1} reprend la compétition après une longue absence (> 75 jours sans match). Manque de rythme possible.")
+    if feat.get("_rust_p2", 0) > 0:
+        context_alerts.append(f"⚠️ {p2} reprend la compétition après une longue absence (> 75 jours sans match). Manque de rythme possible.")
+    if feat.get("_slump_p1", 0) > 0:
+        context_alerts.append(f"📉 {p1} traverse une spirale négative récente (série de défaites face à des adversaires moins bien classés).")
+    if feat.get("_slump_p2", 0) > 0:
+        context_alerts.append(f"📉 {p2} traverse une spirale négative récente (série de défaites face à des adversaires moins bien classés).")
+    if req.best_of == 5:
+        bo5_1 = feat.get("_bo5_wr_p1", 0.5)
+        bo5_2 = feat.get("_bo5_wr_p2", 0.5)
+        if abs(bo5_1 - bo5_2) >= 0.15:
+            fav_bo5 = p1 if bo5_1 > bo5_2 else p2
+            context_alerts.append(f"🔥 Format 5 sets (Grand Chelem) : Avantage d'endurance et d'expérience pour {fav_bo5} ({round(max(bo5_1, bo5_2)*100)}% vs {round(min(bo5_1, bo5_2)*100)}%).")
+
     return {
         "p1": p1,
         "p2": p2,
         "circuit": req.circuit.upper(),
+        "context_alerts": context_alerts,
+        "modeling_signals": {
+            "rust_factor": {
+                "p1_is_rusty": bool(feat.get("_rust_p1", 0) > 0),
+                "p2_is_rusty": bool(feat.get("_rust_p2", 0) > 0),
+            },
+            "slump_detection": {
+                "p1_in_slump": bool(feat.get("_slump_p1", 0) > 0),
+                "p2_in_slump": bool(feat.get("_slump_p2", 0) > 0),
+            },
+            "best_of_5": {
+                "is_bo5": bool(req.best_of == 5),
+                "p1_bo5_winrate": round(feat.get("_bo5_wr_p1", 0.5) * 100, 1),
+                "p2_bo5_winrate": round(feat.get("_bo5_wr_p2", 0.5) * 100, 1),
+            }
+        },
         "proba_p1": round(p_p1, 4),
         "proba_p2": round(p_p2, 4),
         "proba_p1_display": round(max(p_p1, 0.01) * 100, 1),

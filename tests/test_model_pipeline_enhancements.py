@@ -32,7 +32,61 @@ pm = importlib.util.module_from_spec(_spec_pm)
 _spec_pm.loader.exec_module(pm)
 
 
+compute_rust_factor = fe.compute_rust_factor
+compute_slump_indicator = fe.compute_slump_indicator
+compute_bo5_stats = fe.compute_bo5_stats
+
+
 class TestPipelineEnhancements(unittest.TestCase):
+
+    def test_rust_factor_detection(self):
+        """Player inactive > 75 days or with < 3 matches after a long break is flagged as rusty."""
+        # 1. Player with 90 days of inactivity: must be flagged as rusty (is_rusty=1.0, 0 matches)
+        is_rusty, matches = compute_rust_factor(day=1000, last_play_day=910, matches_since_break=10)
+        self.assertEqual(is_rusty, 1.0)
+        self.assertEqual(matches, 0)
+
+        # 2. Player returning who has only played 1 match since the break
+        is_rusty, matches = compute_rust_factor(day=1005, last_play_day=1002, matches_since_break=1)
+        self.assertEqual(is_rusty, 1.0)
+        self.assertEqual(matches, 1)
+
+        # 3. Player who has played 3 matches since the break and active
+        is_rusty, matches = compute_rust_factor(day=1010, last_play_day=1008, matches_since_break=3)
+        self.assertEqual(is_rusty, 0.0)
+
+    def test_bo5_stats(self):
+        """Grand Slam best-of-5 matches must compute smoothed winrate and log experience, neutral otherwise."""
+        # In Best-of-3: neutral (0.50, 0.0)
+        wr_bo3, exp_bo3 = compute_bo5_stats(bo5_matches_count=20, bo5_wins_count=18, match_best_of=3)
+        self.assertEqual(wr_bo3, 0.50)
+        self.assertEqual(exp_bo3, 0.0)
+
+        # In Best-of-5: smoothed winrate: (18 + 1) / (20 + 2) = 19/22 ≈ 0.8636
+        wr_bo5, exp_bo5 = compute_bo5_stats(bo5_matches_count=20, bo5_wins_count=18, match_best_of=5)
+        self.assertAlmostEqual(wr_bo5, 19.0 / 22.0, places=4)
+        self.assertGreater(exp_bo5, 0.0)
+
+    def test_slump_indicator(self):
+        """Player with consecutive losses or frequent losses against lower-ranked players must be flagged in slump."""
+        # Active streak of -4, 4 losses in last 5 matches, including 2 against lower-ranked players
+        # format of recent_results: (day, win, opp_better_ranked, ...)
+        recent_res = [
+            (100, False, False),  # bad loss
+            (105, False, True),   # loss to higher ranked
+            (110, True, False),   # win
+            (115, False, False),  # bad loss
+            (120, False, False),  # bad loss
+        ]
+        is_in_slump, severity = compute_slump_indicator(recent_res, current_streak=-3)
+        self.assertEqual(is_in_slump, 1.0)
+        self.assertGreater(severity, 1.0)
+
+        # Player with winning streak of +3
+        good_res = [(100 + i, True, False) for i in range(5)]
+        is_in_slump_good, severity_good = compute_slump_indicator(good_res, current_streak=3)
+        self.assertEqual(is_in_slump_good, 0.0)
+        self.assertEqual(severity_good, 0.0)
 
     def test_travel_strain_cross_continent(self):
         """Player traveling cross-continent with short rest must have positive travel strain."""

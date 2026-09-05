@@ -235,6 +235,62 @@ def get_dynamic_k(base_k, matches_count, k_boost=32.0, halflife_matches=25.0):
     return base_k + k_boost * unc_factor
 
 
+def compute_rust_factor(day, last_play_day, matches_since_break, break_threshold_days=75, max_rusty_matches=3):
+    """
+    Détecte si un joueur reprend la compétition après une longue absence (> 75j)
+    avec moins de 3 matchs dans les jambes.
+    Retourne (is_rusty, matches_since_break).
+    """
+    if last_play_day is None or day is None:
+        return 0.0, 999
+
+    days_inactive = day - last_play_day
+    # Si le match actuel survient après une pause de plus de 75 jours
+    if days_inactive > break_threshold_days:
+        return 1.0, 0
+
+    # Si le joueur a connu une longue pause récemment et a joué moins de 3 matchs
+    if matches_since_break is not None and matches_since_break < max_rusty_matches:
+        return 1.0, matches_since_break
+
+    return 0.0, matches_since_break if matches_since_break is not None else 999
+
+
+def compute_slump_indicator(recent_results_list, current_streak):
+    """
+    Détecte si un joueur est dans une spirale négative ("slump") :
+    - 3+ défaites consécutives (current_streak <= -3) OU 4+ défaites sur les 5 derniers matchs
+    - ET au moins 1 défaite face à un adversaire moins bien classé (contre-performance).
+    Retourne (is_in_slump, slump_severity).
+    """
+    if not recent_results_list:
+        return 0.0, 0.0
+
+    last5 = recent_results_list[-5:]
+    losses_last5 = sum(1 for r in last5 if not r[1])
+    # r = (day, win, opp_better_ranked, ...) -> not opp_better_ranked = joueur moins bien classé
+    bad_losses = sum(1 for r in last5 if (not r[1] and (r[2] is False)))
+    consecutive_losses = max(0, -current_streak) if current_streak is not None else 0
+
+    is_in_slump = 1.0 if ((consecutive_losses >= 3 or losses_last5 >= 4) and bad_losses >= 1) else 0.0
+    slump_severity = float(np.clip((consecutive_losses * 0.35) + (bad_losses * 0.45), 0.0, 3.0))
+    return is_in_slump, slump_severity
+
+
+def compute_bo5_stats(bo5_matches_count, bo5_wins_count, match_best_of):
+    """
+    Calcule le winrate lissé et l'expérience en Best-of-5 (Grand Chelem).
+    Si le match n'est pas en Best-of-5 (ex: ATP 250/500/1000), retourne (0.50, 0.0) pour neutraliser.
+    """
+    if match_best_of != 5:
+        return 0.50, 0.0
+    m = bo5_matches_count if bo5_matches_count is not None else 0
+    w = bo5_wins_count if bo5_wins_count is not None else 0
+    smoothed_wr = (w + 1.0) / (m + 2.0)
+    log_exp = float(np.log1p(m))
+    return smoothed_wr, log_exp
+
+
 # ---------------------------------------------------------------------------
 # Parsing du score : nécessaire pour les features "mental/clutch" (set
 # décisif, comeback, tie-breaks). Le score brut est toujours écrit du point
@@ -379,6 +435,9 @@ def build_features(df, circuit="atp", state_only=False):
     last_retirement = defaultdict(bool)
     streak = defaultdict(int)                         # signé : +N série de victoires, -N série de défaites
     last_play_date = {}
+    matches_since_long_break = defaultdict(lambda: 999) # matchs joués depuis une pause > 75j
+    bo5_matches = defaultdict(int)                    # matchs en 5 sets en carrière
+    bo5_wins = defaultdict(int)                       # victoires en 5 sets en carrière
     h2h = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     h2h_surface = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [0, 0])))
     last_h2h_day = defaultdict(dict)
@@ -502,7 +561,12 @@ def build_features(df, circuit="atp", state_only=False):
             # --- Serve & Return Elo + Markov Point-by-Point ---
             "serve_elo_diff", "return_elo_diff",
             "serve_elo_surface_diff", "return_elo_surface_diff",
-            "markov_p_win", "markov_hold_diff", "markov_expected_games"
+            "markov_p_win", "markov_hold_diff", "markov_expected_games",
+
+            # --- Nouvelles features Modélisation (Rust, Bo5, Slump) ---
+            "returning_from_break_diff", "is_returning_from_break_p1", "is_returning_from_break_p2",
+            "bo5_winrate_diff", "bo5_experience_diff",
+            "slump_diff", "is_in_slump_p1", "is_in_slump_p2"
         ]}
         hand_matchup_arr = np.empty(n, dtype=object)
         serve_diff_20 = {k: np.empty(n) for k in SERVE_RETURN_KEYS}
@@ -788,6 +852,27 @@ def build_features(df, circuit="atp", state_only=False):
             out["markov_p_win"][i] = m_res["proba_a"]
             out["markov_hold_diff"][i] = m_res["hold_proba_a"] - m_res["hold_proba_b"]
             out["markov_expected_games"][i] = m_res["expected_total_games"]
+
+            # --- Nouvelles features Modélisation (Rust, Bo5, Slump) ---
+            # 1. Rust Factor (Reprise de blessure)
+            rust1, _ = compute_rust_factor(day, last_p1, matches_since_long_break[p1])
+            rust2, _ = compute_rust_factor(day, last_p2, matches_since_long_break[p2])
+            out["returning_from_break_diff"][i] = rust1 - rust2
+            out["is_returning_from_break_p1"][i] = rust1
+            out["is_returning_from_break_p2"][i] = rust2
+
+            # 2. Best-of-5 (Grand Chelem)
+            bo5_wr1, bo5_exp1 = compute_bo5_stats(bo5_matches[p1], bo5_wins[p1], bo_i)
+            bo5_wr2, bo5_exp2 = compute_bo5_stats(bo5_matches[p2], bo5_wins[p2], bo_i)
+            out["bo5_winrate_diff"][i] = bo5_wr1 - bo5_wr2
+            out["bo5_experience_diff"][i] = bo5_exp1 - bo5_exp2
+
+            # 3. Slump (Spirale négative)
+            slump1, slump_sev1 = compute_slump_indicator(rr1, streak[p1])
+            slump2, slump_sev2 = compute_slump_indicator(rr2, streak[p2])
+            out["slump_diff"][i] = slump_sev1 - slump_sev2
+            out["is_in_slump_p1"][i] = slump1
+            out["is_in_slump_p2"][i] = slump2
         else:
             t_country = get_tourney_country(t_name)
             t1_id = tourney_id[i]
@@ -933,6 +1018,28 @@ def build_features(df, circuit="atp", state_only=False):
             tourney_games_won[p2]   = gw2_m;     tourney_games_total[p2] = g_total_m
             tourney_sets_won[p2]    = sw2_m;     tourney_sets_total[p2]  = n_sets_i
 
+        # Suivi Rust Factor (reprise de compétition après absence > 75 jours)
+        if last_p1 is not None and (day - last_p1) > 75:
+            matches_since_long_break[p1] = 1
+        else:
+            if matches_since_long_break[p1] < 10:
+                matches_since_long_break[p1] += 1
+
+        if last_p2 is not None and (day - last_p2) > 75:
+            matches_since_long_break[p2] = 1
+        else:
+            if matches_since_long_break[p2] < 10:
+                matches_since_long_break[p2] += 1
+
+        # Suivi Best-of-5 (Grand Chelem)
+        if best_of[i] == 5:
+            bo5_matches[p1] += 1
+            bo5_matches[p2] += 1
+            if p1_won:
+                bo5_wins[p1] += 1
+            else:
+                bo5_wins[p2] += 1
+
         streak[p1] = _update_streak(streak[p1], p1_won)
         streak[p2] = _update_streak(streak[p2], not p1_won)
 
@@ -1071,6 +1178,9 @@ def build_features(df, circuit="atp", state_only=False):
         "streak": dict(streak),
         "last_play_date": dict(last_play_date),
         "last_retirement": dict(last_retirement),
+        "matches_since_long_break": dict(matches_since_long_break),
+        "bo5_matches": dict(bo5_matches),
+        "bo5_wins": dict(bo5_wins),
         "h2h": {p: {q: list(v) for q, v in d.items()} for p, d in h2h.items()},
         "h2h_surface": {p: {q: {s: list(v) for s, v in sd.items()}
                             for q, sd in d.items()} for p, d in h2h_surface.items()},
@@ -1381,7 +1491,7 @@ def prune_player_state(player_state, max_years=5):
               "matches_this_tourney", "tourney_games_won", "tourney_games_total",
               "tourney_sets_won", "tourney_sets_total", "streak", "last_play_date",
               "last_retirement", "last_rank", "last_points", "last_ht", "last_hand",
-              "last_age", "last_age_day"]:
+              "last_age", "last_age_day", "matches_since_long_break", "bo5_matches", "bo5_wins"]:
         if k in player_state:
             player_state[k] = {p: val for p, val in player_state[k].items() if p in active_players}
 
