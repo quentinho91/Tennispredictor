@@ -36,11 +36,13 @@ class TestTelegramNotifier(unittest.TestCase):
             ],
             "daily_parlays": {
                 "has_parlays": True,
-                "value": {
-                    "total_odds": 3.8,
-                    "ev_pct": 17.7,
+                "max_odds": {
+                    "total_odds": 5.9,
+                    "combined_prob_pct": 30.9,
+                    "confidence_score": 90.2,
+                    "confidence_label": "Très haute",
                     "selections": [
-                        {"match_display": "Blockx vs Cobolli", "selection": "Cobolli", "odds": 1.89}
+                        {"match_display": "Blockx vs Cobolli", "tournament": "US Open", "selection": "Cobolli", "odds": 1.89, "prob_pct": 58.0}
                     ]
                 }
             }
