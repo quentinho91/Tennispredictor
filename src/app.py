@@ -1726,6 +1726,58 @@ def get_daily_scanner(
     )
 
 
+# --------------------------------------------------------------------------
+# Endpoints Alertes Telegram (Notification Quotidienne des Value Bets)
+# --------------------------------------------------------------------------
+@app.get("/api/telegram/status")
+def get_telegram_status():
+    """Vérifie si les identifiants Telegram Bot sont configurés."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    cid = os.getenv("TELEGRAM_CHAT_ID")
+    return {
+        "configured": bool(token and cid),
+        "bot_token_present": bool(token),
+        "chat_id_present": bool(cid),
+        "schedule_info": "Automatique tous les jours à 10:00 (Paris) via GitHub Actions ou appel API /api/telegram/send-briefing"
+    }
+
+
+@app.post("/api/telegram/test")
+def test_telegram_connection():
+    """Envoie un court message de test pour valider la configuration Telegram."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    cid = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not cid:
+        raise HTTPException(
+            status_code=400,
+            detail="Variables d'environnement TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID manquantes."
+        )
+    from telegram_notifier import send_telegram_message
+    res = send_telegram_message(
+        token,
+        cid,
+        "🔔 <b>Test Tennis Predictor AI</b>\nVotre bot Telegram est connecté et fonctionnel ! Prêt pour les alertes quotidiennes de Value Bets."
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=502, detail=f"Erreur Telegram: {res.get('error')}")
+    return {"success": True, "message": "Notification de test envoyée avec succès sur Telegram !"}
+
+
+@app.post("/api/telegram/send-briefing")
+def trigger_telegram_briefing():
+    """Lance l'analyse des matchs avec TennisExplorer et envoie le briefing des Value Bets sur Telegram."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    cid = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not cid:
+        raise HTTPException(
+            status_code=400,
+            detail="Variables d'environnement TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID manquantes."
+        )
+    from telegram_notifier import run_daily_scan_and_notify
+    result = run_daily_scan_and_notify(bot_token=token, chat_id=cid, force_update_models=False)
+    return result
+
+
 # Montage des fichiers statiques (Frontend)
 STATIC_DIR = BASE_DIR / "src" / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
