@@ -150,22 +150,41 @@ def format_daily_telegram_briefing(scan_data: Dict[str, Any]) -> str:
         lines.append("🎯 <b>COMBINÉS CONSEILLÉS DU JOUR</b>")
         lines.append("────────────────────────")
 
-        # 1. Combiné Value Bets
+        # 1. Combiné IA Optimisé (Max Cote) - Flagship Recommandation du Jour
+        max_parlay = parlays.get("max_odds")
+        if max_parlay and max_parlay.get("selections"):
+            count = len(max_parlay.get("selections", []))
+            lines.append(f"🔥 <b>COMBINÉ IA OPTIMISÉ (MAX COTE • {count} SÉLECTIONS)</b>")
+            lines.append("⭐ <i>Multiplicateur Maximal • Recommandation IA du Jour</i>")
+            lines.append(f"• <b>Cote Totale</b> : <b>@{max_parlay.get('total_odds')}</b> | <b>Probabilité IA</b> : <b>{max_parlay.get('combined_prob_pct')}%</b>")
+            lines.append(f"• <b>Confiance</b> : <b>{max_parlay.get('confidence_score')}%</b> ({max_parlay.get('confidence_label', 'Très haute')})")
+            lines.append("📋 <b>Détail du ticket :</b>")
+            for sel in max_parlay.get("selections", []):
+                m_disp = sel.get("match_display", "")
+                tourn = sel.get("tournament", "")
+                pick = sel.get("selection", "")
+                o_val = sel.get("odds", "")
+                p_val = sel.get("prob_pct", "")
+                lines.append(f"   ▫️ {m_disp} ({tourn})")
+                lines.append(f"      👉 <b>Victoire {pick}</b> @ <b>{o_val}</b> <i>(IA: {p_val}%)</i>")
+            lines.append("")
+
+        # 2. Combiné Value Bets (EV+)
         val_parlay = parlays.get("value")
         if val_parlay and val_parlay.get("selections"):
             lines.append("🚀 <b>Combiné Value Bets (EV+)</b>")
-            lines.append(f"• <b>Cote totale</b> : <b>{val_parlay.get('total_odds')}</b> | <b>EV combinée</b> : +{val_parlay.get('ev_pct')}%")
+            lines.append(f"• <b>Cote totale</b> : <b>@{val_parlay.get('total_odds')}</b> | <b>EV combinée</b> : <b>+{val_parlay.get('ev_pct')}%</b>")
             for sel in val_parlay.get("selections", []):
-                lines.append(f"   ▫️ {sel.get('match_display')} : <b>{sel.get('selection')}</b> @ {sel.get('odds')}")
+                lines.append(f"   ▫️ {sel.get('match_display')} : <b>{sel.get('selection')}</b> @ <b>{sel.get('odds')}</b>")
             lines.append("")
 
-        # 2. Combiné Safe
+        # 3. Combiné Sécurité / Haute Probabilité
         safe_parlay = parlays.get("safe")
         if safe_parlay and safe_parlay.get("selections"):
-            lines.append("🛡️ <b>Combiné Sécurité / Confiance</b>")
-            lines.append(f"• <b>Cote totale</b> : <b>{safe_parlay.get('total_odds')}</b> | <b>Probabilité</b> : {safe_parlay.get('combined_prob_pct')}%")
+            lines.append("🛡️ <b>Combiné Sécurité / Haute Confiance</b>")
+            lines.append(f"• <b>Cote totale</b> : <b>@{safe_parlay.get('total_odds')}</b> | <b>Probabilité</b> : <b>{safe_parlay.get('combined_prob_pct')}%</b>")
             for sel in safe_parlay.get("selections", []):
-                lines.append(f"   ▫️ {sel.get('match_display')} : <b>{sel.get('selection')}</b> @ {sel.get('odds')}")
+                lines.append(f"   ▫️ {sel.get('match_display')} : <b>{sel.get('selection')}</b> @ <b>{sel.get('odds')}</b>")
             lines.append("")
 
     lines.append("───────────────")

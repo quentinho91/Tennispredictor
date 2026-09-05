@@ -627,7 +627,10 @@ def generate_daily_parlays(analyzed_matches: List[Dict[str, Any]]) -> Dict[str, 
     )
 
     # 2. PARLAY SAFE (2-3 Matchs Ultra-Sécurisés)
-    safe_sorted = sorted(valid_candidates, key=lambda x: x["prob_pct"], reverse=True)
+    safe_candidates = [c for c in valid_candidates if c.get("odds", 2.0) <= 1.55]
+    if len(safe_candidates) < 2:
+        safe_candidates = valid_candidates
+    safe_sorted = sorted(safe_candidates, key=lambda x: x["prob_pct"], reverse=True)
     safe_picks = []
     seen_safe = set()
     for c in safe_sorted:
