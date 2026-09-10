@@ -179,8 +179,8 @@ def join_odds(df, circuit="atp"):
     df["_w_last"], df["_w_init"] = zip(*df["winner_name"].apply(_build_name_key))
     df["_l_last"], df["_l_init"] = zip(*df["loser_name"].apply(_build_name_key))
     
-    df["tourney_date"] = pd.to_datetime(df["tourney_date"])
-    odds["tourney_date"] = pd.to_datetime(odds["tourney_date"])
+    df["tourney_date"] = pd.to_datetime(df["tourney_date"]).astype("datetime64[ns]")
+    odds["tourney_date"] = pd.to_datetime(odds["tourney_date"]).astype("datetime64[ns]")
     
     # merge_asof exige que les DataFrames soient triés sur la clé temporelle
     df = df.sort_values("tourney_date")
@@ -205,7 +205,7 @@ def join_odds(df, circuit="atp"):
         on="tourney_date",
         left_by=["_w_last", "_w_init", "_l_last", "_l_init"],
         right_by=["winner_last", "winner_init", "loser_last", "loser_init"],
-        tolerance=pd.Timedelta("7d"),
+        tolerance=pd.Timedelta("7D"),
         direction="nearest"
     )
     
