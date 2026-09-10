@@ -146,7 +146,7 @@ def objective_cat(trial, X_train, y_train, sample_weights, X_early_stop, y_early
     return log_loss(y_calib, p_calib)
 
 
-def tune_model(model_name, X_train, y_train, sample_weights, X_early_stop, y_early_stop, X_calib, y_calib, X_test, y_test, n_trials=30, circuit="atp"):
+def tune_model(model_name, X_train, y_train, sample_weights, X_early_stop, y_early_stop, X_calib, y_calib, X_test, y_test, n_trials=150, circuit="atp"):
     name_upper = model_name.upper()
     print("\n" + "=" * 65)
     print(f"  OPTIMISATION BAYÉSIENNE {name_upper} ({circuit.upper()})")
@@ -252,8 +252,8 @@ def main():
     parser = argparse.ArgumentParser(description="Optimisation bayésienne multi-modèles pour Tennis Predictor.")
     parser.add_argument("--circuit", default="atp", choices=["atp", "wta"], help="Circuit (atp ou wta)")
     parser.add_argument("--model", default="all", choices=["xgb", "lgb", "cat", "all"], help="Modèle à optimiser (xgb, lgb, cat, all)")
-    parser.add_argument("--n-trials", type=int, default=30, help="Nombre de tirages Optuna (défaut: 30)")
-    parser.add_argument("--half-life-years", type=float, default=7.0, help="Demi-vie pour sample weights")
+    parser.add_argument("--n-trials", type=int, default=150, help="Nombre de tirages Optuna (défaut: 150)")
+    parser.add_argument("--half-life-years", type=float, default=3.5, help="Demi-vie pour sample weights")
     args = parser.parse_args()
 
     df = load_data(circuit=args.circuit)

@@ -399,6 +399,18 @@ def build_features(df, circuit="atp", state_only=False):
     minutes_arr = df["minutes"].to_numpy(dtype=float)
     indoor_arr = df["indoor"].to_numpy()
 
+    # ---- Cotes bookmakers (optionnelles — NaN si match hors couverture 2013+) ----
+    def _safe_float_arr(col):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").to_numpy(dtype=float)
+        return np.full(n, np.nan)
+
+    p1_bookie_prob     = _safe_float_arr("p1_bookie_prob")      # prob implicite avg (sans vig)
+    p2_bookie_prob     = _safe_float_arr("p2_bookie_prob")
+    p1_bookie_prob_ps  = _safe_float_arr("p1_bookie_prob_ps")   # prob implicite Pinnacle
+    p2_bookie_prob_ps  = _safe_float_arr("p2_bookie_prob_ps")
+    overround_avg_arr  = _safe_float_arr("overround_avg_pct")   # marge totale du marche
+
     def stat_arrays(who):
         return {
             "svpt": df[f"{who}_svpt"].to_numpy(dtype=float),
@@ -521,7 +533,7 @@ def build_features(df, circuit="atp", state_only=False):
 
     if not state_only:
         out = {name: np.empty(n) for name in [
-            "elo_diff", "elo_surface_diff", "elo_p1", "elo_p2", "elo_trend_diff", "points_diff", "peak_rank_diff", "rank_momentum_diff",
+            "elo_diff", "elo_surface_diff", "elo_538_diff", "elo_p1", "elo_p2", "elo_trend_diff", "points_diff", "peak_rank_diff", "rank_momentum_diff",
             "form10_diff", "form365d_diff",
             "streak_diff", "consistency_diff",
             "h2h_diff", "h2h_total", "h2h_surface_diff", "days_since_h2h", "last_h2h_result_diff",
@@ -561,12 +573,21 @@ def build_features(df, circuit="atp", state_only=False):
             # --- Serve & Return Elo + Markov Point-by-Point ---
             "serve_elo_diff", "return_elo_diff",
             "serve_elo_surface_diff", "return_elo_surface_diff",
+            "serve_vs_return_surface_diff",
             "markov_p_win", "markov_hold_diff", "markov_expected_games",
 
             # --- Nouvelles features Modélisation (Rust, Bo5, Slump) ---
             "returning_from_break_diff", "is_returning_from_break_p1", "is_returning_from_break_p2",
             "bo5_winrate_diff", "bo5_experience_diff",
-            "slump_diff", "is_in_slump_p1", "is_in_slump_p2"
+            "slump_diff", "is_in_slump_p1", "is_in_slump_p2",
+
+            # --- Cotes Bookmakers (features marche) ---
+            "bookie_prob_diff",      # prob implicite p1 - p2 (signal marche brut)
+            "bookie_prob_p1",        # prob absolue p1 (utile pour stacking / calibration)
+            "market_edge_elo",       # elo_prob_p1 - bookie_prob_p1 (accord / desaccord modele-marche)
+            "market_edge_markov",    # markov_p_win - bookie_prob_p1 (idem via Markov)
+            "bookie_consensus",      # accord Avg vs Pinnacle (|avg - ps|, petit = marche sur)
+            "overround_avg",         # marge totale bookmaker (liquidite du match)
         ]}
         hand_matchup_arr = np.empty(n, dtype=object)
         serve_diff_20 = {k: np.empty(n) for k in SERVE_RETURN_KEYS}
@@ -599,15 +620,23 @@ def build_features(df, circuit="atp", state_only=False):
         e2 = get_decayed_elo(elo[p2], day, last_p2)
         es1 = get_decayed_elo(elo_surface[surf][p1], day, last_p1)
         es2 = get_decayed_elo(elo_surface[surf][p2], day, last_p2)
+        esw1 = get_decayed_elo(elo_surface_w[surf].get(p1, ELO_INIT), day, last_p1)
+        esw2 = get_decayed_elo(elo_surface_w[surf].get(p2, ELO_INIT), day, last_p2)
         eh1, eh2 = elo_history[p1], elo_history[p2]
         rh1, rh2 = rank_history[p1], rank_history[p2]
         rr1, rr2 = recent_results[p1], recent_results[p2]
         sh1, sh2 = serve_return_hist[p1], serve_return_hist[p2]
         has_rank = (r1 == r1 and r2 == r2)
 
+        # Espérance hybride 538 (50% global + 50% surface)
+        blend_e1 = 0.5 * e1 + 0.5 * es1
+        blend_e2 = 0.5 * e2 + 0.5 * es2
+        exp_blend = elo_expected(blend_e1, blend_e2)
+
         if not state_only:
             out["elo_diff"][i] = e1 - e2
             out["elo_surface_diff"][i] = es1 - es2
+            out["elo_538_diff"][i] = (0.5 * e1 + 0.5 * es1) - (0.5 * e2 + 0.5 * es2)
             out["elo_p1"][i] = e1
             out["elo_p2"][i] = e2
             trend1 = (e1 - eh1[-ELO_TREND_LAG]) if len(eh1) >= ELO_TREND_LAG else np.nan
@@ -844,6 +873,7 @@ def build_features(df, circuit="atp", state_only=False):
             out["return_elo_diff"][i] = re1 - re2
             out["serve_elo_surface_diff"][i] = ses1 - ses2
             out["return_elo_surface_diff"][i] = res1 - res2
+            out["serve_vs_return_surface_diff"][i] = (ses1 - res2) - (ses2 - res1)
 
             pa_m, pb_m = estimate_point_probabilities(ses1, res2, ses2, res1, surface=surf, circuit=circuit)
             bo_i = int(best_of[i]) if (best_of[i] == best_of[i] and best_of[i] in (3, 5)) else 3
@@ -873,6 +903,32 @@ def build_features(df, circuit="atp", state_only=False):
             out["slump_diff"][i] = slump_sev1 - slump_sev2
             out["is_in_slump_p1"][i] = slump1
             out["is_in_slump_p2"][i] = slump2
+
+            # ---- Cotes Bookmakers ----
+            bp1 = p1_bookie_prob[i]    # prob implicite sans vig (cote moyenne marche)
+            bp2 = p2_bookie_prob[i]
+            bp1_ps = p1_bookie_prob_ps[i]  # prob Pinnacle (sharper)
+            bp2_ps = p2_bookie_prob_ps[i]
+            or_avg = overround_avg_arr[i]
+
+            # Prob implicite brute et diff
+            out["bookie_prob_p1"][i]   = bp1 if bp1 == bp1 else np.nan
+            out["bookie_prob_diff"][i] = (bp1 - bp2) if (bp1 == bp1 and bp2 == bp2) else np.nan
+
+            # Market edge : desaccord entre prob Elo et prob marche
+            # Positif => le modele pense que p1 est plus fort que ce que dit le marche
+            elo_prob_p1 = exp_blend
+            out["market_edge_elo"][i] = (elo_prob_p1 - bp1) if (bp1 == bp1) else np.nan
+
+            # Market edge via Markov : desaccord entre prob Markov et prob marche
+            out["market_edge_markov"][i] = (m_res["proba_a"] - bp1) if (bp1 == bp1) else np.nan
+
+            # Consensus du marche : accord entre cote Avg et cote Pinnacle
+            # Petit = marche tres sur de lui, grand = divergence / incertitude
+            out["bookie_consensus"][i] = abs(bp1 - bp1_ps) if (bp1 == bp1 and bp1_ps == bp1_ps) else np.nan
+
+            # Overround moyen du bookmaker (indicateur de liquidite)
+            out["overround_avg"][i] = or_avg if or_avg == or_avg else np.nan
         else:
             t_country = get_tourney_country(t_name)
             t1_id = tourney_id[i]
@@ -897,7 +953,7 @@ def build_features(df, circuit="atp", state_only=False):
 
         # ================= MISE A JOUR DE L'ETAT (après calcul des features) =================
         p1_won = bool(target[i])
-        exp1 = elo_expected(e1, e2)
+
         outcome = derive_match_outcome_stats(score_arr[i], p1_won, best_of[i])
         p1_dec, p2_dec, p1_tbp, p1_tbw, p1_cb, p2_cb, p2_tbp, p2_tbw = outcome
 
@@ -927,25 +983,23 @@ def build_features(df, circuit="atp", state_only=False):
         # Mise à jour Elo (pondérée par MoV et K adaptatif à l'incertitude / expérience)
         k1 = get_dynamic_k(K_ELO, career_matches[p1]) * mov_mult
         k2 = get_dynamic_k(K_ELO, career_matches[p2]) * mov_mult
-        new_e1 = e1 + k1 * ((1.0 if p1_won else 0.0) - exp1)
-        new_e2 = e2 + k2 * ((0.0 if p1_won else 1.0) - (1.0 - exp1))
+        new_e1 = e1 + k1 * ((1.0 if p1_won else 0.0) - exp_blend)
+        new_e2 = e2 + k2 * ((0.0 if p1_won else 1.0) - (1.0 - exp_blend))
         elo[p1], elo[p2] = new_e1, new_e2
         eh1.append(new_e1); _trim(eh1, 60)
         eh2.append(new_e2); _trim(eh2, 60)
 
-        exps1 = elo_expected(es1, es2)
         ks1 = get_dynamic_k(K_ELO, surface_career_count[p1][surf]) * mov_mult
         ks2 = get_dynamic_k(K_ELO, surface_career_count[p2][surf]) * mov_mult
-        elo_surface[surf][p1] = es1 + ks1 * ((1.0 if p1_won else 0.0) - exps1)
-        elo_surface[surf][p2] = es2 + ks2 * ((0.0 if p1_won else 1.0) - (1.0 - exps1))
+        elo_surface[surf][p1] = es1 + ks1 * ((1.0 if p1_won else 0.0) - exp_blend)
+        elo_surface[surf][p2] = es2 + ks2 * ((0.0 if p1_won else 1.0) - (1.0 - exp_blend))
 
         # Elo surface avec K adaptatif (GC>M1000>ATP500) pondéré par MoV & incertitude
         base_lvl = K_ELO_BY_LEVEL.get(str(tourney_level[i]), K_ELO)
         k_lvl_1 = get_dynamic_k(base_lvl, surface_career_count[p1][surf]) * mov_mult
         k_lvl_2 = get_dynamic_k(base_lvl, surface_career_count[p2][surf]) * mov_mult
-        expsw = elo_expected(esw1, esw2)
-        elo_surface_w[surf][p1] = esw1 + k_lvl_1 * ((1.0 if p1_won else 0.0) - expsw)
-        elo_surface_w[surf][p2] = esw2 + k_lvl_2 * ((0.0 if p1_won else 1.0) - (1.0 - expsw))
+        elo_surface_w[surf][p1] = esw1 + k_lvl_1 * ((1.0 if p1_won else 0.0) - exp_blend)
+        elo_surface_w[surf][p2] = esw2 + k_lvl_2 * ((0.0 if p1_won else 1.0) - (1.0 - exp_blend))
 
         if r1 == r1:
             peak_rank[p1] = min(peak_rank[p1], r1)

@@ -717,6 +717,7 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     esw2 = get_decayed_elo(elo_surf_w.get(surf, {}).get(p2, ELO_INIT), day, last_p2)
     feat["elo_diff"]           = e1 - e2
     feat["elo_surface_diff"]   = es1 - es2
+    feat["elo_538_diff"]       = (0.5 * e1 + 0.5 * es1) - (0.5 * e2 + 0.5 * es2)
     feat["elo_surface_w_diff"] = esw1 - esw2
     feat["elo_p1"]             = e1
     feat["elo_p2"]             = e2
@@ -951,6 +952,7 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["return_elo_diff"]          = re1 - re2
     feat["serve_elo_surface_diff"]   = ses1 - ses2
     feat["return_elo_surface_diff"]  = res1 - res2
+    feat["serve_vs_return_surface_diff"] = (ses1 - res2) - (ses2 - res1)
 
     # Point prob estimation & Markov match simulation
     pa_m, pb_m = estimate_point_probabilities(ses1, res2, ses2, res1, surface=surf, circuit=state.get("circuit", "atp"))
@@ -1077,6 +1079,31 @@ def compute_features(p1, p2, surf, t_level, round_, best_of, indoor,
     feat["_p2_serve_elo_surf"]    = ses2
     feat["_p1_return_elo_surf"]   = res1
     feat["_p2_return_elo_surf"]   = res2
+
+    # ---- Cotes Bookmakers (optionnelles, fournies en temps reel) ----
+    # odds1 / odds2 : cotes decimales du bookmaker pour p1 et p2
+    # Si non fournies, les features sont NaN et le modele reste insensible au marche.
+    _odds1 = feat.get("_odds1", np.nan)   # injecte par l'appelant si disponible
+    _odds2 = feat.get("_odds2", np.nan)
+    if _odds1 == _odds1 and _odds2 == _odds2 and _odds1 > 1.0 and _odds2 > 1.0:
+        p1_raw = 1.0 / _odds1
+        p2_raw = 1.0 / _odds2
+        _total = p1_raw + p2_raw
+        bp1 = p1_raw / _total   # prob implicite p1 sans vig
+        bp2 = p2_raw / _total   # prob implicite p2 sans vig
+        _or = (_total - 1.0) * 100.0  # overround %
+    else:
+        bp1 = np.nan
+        bp2 = np.nan
+        _or = np.nan
+
+    feat["bookie_prob_p1"]     = bp1
+    feat["bookie_prob_diff"]   = (bp1 - bp2) if (bp1 == bp1 and bp2 == bp2) else np.nan
+    elo_prob_p1 = elo_exp(e1, e2)
+    feat["market_edge_elo"]    = (elo_prob_p1 - bp1)          if bp1 == bp1 else np.nan
+    feat["market_edge_markov"] = (m_res["proba_a"] - bp1)    if bp1 == bp1 else np.nan
+    feat["bookie_consensus"]   = np.nan  # pas de Pinnacle en temps reel sans API dediee
+    feat["overround_avg"]      = _or
 
     # Catégoriel
     feat["surface"]       = surf

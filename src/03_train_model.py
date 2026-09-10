@@ -55,7 +55,7 @@ def get_parser():
     parser.add_argument("--calib-months", type=int, default=12, help="Nombre de mois pour la calibration (défaut: 12)")
     parser.add_argument("--test-months", type=int, default=6, help="Nombre de mois pour le test (défaut: 6)")
     parser.add_argument("--ref-date", default=None, help="Date de référence (AAAA-MM-JJ). Défaut: date max du dataset.")
-    parser.add_argument("--half-life-years", type=float, default=7.0, help="Demi-vie en années pour la pondération temporelle (0 pour désactiver, défaut: 7.0)")
+    parser.add_argument("--half-life-years", type=float, default=3.5, help="Demi-vie en années pour la pondération temporelle (0 pour désactiver, défaut: 7.0)")
     parser.add_argument("--oof-splits", type=int, default=5, help="Nombre de plis pour les prédictions Out-Of-Fold du meta-learner (défaut: 5, 0 pour désactiver)")
     return parser
 
@@ -176,7 +176,7 @@ def dynamic_temporal_split(df, X, y, calib_months=12, test_months=6, ref_date=No
             df.loc[test_mask])
 
 
-def compute_sample_weights(train_dates, half_life_years=7.0, min_weight=0.10):
+def compute_sample_weights(train_dates, half_life_years=3.5, min_weight=0.10):
     """
     Calcule des poids d'échantillons exponentiellement décroissants selon l'ancienneté du match.
     """

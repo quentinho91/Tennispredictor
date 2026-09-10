@@ -8,10 +8,15 @@ Si on entraîne un modèle directement là-dessus, il peut apprendre des
 raccourcis idiots (ex: "la colonne A gagne presque toujours" si on
 n'y prend pas garde dans le feature engineering). On restructure donc
 en (player_1, player_2, target) avec une assignation aléatoire du
-"joueur 1", puis toutes les features seront construites en DIFFÉRENCE
+"joueur 1", puis toutes les features seront construites en DIFFERENCE
 (player_1 - player_2), ce qui rend le problème naturellement symétrique.
+
+V2 : Jointure des cotes bookmakers historiques (tennis-data.co.uk)
+  -> B365, Pinnacle, Avg market → probabilites implicites sans vig
+  -> features bookie_implied_prob_p1/p2, market_edge, overround
 """
 
+import re
 import pandas as pd
 import numpy as np
 import glob
@@ -136,10 +141,98 @@ def basic_clean(df):
     return df
 
 
+# ---------------------------------------------------------------------------
+# Jointure des cotes bookmakers
+# ---------------------------------------------------------------------------
+
+def _build_name_key(full_name):
+    """
+    'Roger Federer' -> ('federer', 'r')
+    'Alex De Minaur' -> ('de minaur', 'a')
+    """
+    if not isinstance(full_name, str):
+        return None, None
+    parts = full_name.strip().split()
+    if len(parts) < 2:
+        return full_name.lower(), None
+    first_initial = parts[0][0].lower()
+    last = " ".join(parts[1:]).lower()
+    return last, first_initial
+
+
+def join_odds(df, circuit="atp"):
+    """
+    Joint les cotes bookmakers sur chaque match via un matching :
+      (winner_last, winner_init, loser_last, loser_init, date +-7j)
+    Ajoute les colonnes odds au dataframe.
+    """
+    odds_path = PROCESSED_DIR / "odds_lookup_atp.parquet"
+    if circuit != "atp" or not odds_path.exists():
+        if circuit == "atp":
+            print("[WARN] odds_lookup_atp.parquet introuvable. Lance d'abord: python src/00b_build_odds_lookup.py")
+        return df
+
+    odds = pd.read_parquet(odds_path)
+    
+    # Nettoyage et préparation pour merge_asof
+    df = df.copy()
+    df["_w_last"], df["_w_init"] = zip(*df["winner_name"].apply(_build_name_key))
+    df["_l_last"], df["_l_init"] = zip(*df["loser_name"].apply(_build_name_key))
+    
+    df["tourney_date"] = pd.to_datetime(df["tourney_date"])
+    odds["tourney_date"] = pd.to_datetime(odds["tourney_date"])
+    
+    # merge_asof exige que les DataFrames soient triés sur la clé temporelle
+    df = df.sort_values("tourney_date")
+    odds = odds.sort_values("tourney_date")
+    
+    # Sélection des colonnes pertinentes de odds pour ne pas polluer df
+    odds_cols_to_keep = [
+        "tourney_date", "winner_last", "winner_init", "loser_last", "loser_init",
+        "odds_winner_avg", "odds_loser_avg", "odds_winner_ps", "odds_loser_ps",
+        "odds_winner_b365", "odds_loser_b365", "odds_winner_max", "odds_loser_max",
+        "implied_prob_winner_avg", "implied_prob_loser_avg",
+        "implied_prob_winner_ps", "implied_prob_loser_ps",
+        "overround_b365_pct", "overround_avg_pct"
+    ]
+    odds_subset = odds[[c for c in odds_cols_to_keep if c in odds.columns]].copy()
+    
+    # Jointure fuzzy sur la date (plus proche, tolérance de 7 jours)
+    # par correspondance stricte sur les noms des joueurs
+    merged = pd.merge_asof(
+        df,
+        odds_subset,
+        on="tourney_date",
+        left_by=["_w_last", "_w_init", "_l_last", "_l_init"],
+        right_by=["winner_last", "winner_init", "loser_last", "loser_init"],
+        tolerance=pd.Timedelta("7d"),
+        direction="nearest"
+    )
+    
+    # Compter les matchs avec cotes
+    total_candidates = len(df[df["tourney_date"].dt.year >= 2013])
+    matched = merged["odds_winner_avg"].notna().sum()
+    pct = matched / total_candidates * 100 if total_candidates > 0 else 0
+    print(f"  Odds joined: {matched:,}/{total_candidates:,} matchs post-2013 ({pct:.1f}%)")
+
+    # Nettoyage des colonnes temporaires
+    cols_to_drop = ["_w_last", "_w_init", "_l_last", "_l_init", 
+                    "winner_last", "winner_init", "loser_last", "loser_init"]
+    merged.drop(columns=[c for c in cols_to_drop if c in merged.columns], inplace=True)
+    
+    # Restaurer l'ordre initial par match_id si possible
+    if "match_id" in merged.columns:
+        merged = merged.sort_values("match_id").reset_index(drop=True)
+        
+    return merged
+
+
 def to_symmetric(df):
     """Transforme chaque ligne winner/loser en player_1/player_2 + target,
-    avec assignation aléatoire de qui est 'player_1' pour éviter tout biais
-    d'ordre dans les colonnes."""
+    avec assignation aleatoire de qui est 'player_1' pour eviter tout biais
+    d'ordre dans les colonnes.
+    Propage aussi les colonnes odds en les orientant correctement selon le swap.
+    """
     swap = np.random.rand(len(df)) < 0.5
 
     p1_is_winner = ~swap  # si pas de swap, player_1 = winner
@@ -154,10 +247,33 @@ def to_symmetric(df):
         "best_of": pd.to_numeric(df["best_of"], errors="coerce"),
         "round": df["round"],
         "retirement": df["retirement"],
-        "score": df["score"],  # gardé brut, toujours écrit du point de vue du VAINQUEUR
+        "score": df["score"],  # garde brut, toujours ecrit du point de vue du VAINQUEUR
         "minutes": pd.to_numeric(df["minutes"], errors="coerce"),
         "indoor": df["indoor"],
     })
+
+    # --- Odds bookmakers : orientes selon le swap ---
+    # Si p1_is_winner : p1 = winner -> odds_p1 = odds_winner, odds_p2 = odds_loser
+    # Si swap         : p1 = loser  -> odds_p1 = odds_loser,  odds_p2 = odds_winner
+    odds_pairs = [
+        ("odds_avg",    "odds_winner_avg",   "odds_loser_avg"),
+        ("odds_ps",     "odds_winner_ps",    "odds_loser_ps"),
+        ("odds_b365",   "odds_winner_b365",  "odds_loser_b365"),
+        ("odds_max",    "odds_winner_max",   "odds_loser_max"),
+        ("bookie_prob", "implied_prob_winner_avg", "implied_prob_loser_avg"),
+        ("bookie_prob_ps", "implied_prob_winner_ps", "implied_prob_loser_ps"),
+    ]
+    for base, w_col, l_col in odds_pairs:
+        if w_col in df.columns and l_col in df.columns:
+            w_vals = pd.to_numeric(df[w_col], errors="coerce")
+            l_vals = pd.to_numeric(df[l_col], errors="coerce")
+            out[f"p1_{base}"] = np.where(p1_is_winner, w_vals, l_vals)
+            out[f"p2_{base}"] = np.where(p1_is_winner, l_vals, w_vals)
+
+    # Overround (identique quel que soit le swap)
+    for col in ["overround_b365_pct", "overround_avg_pct"]:
+        if col in df.columns:
+            out[col] = pd.to_numeric(df[col], errors="coerce")
 
     cols_map = [
         ("id", "winner_id", "loser_id"),
@@ -214,11 +330,21 @@ def to_symmetric(df):
 if __name__ == "__main__":
     raw = load_raw()
     raw = basic_clean(raw)
+
+    # --- Jointure cotes bookmakers (ATP uniquement, 2013+) ---
+    print("\nJointure des cotes bookmakers...")
+    raw = join_odds(raw, circuit=args.circuit)
+
     sym = to_symmetric(raw)
     output_path = PROCESSED_DIR / f"matches_symmetric_{args.circuit}.parquet"
     sym.to_parquet(output_path, index=False)
-    print(f"{len(sym)} matchs traités -> {output_path}")
+    print(f"{len(sym)} matchs traites -> {output_path}")
     print(sym["target"].value_counts(normalize=True))
+
+    # Rapport couverture odds
+    if "p1_bookie_prob" in sym.columns:
+        n_with_odds = sym["p1_bookie_prob"].notna().sum()
+        print(f"\nCouverture odds : {n_with_odds:,}/{len(sym):,} matchs ({n_with_odds/len(sym)*100:.1f}%)")
 
     # --- UPDATE PREDICTIONS DB RESULTS ---
     import json

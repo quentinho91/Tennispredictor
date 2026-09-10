@@ -90,7 +90,7 @@ def walk_forward_split(df, test_year, calib_months=12):
     return train_mask, early_stop_mask, calib_only_mask, calib_mask, test_mask
 
 
-def run_walk_forward(circuit="atp", start_year=2021, end_year=2024, calib_months=12, half_life_years=7.0, fast=False):
+def run_walk_forward(circuit="atp", start_year=2021, end_year=2024, calib_months=12, half_life_years=3.5, fast=False):
     print("=" * 85)
     print(f"  ÉVALUATION TEMPORELLE GLISSANTE (WALK-FORWARD) — CIRCUIT {circuit.upper()}")
     print(f"  Période de test : {start_year} à {end_year} | Calibration : {calib_months} mois")
@@ -197,19 +197,19 @@ def run_walk_forward(circuit="atp", start_year=2021, end_year=2024, calib_months
         acc_xgb = accuracy_score(y_test, p_xgb_test > 0.5)
 
         row = {
-            "year": test_year,
-            "n_matches": n_test,
-            "log_loss_base": round(ll_base, 4),
-            "acc_base": round(acc_base * 100, 2),
-            "log_loss_xgb": round(ll_xgb, 4),
-            "acc_xgb": round(acc_xgb * 100, 2),
-            "log_loss_ensemble": round(ll, 4),
-            "brier": round(brier, 4),
-            "accuracy": round(acc * 100, 2),
-            "auc": round(auc, 4),
-            "ece": round(ece * 100, 2),
+            "year": int(test_year),
+            "n_matches": int(n_test),
+            "log_loss_base": float(round(ll_base, 4)),
+            "acc_base": float(round(acc_base * 100, 2)),
+            "log_loss_xgb": float(round(ll_xgb, 4)),
+            "acc_xgb": float(round(acc_xgb * 100, 2)),
+            "log_loss_ensemble": float(round(ll, 4)),
+            "brier": float(round(brier, 4)),
+            "accuracy": float(round(acc * 100, 2)),
+            "auc": float(round(auc, 4)),
+            "ece": float(round(ece * 100, 2)),
             "best_calib": best_cal_name,
-            "ll_gain_vs_base": round((ll_base - ll), 4)
+            "ll_gain_vs_base": float(round((ll_base - ll), 4))
         }
         yearly_metrics.append(row)
 
@@ -248,7 +248,7 @@ def main():
     parser.add_argument("--start-year", type=int, default=2021, help="Première année de test (défaut: 2021)")
     parser.add_argument("--end-year", type=int, default=2024, help="Dernière année de test (défaut: 2024)")
     parser.add_argument("--calib-months", type=int, default=12, help="Mois de calibration (défaut: 12)")
-    parser.add_argument("--half-life-years", type=float, default=7.0, help="Demi-vie temporelle (défaut: 7.0)")
+    parser.add_argument("--half-life-years", type=float, default=3.5, help="Demi-vie temporelle (défaut: 7.0)")
     parser.add_argument("--fast", action="store_true", help="Mode rapide avec moins d'arbres pour tester")
     args = parser.parse_args()
 
