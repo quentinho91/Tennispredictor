@@ -120,10 +120,43 @@ def deduce_tournament_meta(tourney_name: str, circuit: str = "atp") -> Dict[str,
     return meta
 
 
+def fetch_main_tournaments_whitelist() -> List[str]:
+    """
+    Scrape la page d'accueil de TennisExplorer pour récupérer la liste dynamique
+    des 'Main tournaments' (ATP & WTA) de la semaine.
+    Cela permet d'exclure automatiquement 95% des Challengers et ITF.
+    """
+    url = "https://www.tennisexplorer.com/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    }
+    whitelist = []
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+        soup = BeautifulSoup(html, "html.parser")
+        
+        for tr in soup.find_all("tr"):
+            if "Main tournaments" in tr.get_text():
+                sibling = tr.find_next_sibling("tr")
+                while sibling and "Lower level" not in sibling.get_text():
+                    for a in sibling.find_all("a"):
+                        href = a.get("href", "")
+                        if href and not href.endswith("?draw=1"):
+                            whitelist.append(a.get_text(strip=True).lower())
+                    sibling = sibling.find_next_sibling("tr")
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération de la whitelist des tournois : {e}")
+    
+    return whitelist
+
+
 def _scrape_tennisexplorer_single_day(
     target_dt: datetime,
     is_today: bool = True,
-    is_tomorrow: bool = False
+    is_tomorrow: bool = False,
+    main_tournaments_whitelist: Optional[List[str]] = None
 ) -> List[Dict[str, Any]]:
     """Scrape et extrait les matchs d'une date spécifique depuis TennisExplorer."""
     url = f"https://www.tennisexplorer.com/matches/?type=all&year={target_dt.year}&month={target_dt.month}&day={target_dt.day}"
@@ -187,7 +220,28 @@ def _scrape_tennisexplorer_single_day(
                 is_wta_125 = "125" in current_tourney.lower() or "125" in current_href.lower()
                 blacklist_wta = ["montreux", "sao paulo", "caldas", "valencia", "antalya", "bucharest", "ljubljana", "barranquilla"]
                 is_blacklisted = any(b in current_tourney.lower() for b in blacklist_wta)
-                is_amateur = "utr" in current_tourney.lower() or "exhibition" in current_tourney.lower() or is_challenger or is_itf or is_wta_125 or is_blacklisted
+                
+                # Vérification avec la whitelist dynamique de la page d'accueil
+                is_in_whitelist = False
+                if main_tournaments_whitelist:
+                    is_in_whitelist = any(w in current_tourney.lower() or current_tourney.lower() in w for w in main_tournaments_whitelist)
+                
+                # Un tournoi est "amateur" si on a des mots-clés d'exclusion, 
+                # ou s'il n'est PAS dans la whitelist et n'est pas un tournoi connu majeur (Grand Chelem / Masters)
+                is_known = any(k in current_tourney.lower() for k in KNOWN_TOURNAMENT_PATTERNS.keys())
+                is_amateur = (
+                    "utr" in current_tourney.lower() 
+                    or "exhibition" in current_tourney.lower() 
+                    or is_challenger 
+                    or is_itf 
+                    or is_wta_125 
+                    or is_blacklisted
+                )
+                
+                # Si strict whitelist est activée, on bloque ce qui n'est pas whitelisté ni connu
+                if not is_amateur and main_tournaments_whitelist is not None:
+                    if not is_in_whitelist and not is_known:
+                        is_amateur = True
 
                 if "wta" in current_href.lower() or "wta" in current_tourney.lower() or "women" in current_href.lower():
                     current_circuit = "wta"
@@ -378,12 +432,15 @@ def fetch_tennisexplorer_matches(circuit: str = "all", date_str: Optional[str] =
     else:
         dt_primary = datetime.now()
 
-    raw_matches = _scrape_tennisexplorer_single_day(dt_primary, is_today=True, is_tomorrow=False)
+    whitelist = fetch_main_tournaments_whitelist()
+    logger.info(f"Whitelist Main Tournaments récupérée: {whitelist}")
+
+    raw_matches = _scrape_tennisexplorer_single_day(dt_primary, is_today=True, is_tomorrow=False, main_tournaments_whitelist=whitelist)
 
     # Récupérer uniquement la session de nuit de la même journée (décalage horaire US : 00h00 à 08h30 du lendemain matin)
     if include_night_matches:
         dt_tomorrow = dt_primary + timedelta(days=1)
-        tomorrow_matches = _scrape_tennisexplorer_single_day(dt_tomorrow, is_today=False, is_tomorrow=True)
+        tomorrow_matches = _scrape_tennisexplorer_single_day(dt_tomorrow, is_today=False, is_tomorrow=True, main_tournaments_whitelist=whitelist)
         
         seen_keys = {f"{m['p1'].lower()}_{m['p2'].lower()}_{m['tournament'].lower()}" for m in raw_matches}
         for tm in tomorrow_matches:
