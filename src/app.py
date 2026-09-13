@@ -113,11 +113,12 @@ def _get_last_data_update_str() -> str:
     if p.exists():
         try:
             mtime = p.stat().st_mtime
-            dt = datetime.datetime.fromtimestamp(mtime)
+            import zoneinfo
+            dt = datetime.datetime.fromtimestamp(mtime, zoneinfo.ZoneInfo("Europe/Paris"))
             return dt.strftime("%d/%m/%Y à %H:%M")
         except Exception:
             pass
-    return "23/08/2026 à 10:25"
+    return "Aucune"
 
 
 @app.get("/api/status")
@@ -133,7 +134,8 @@ def get_status():
     if p.exists():
         try:
             mtime = p.stat().st_mtime
-            last_update_iso = datetime.datetime.fromtimestamp(mtime).isoformat()
+            # Indispensable: Ajouter le fuseau horaire UTC pour que le navigateur convertisse correctement en heure locale
+            last_update_iso = datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc).isoformat()
         except Exception:
             pass
 
@@ -1197,7 +1199,8 @@ def _run_background_sync():
             PLAYERS_CACHE.clear()
             TOURNAMENTS_DATA.clear()
             gc.collect()
-            now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
+            import zoneinfo
+            now_str = datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Paris")).strftime("%d/%m/%Y à %H:%M")
             with SYNC_LOCK:
                 SYNC_STATE["running"] = False
                 SYNC_STATE["step"] = "done"
@@ -1235,7 +1238,8 @@ def _run_background_sync():
         TOURNAMENTS_DATA.clear()
         gc.collect()
 
-        now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
+        import zoneinfo
+        now_str = datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Paris")).strftime("%d/%m/%Y à %H:%M")
         with SYNC_LOCK:
             SYNC_STATE["running"] = False
             SYNC_STATE["step"] = "done"
@@ -1244,7 +1248,8 @@ def _run_background_sync():
             SYNC_STATE["timestamp"] = now_str
     except Exception as e:
         gc.collect()
-        now_str = datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")
+        import zoneinfo
+        now_str = datetime.datetime.now(zoneinfo.ZoneInfo("Europe/Paris")).strftime("%d/%m/%Y à %H:%M")
         with SYNC_LOCK:
             SYNC_STATE["running"] = False
             SYNC_STATE["step"] = "error"
