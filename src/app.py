@@ -883,14 +883,14 @@ def compute_detailed_analytics(
 
     # 4. H2H Global
     h12 = state.get("h2h", {}).get(p1, {}).get(p2, [0, 0])
-    p1_h2h_wins = h12[1] if len(h12) > 1 else 0
-    p2_h2h_wins = h12[0] if len(h12) > 0 else 0
+    p1_h2h_wins = h12[0] if len(h12) > 0 else 0
+    p2_h2h_wins = h12[1] if len(h12) > 1 else 0
     total_h2h = p1_h2h_wins + p2_h2h_wins
 
     # H2H sur surface
-    h12_surf = state.get("h2h_surface", {}).get(surface, {}).get(p1, {}).get(p2, [0, 0])
-    p1_h2h_surf_wins = h12_surf[1] if len(h12_surf) > 1 else 0
-    p2_h2h_surf_wins = h12_surf[0] if len(h12_surf) > 0 else 0
+    h12_surf = state.get("h2h_surface", {}).get(p1, {}).get(p2, {}).get(surface, [0, 0])
+    p1_h2h_surf_wins = h12_surf[0] if len(h12_surf) > 0 else 0
+    p2_h2h_surf_wins = h12_surf[1] if len(h12_surf) > 1 else 0
 
     # 5. Synthèse "En Clair"
     is_p1_fav = p_p1 >= p_p2

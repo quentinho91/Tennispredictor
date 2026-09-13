@@ -1098,11 +1098,11 @@ def build_features(df, circuit="atp", state_only=False):
         streak[p2] = _update_streak(streak[p2], not p1_won)
 
         if p1_won:
-            h2h[p1][p2][0] += 1; h2h[p2][p1][0] += 1
-            h2h_surface[p1][p2][surf][0] += 1; h2h_surface[p2][p1][surf][0] += 1
+            h2h[p1][p2][0] += 1; h2h[p2][p1][1] += 1
+            h2h_surface[p1][p2][surf][0] += 1; h2h_surface[p2][p1][surf][1] += 1
         else:
-            h2h[p1][p2][1] += 1; h2h[p2][p1][1] += 1
-            h2h_surface[p1][p2][surf][1] += 1; h2h_surface[p2][p1][surf][1] += 1
+            h2h[p1][p2][1] += 1; h2h[p2][p1][0] += 1
+            h2h_surface[p1][p2][surf][1] += 1; h2h_surface[p2][p1][surf][0] += 1
 
         h2h_history[p1][p2].append((day, p1_won)); _trim(h2h_history[p1][p2], 30)
         h2h_history[p2][p1].append((day, not p1_won)); _trim(h2h_history[p2][p1], 30)
