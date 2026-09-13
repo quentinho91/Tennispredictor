@@ -185,7 +185,9 @@ def _scrape_tennisexplorer_single_day(
                 is_challenger = "challenger" in current_tourney.lower() or "challenger" in current_href.lower()
                 is_itf = "itf" in current_tourney.lower() or "itf" in current_href.lower() or "futures" in current_tourney.lower()
                 is_wta_125 = "125" in current_tourney.lower() or "125" in current_href.lower()
-                is_amateur = "utr" in current_tourney.lower() or "exhibition" in current_tourney.lower() or is_challenger or is_itf or is_wta_125
+                blacklist_wta = ["montreux", "sao paulo", "caldas", "valencia", "antalya", "bucharest", "ljubljana", "barranquilla"]
+                is_blacklisted = any(b in current_tourney.lower() for b in blacklist_wta)
+                is_amateur = "utr" in current_tourney.lower() or "exhibition" in current_tourney.lower() or is_challenger or is_itf or is_wta_125 or is_blacklisted
 
                 if "wta" in current_href.lower() or "wta" in current_tourney.lower() or "women" in current_href.lower():
                     current_circuit = "wta"
