@@ -218,8 +218,6 @@ def _scrape_tennisexplorer_single_day(
                 is_challenger = "challenger" in current_tourney.lower() or "challenger" in current_href.lower()
                 is_itf = "itf" in current_tourney.lower() or "itf" in current_href.lower() or "futures" in current_tourney.lower()
                 is_wta_125 = "125" in current_tourney.lower() or "125" in current_href.lower()
-                blacklist_wta = ["montreux", "sao paulo", "caldas", "valencia", "antalya", "bucharest", "ljubljana", "barranquilla"]
-                is_blacklisted = any(b in current_tourney.lower() for b in blacklist_wta)
                 
                 # Vérification avec la whitelist dynamique de la page d'accueil
                 is_in_whitelist = False
@@ -234,8 +232,7 @@ def _scrape_tennisexplorer_single_day(
                     or "exhibition" in current_tourney.lower() 
                     or is_challenger 
                     or is_itf 
-                    or is_wta_125 
-                    or is_blacklisted
+                    or is_wta_125
                 )
                 
                 # Si strict whitelist est activée, on bloque ce qui n'est pas whitelisté ni connu
