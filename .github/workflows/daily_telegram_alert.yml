@@ -2,8 +2,8 @@ name: Daily Telegram Value Bets Alert
 
 on:
   schedule:
-    # Tous les jours à 08:00 UTC (10:00 heure de Paris / CET)
-    - cron: '0 8 * * *'
+    # Tous les jours à 05:00 UTC (07:00 heure de Paris / CET) pour compenser les retards de GitHub
+    - cron: '0 5 * * *'
   workflow_dispatch: # Permet de déclencher l'alerte manuellement avec un bouton sur GitHub
 
 concurrency:
