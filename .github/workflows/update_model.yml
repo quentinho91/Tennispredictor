@@ -48,8 +48,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete latest_model --yes --cleanup-tag || true
+          # Check if release exists and delete it with retries to handle 502/API errors
+          if gh release view latest_model > /dev/null 2>&1; then
+            echo "Release latest_model exists, attempting to delete..."
+            success=false
+            for i in {1..5}; do
+              if gh release delete latest_model --yes --cleanup-tag; then
+                echo "Successfully deleted latest_model release and tag."
+                success=true
+                break
+              fi
+              echo "Attempt $i failed. Waiting 5s before retrying..."
+              sleep 5
+            done
+            if [ "$success" = false ]; then
+              echo "Error: Failed to delete release latest_model after multiple attempts."
+              exit 1
+            fi
+          fi
+          
+          # Also try to delete the tag just in case it was left behind
           git push --delete origin latest_model || true
+          
+          # Short pause to ensure GitHub API is updated before creating the new release
+          sleep 2
           
           gh release create latest_model \
             data/processed/player_state_atp.pkl \
