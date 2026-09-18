@@ -4,8 +4,8 @@ telegram_notifier.py - Module d'alerte et de notification Telegram automatique p
 Fonctionnalités :
 1. Télécharge les derniers modèles et états récents (GitHub Release).
 2. Analyse l'intégralité des matchs et cotes du jour via TennisExplorer (sans quota API).
-3. Détecte les Value Bets haute/moyenne confiance et assemble les combinés optimaux.
-4. Formate un briefing complet, élégant et lisible en HTML pour Telegram.
+3. Détecte les Value Bets haute/moyenne confiance.
+4. Formate un briefing clair et lisible en HTML pour Telegram (paris uniquement, sans combiné).
 5. Envoie le message via l'API Telegram Bot (zéro dépendance externe, urllib natif).
 """
 
@@ -47,13 +47,19 @@ def send_telegram_message(
     Gère automatiquement le découpage si le message dépasse la limite de 4096 caractères de Telegram.
     """
     if not bot_token or not chat_id:
+        logger.error("TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID manquant — impossible d'envoyer")
         return {"success": False, "error": "TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID manquant"}
+
+    # Masquer le token dans les logs
+    token_preview = bot_token[:8] + "..." if len(bot_token) > 8 else "***"
+    logger.info(f"Envoi Telegram → chat_id={chat_id} | token={token_preview} | longueur={len(text)} chars")
 
     url = TELEGRAM_API_URL.format(token=bot_token, method="sendMessage")
 
     # Découpage si > 4000 caractères
     max_len = 4000
     chunks = [text[i:i + max_len] for i in range(0, len(text), max_len)] if len(text) > max_len else [text]
+    logger.info(f"Message découpé en {len(chunks)} partie(s)")
 
     responses = []
     for idx, chunk in enumerate(chunks):
@@ -74,15 +80,21 @@ def send_telegram_message(
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 res_body = json.loads(resp.read().decode("utf-8"))
+                if not res_body.get("ok"):
+                    err_detail = res_body.get("description", "Réponse Telegram non-ok")
+                    logger.error(f"Telegram API réponse non-ok (partie {idx+1}): {err_detail}")
+                    return {"success": False, "error": err_detail, "response": res_body}
+                logger.info(f"Partie {idx+1}/{len(chunks)} envoyée avec succès")
                 responses.append(res_body)
         except urllib.error.HTTPError as he:
             err_msg = he.read().decode("utf-8")
-            logger.error(f"Erreur HTTP Telegram ({he.code}): {err_msg}")
+            logger.error(f"Erreur HTTP Telegram {he.code} (partie {idx+1}): {err_msg}")
             return {"success": False, "status_code": he.code, "error": err_msg}
         except Exception as e:
-            logger.error(f"Erreur envoi Telegram: {e}")
+            logger.error(f"Erreur envoi Telegram (partie {idx+1}): {type(e).__name__}: {e}")
             return {"success": False, "error": str(e)}
 
+    logger.info(f"Envoi Telegram terminé : {len(chunks)} partie(s) envoyée(s) avec succès")
     return {"success": True, "parts_sent": len(chunks), "responses": responses}
 
 
@@ -150,28 +162,6 @@ def format_daily_telegram_briefing(scan_data: Dict[str, Any]) -> str:
         lines.append("💡 <i>Règle d'or : Savoir ne pas parier protège votre capital !</i>")
         lines.append("")
 
-    # --- SECTION COMBINÉ DU JOUR ---
-    parlays = scan_data.get("daily_parlays", {})
-    max_parlay = parlays.get("max_odds") if parlays else None
-    if max_parlay and max_parlay.get("selections"):
-        count = len(max_parlay.get("selections", []))
-        lines.append(f"🔥 <b>COMBINÉ IA DU JOUR (MAX COTE • {count} SÉLECTIONS)</b>")
-        lines.append("⭐ <i>Multiplicateur Maximal • Recommandation IA du Jour</i>")
-        lines.append("────────────────────────")
-        lines.append(f"• <b>Cote Totale</b> : <b>@{max_parlay.get('total_odds')}</b> | <b>Probabilité IA</b> : <b>{max_parlay.get('combined_prob_pct')}%</b>")
-        lines.append(f"• <b>Confiance</b> : <b>{max_parlay.get('confidence_score')}%</b> ({max_parlay.get('confidence_label', 'Très haute')})")
-        lines.append("")
-        lines.append("📋 <b>Détail du ticket :</b>")
-        for sel in max_parlay.get("selections", []):
-            m_disp = sel.get("match_display", "")
-            tourn = sel.get("tournament", "")
-            pick = sel.get("selection", "")
-            o_val = sel.get("odds", "")
-            p_val = sel.get("prob_pct", "")
-            lines.append(f"   ▫️ {m_disp} ({tourn})")
-            lines.append(f"      👉 <b>Victoire {pick}</b> @ <b>{o_val}</b> <i>(IA: {p_val}%)</i>")
-        lines.append("")
-
     lines.append("───────────────")
     lines.append("🤖 <i>Généré automatiquement par Tennis Predictor AI (Stacking Ensemble XGBoost + Markov)</i>")
 
@@ -192,12 +182,20 @@ def run_daily_scan_and_notify(
     token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
     cid = chat_id or os.getenv("TELEGRAM_CHAT_ID")
 
+    logger.info(f"=== Démarrage du pipeline Telegram ===")
+    logger.info(f"TELEGRAM_BOT_TOKEN présent : {'oui' if token else 'NON — MANQUANT'}")
+    logger.info(f"TELEGRAM_CHAT_ID présent   : {'oui' if cid else 'NON — MANQUANT'} ({cid!r})")
+
     # 1. Synchronisation des modèles récents
     if force_update_models:
         try:
             from download_release import download_release_assets
             logger.info("Synchronisation des modèles récents depuis la release GitHub...")
-            download_release_assets()
+            ok = download_release_assets()
+            if ok:
+                logger.info("Modèles synchronisés avec succès.")
+            else:
+                logger.warning("Synchronisation partielle des modèles (certains fichiers manquants).")
         except Exception as e:
             logger.warning(f"Note: Impossible de rafraîchir les modèles depuis la release: {e}")
 
@@ -206,30 +204,43 @@ def run_daily_scan_and_notify(
     from app import predict_match, get_cached_resources, smart_resolve_name
 
     logger.info("Lancement de l'analyse des matchs quotidiens avec TennisExplorer...")
-    scan_data = scan_daily_matches(
-        circuit="all",
-        source="tennisexplorer",
-        force_refresh=True,
-        predict_func=predict_match,
-        get_resources_func=get_cached_resources,
-        smart_resolve_func=smart_resolve_name
-    )
+    try:
+        scan_data = scan_daily_matches(
+            circuit="all",
+            source="tennisexplorer",
+            force_refresh=True,
+            predict_func=predict_match,
+            get_resources_func=get_cached_resources,
+            smart_resolve_func=smart_resolve_name
+        )
+    except Exception as e:
+        logger.error(f"ERREUR CRITIQUE lors du scan des matchs : {type(e).__name__}: {e}")
+        raise
+
+    n_matches = len(scan_data.get("matches", []))
+    n_vbs = scan_data.get("value_bets_count", 0)
+    logger.info(f"Scan terminé : {n_matches} matchs analysés, {n_vbs} value bet(s) détecté(s)")
 
     # 3. Formatage du message
     briefing_html = format_daily_telegram_briefing(scan_data)
+    logger.info(f"Message formaté : {len(briefing_html)} caractères")
 
     # 4. Envoi sur Telegram
     send_result = {"success": False, "message": "Tokens Telegram non configurés"}
     if token and cid:
-        logger.info(f"Envoi du briefing sur Telegram (chat_id={cid})...")
         send_result = send_telegram_message(token, cid, briefing_html)
+        if not send_result.get("success"):
+            # On logue l'erreur complète pour la rendre visible dans les logs GitHub Actions
+            logger.error(f"ÉCHEC ENVOI TELEGRAM : {send_result}")
+        else:
+            logger.info("Briefing envoyé avec succès sur Telegram.")
     else:
-        logger.info("Alerte: TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID non configuré. Message généré sans envoi.")
+        logger.warning("TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID non configuré — message généré sans envoi.")
 
     return {
         "success": True,
-        "matches_count": len(scan_data.get("matches", [])),
-        "value_bets_count": scan_data.get("value_bets_count", 0),
+        "matches_count": n_matches,
+        "value_bets_count": n_vbs,
         "telegram_sent": send_result.get("success", False),
         "telegram_details": send_result,
         "message_preview": briefing_html
@@ -238,6 +249,12 @@ def run_daily_scan_and_notify(
 
 if __name__ == "__main__":
     import argparse
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S"
+    )
+
     parser = argparse.ArgumentParser(description="Scan quotidien TennisExplorer et notification Telegram")
     parser.add_argument("--dry-run", action="store_true", help="Générer le message sans l'envoyer")
     parser.add_argument("--no-update", action="store_true", help="Ne pas retélécharger les modèles")
@@ -248,6 +265,7 @@ if __name__ == "__main__":
 
     if args.dry_run:
         token, cid = None, None
+        logger.info("Mode dry-run activé : message généré sans envoi")
 
     result = run_daily_scan_and_notify(
         bot_token=token,
@@ -267,5 +285,11 @@ if __name__ == "__main__":
     except UnicodeEncodeError:
         print(result["message_preview"].encode("ascii", "replace").decode("ascii"))
     print("\n=============================================================")
-    status_msg = "Envoye avec succes" if result["telegram_sent"] else "Non envoye (Tokens absents ou mode dry-run)"
-    print(f"Statut envoi Telegram : {status_msg}")
+
+    if result["telegram_sent"]:
+        logger.info("✅ Statut : Envoyé avec succès sur Telegram")
+    elif args.dry_run:
+        logger.info("ℹ️  Statut : Mode dry-run — message non envoyé (normal)")
+    else:
+        logger.error("❌ Statut : ÉCHEC DE L'ENVOI TELEGRAM — voir les logs ci-dessus")
+        sys.exit(1)  # Force GitHub Actions à marquer le job en rouge
